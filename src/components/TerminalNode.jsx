@@ -1,0 +1,77 @@
+import { useEffect, useRef, useState } from 'react';
+import { Handle, NodeResizer, Position, useReactFlow } from '@xyflow/react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { agentById } from '../agents.js';
+
+// Un nœud de la map = une fenêtre avec un vrai terminal dedans.
+export default function TerminalNode({ id, data, selected }) {
+  const containerRef = useRef(null);
+  const [exited, setExited] = useState(false);
+  const { deleteElements } = useReactFlow();
+  const agent = agentById(data.agentId);
+
+  useEffect(() => {
+    const term = new Terminal({
+      fontSize: 13,
+      fontFamily: 'Menlo, Consolas, monospace',
+      theme: { background: '#11141a' },
+      cursorBlink: true,
+    });
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    term.open(containerRef.current);
+    fit.fit();
+
+    // Clavier -> PTY, PTY -> écran
+    const offInput = term.onData((d) => window.pty.write(id, d));
+    const offData = window.pty.onData(id, (d) => term.write(d));
+    const offExit = window.pty.onExit(id, () => setExited(true));
+
+    window.pty.create({ id, agentId: data.agentId, cols: term.cols, rows: term.rows });
+
+    // Quand la case change de taille, le terminal suit.
+    const observer = new ResizeObserver(() => {
+      try {
+        fit.fit();
+        window.pty.resize(id, term.cols, term.rows);
+      } catch {}
+    });
+    observer.observe(containerRef.current);
+
+    return () => {
+      observer.disconnect();
+      offInput.dispose();
+      offData();
+      offExit();
+      term.dispose();
+    };
+  }, [id, data.agentId]);
+
+  const close = () => {
+    window.pty.kill(id);
+    deleteElements({ nodes: [{ id }] });
+  };
+
+  return (
+    <div className={`terminal-node ${selected ? 'selected' : ''}`}>
+      <NodeResizer minWidth={360} minHeight={220} isVisible={selected} />
+      {/* Points d'accroche pour les futurs liens entre agents */}
+      <Handle type="target" position={Position.Left} />
+      <Handle type="source" position={Position.Right} />
+
+      {/* Seule la barre de titre sert à déplacer la case */}
+      <header className="terminal-header drag-handle">
+        <span className="agent-logo small" style={{ background: agent?.color }}>
+          {agent?.initials}
+        </span>
+        <span>{agent?.name}</span>
+        {exited && <span className="badge">terminé</span>}
+        <button className="close nodrag" onClick={close} title="Fermer">×</button>
+      </header>
+
+      {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
+      <div className="terminal-body nodrag nowheel" ref={containerRef} />
+    </div>
+  );
+}

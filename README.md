@@ -1,1 +1,55 @@
-# AgentBoard
+# Agent Board
+
+Une grande map où tu glisses des agents IA (Claude Code, Codex, Gemini CLI…) depuis la barre de droite. Chaque agent tourne dans un vrai terminal, et tu peux en mettre autant que tu veux côte à côte.
+
+## Lancer le projet
+
+Prérequis : Node.js 20+, et les CLI que tu veux utiliser déjà installés et connectés (`claude`, `codex`, `gemini` doivent marcher dans ton terminal).
+
+```bash
+npm install      # installe tout et recompile node-pty pour Electron
+npm run dev      # lance Vite + Electron avec rechargement à chaud
+```
+
+Sous Windows, si `npm install` échoue sur node-pty, installe les « Desktop development with C++ » de Visual Studio Build Tools et Python 3, puis relance `npm install`.
+
+## Structure
+
+```
+electron/
+  main.cjs         fenêtre Electron + routes IPC vers les terminaux
+  preload.cjs      pont sécurisé : window.pty.create/write/resize/kill/onData
+  ptyManager.cjs   un vrai PTY (node-pty) par case de la map
+  agents.cjs       quelle commande lancer pour chaque agent
+src/
+  App.jsx          la map (React Flow) + le drop qui crée une case
+  agents.js        catalogue affiché dans la barre (nom, couleur, logo)
+  components/
+    AgentSidebar.jsx   la barre de droite, cartes glissables
+    TerminalNode.jsx   une case = xterm.js branché sur un PTY
+  styles.css
+```
+
+Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty → le CLI. La sortie fait le chemin inverse via `pty:data:<id>`.
+
+## Ajouter un agent
+
+1. Une ligne dans `electron/agents.cjs` avec la commande à taper.
+2. Une ligne dans `src/agents.js` avec le même id, le nom et la couleur.
+
+## Déjà en place
+
+- Map avec pan, zoom et minimap.
+- Drag & drop depuis la barre, la case apparaît là où tu lâches.
+- Cases déplaçables par la barre de titre, redimensionnables quand elles sont sélectionnées, le terminal suit la taille.
+- Bouton × qui tue le processus et retire la case. Tous les agents sont tués quand l'app se ferme.
+- Points d'accroche à gauche et à droite : tu peux déjà tracer des liens, ils ne font rien pour l'instant.
+
+## Prochaines étapes
+
+1. **Sauvegarde de la disposition** : enregistrer `nodes` et `edges` dans un JSON (via IPC, `app.getPath('userData')`) et les recharger au démarrage. Choisir un dossier de travail (`cwd`) par case.
+2. **Statut des agents** : savoir qui travaille, qui attend, qui a fini. Pour Claude Code, utiliser les hooks (`Stop`, `Notification`) qui appellent un petit serveur HTTP local lancé par `main.cjs`. Afficher une pastille de couleur dans la barre de titre.
+3. **Liens qui transmettent** : quand le hook `Stop` de A arrive, lire son dernier message dans le transcript, puis l'écrire dans le PTY de B (en bracketed paste : `\x1b[200~` + texte + `\x1b[201~`, puis `\r` séparément). Mettre une limite de tours par lien pour éviter les boucles A→B→A.
+4. **Option plus robuste** : un serveur MCP local avec un outil `send_to_agent(nom, message)`, autorisé seulement pour les liens tracés sur la map.
+
+Pièges à garder en tête : un agent bloqué sur une demande de permission bloque toute la chaîne, et React StrictMode monte les composants deux fois en dev (le `ptyManager` ignore déjà un deuxième `create` sur le même id).
