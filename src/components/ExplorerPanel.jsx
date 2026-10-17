@@ -16,7 +16,7 @@ export default function ExplorerPanel() {
   }
 
   return (
-    <aside className="explorer">
+    <aside className="explorer no-scrollbar">
       <div className="panel-header">
         <h2>Documents</h2>
         <button className="icon-button" title="Masquer les documents" onClick={() => setCollapsed(true)}>

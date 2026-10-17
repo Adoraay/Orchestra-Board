@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Handle, NodeResizer, Position, useReactFlow } from '@xyflow/react';
+import { Handle, NodeResizer, Position, useReactFlow, useStoreApi } from '@xyflow/react';
 import { X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { agentById } from '../agents.js';
 import AgentLogo from './AgentLogo.jsx';
 import useFloatingDrag from '../hooks/useFloatingDrag.js';
+import useResizeMode from '../hooks/useResizeMode.js';
 import { terminalFont, terminalTheme } from '../lib/terminalTheme.js';
 
 // Un nœud de la map = une fenêtre avec un vrai terminal dedans.
@@ -13,7 +14,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const containerRef = useRef(null);
   const [exited, setExited] = useState(false);
   const { deleteElements } = useReactFlow();
+  const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
+  const { resizing, headerProps, stopResizing } = useResizeMode(selected);
   const agent = agentById(data.agentId);
 
   useEffect(() => {
@@ -58,27 +61,45 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     deleteElements({ nodes: [{ id }] });
   };
 
+  // Clic n'importe où (terminal compris) = case choisie. En capture, car xterm
+  // intercepte les clics dans le terminal. Désélectionne aussi les autres cases.
+  const select = () => {
+    if (!selected) store.getState().addSelectedNodes([id]);
+  };
+
   return (
-    <div
-      ref={floating.ref}
-      className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${floating.animClass}`}
-      onAnimationEnd={floating.onAnimationEnd}
-    >
-      <NodeResizer minWidth={360} minHeight={220} isVisible={selected} />
+    <>
+      {/* Hors de .terminal-node : ses animations (transform + overflow) couperaient les poignées */}
+      <NodeResizer
+        minWidth={360}
+        minHeight={220}
+        isVisible={selected && resizing}
+        handleClassName="resize-handle"
+        lineClassName="resize-line"
+      />
       {/* Points d'accroche pour les futurs liens entre agents */}
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
 
-      {/* Seule la barre de titre sert à déplacer la case */}
-      <header className="terminal-header drag-handle">
-        <AgentLogo agent={agent} size={18} />
-        <span>{agent?.name}</span>
-        {exited && <span className="badge">terminé</span>}
-        <button className="close nodrag" onClick={close} title="Fermer"><X size={15} /></button>
-      </header>
+      <div
+        ref={floating.ref}
+        className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${floating.animClass}`}
+        onAnimationEnd={floating.onAnimationEnd}
+        onPointerDownCapture={select}
+      >
+        {/* Glisser = déplacer la case, vrai clic = mode redimensionnement */}
+        <header className="terminal-header drag-handle" {...headerProps}>
+          <AgentLogo agent={agent} size={18} />
+          <span>{agent?.name}</span>
+          {exited && <span className="badge">terminé</span>}
+          <button className="close nodrag" onClick={close} title="Fermer"><X size={15} /></button>
+        </header>
 
-      {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
-      <div className="terminal-body nodrag nowheel" ref={containerRef} />
-    </div>
+        {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
+        <div className="terminal-body nodrag nowheel" onPointerDown={stopResizing}>
+          <div className="terminal-mount" ref={containerRef} />
+        </div>
+      </div>
+    </>
   );
 }
