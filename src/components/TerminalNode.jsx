@@ -3,6 +3,7 @@ import { Handle, NodeResizer, Position, useReactFlow } from '@xyflow/react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { agentById } from '../agents.js';
+import { terminalFont, terminalTheme } from '../lib/terminalTheme.js';
 
 // Un nœud de la map = une fenêtre avec un vrai terminal dedans.
 export default function TerminalNode({ id, data, selected }) {
@@ -14,8 +15,8 @@ export default function TerminalNode({ id, data, selected }) {
   useEffect(() => {
     const term = new Terminal({
       fontSize: 13,
-      fontFamily: 'Menlo, Consolas, monospace',
-      theme: { background: '#11141a' },
+      fontFamily: terminalFont(),
+      theme: terminalTheme(),
       cursorBlink: true,
     });
     const fit = new FitAddon();

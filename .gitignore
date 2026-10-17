@@ -1,2 +1,28 @@
-node_modules
-dist
+# Dépendances et builds
+node_modules/
+dist/
+out/
+release/
+
+# Notes de travail privées
+CLAUDE.md
+PLAN.md
+.claude/
+
+# Secrets et configuration locale
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+*.log
+npm-debug.log*
+
+# Système et éditeurs
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

@@ -1,0 +1,48 @@
+/* Thème Standard (PLAN.md §4.1). Seul endroit où les couleurs sont définies. */
+:root {
+  --bg: #1f1e1d;
+  --surface: #262624;
+  --surface-2: #30302e;
+  --border: #3d3d3a;
+  --text: #ece9e2;
+  --text-muted: #9c9a92;
+  --accent: #c96442;
+  --accent-hover: #d97757;
+  --terminal-bg: #1a1918;
+  --success: #6a9955;
+  --warning: #d4a72c;
+  --danger: #d9534f;
+
+  --shadow: rgba(0, 0, 0, 0.45);
+  --on-accent: #ffffff;
+
+  --font-ui: Inter, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+}
+
+/* React Flow lit ses couleurs dans ces variables. */
+.react-flow {
+  --xy-background-color: var(--bg);
+  --xy-background-pattern-dots-color: var(--border);
+  --xy-edge-stroke: var(--text-muted);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-connectionline-stroke: var(--accent);
+  --xy-handle-background-color: var(--surface-2);
+  --xy-handle-border-color: var(--accent);
+  --xy-resize-background-color: var(--accent);
+  --xy-selection-background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  --xy-selection-border: 1px dotted var(--accent);
+  --xy-minimap-background-color: var(--surface);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--bg) 70%, transparent);
+  --xy-minimap-mask-stroke-color: var(--accent);
+  --xy-minimap-node-background-color: var(--surface-2);
+  --xy-minimap-node-stroke-color: var(--border);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--surface-2);
+  --xy-controls-button-color: var(--text-muted);
+  --xy-controls-button-color-hover: var(--text);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 2px 8px var(--shadow);
+}

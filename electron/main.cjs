@@ -8,7 +8,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1400,
     height: 900,
-    backgroundColor: '#0f1115',
+    backgroundColor: '#1f1e1d', // = --bg de src/theme.css, évite un flash avant le chargement du CSS
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
