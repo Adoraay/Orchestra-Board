@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Handle, NodeResizer, Position, useReactFlow } from '@xyflow/react';
+import { X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { agentById } from '../agents.js';
+import AgentLogo from './AgentLogo.jsx';
+import useFloatingDrag from '../hooks/useFloatingDrag.js';
 import { terminalFont, terminalTheme } from '../lib/terminalTheme.js';
 
 // Un nœud de la map = une fenêtre avec un vrai terminal dedans.
-export default function TerminalNode({ id, data, selected }) {
+export default function TerminalNode({ id, data, selected, dragging, positionAbsoluteX }) {
   const containerRef = useRef(null);
   const [exited, setExited] = useState(false);
   const { deleteElements } = useReactFlow();
+  const floating = useFloatingDrag(dragging, positionAbsoluteX);
   const agent = agentById(data.agentId);
 
   useEffect(() => {
@@ -55,7 +59,11 @@ export default function TerminalNode({ id, data, selected }) {
   };
 
   return (
-    <div className={`terminal-node ${selected ? 'selected' : ''}`}>
+    <div
+      ref={floating.ref}
+      className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${floating.animClass}`}
+      onAnimationEnd={floating.onAnimationEnd}
+    >
       <NodeResizer minWidth={360} minHeight={220} isVisible={selected} />
       {/* Points d'accroche pour les futurs liens entre agents */}
       <Handle type="target" position={Position.Left} />
@@ -63,12 +71,10 @@ export default function TerminalNode({ id, data, selected }) {
 
       {/* Seule la barre de titre sert à déplacer la case */}
       <header className="terminal-header drag-handle">
-        <span className="agent-logo small" style={{ background: agent?.color }}>
-          {agent?.initials}
-        </span>
+        <AgentLogo agent={agent} size={18} />
         <span>{agent?.name}</span>
         {exited && <span className="badge">terminé</span>}
-        <button className="close nodrag" onClick={close} title="Fermer">×</button>
+        <button className="close nodrag" onClick={close} title="Fermer"><X size={15} /></button>
       </header>
 
       {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}

@@ -14,6 +14,7 @@
   --danger: #d9534f;
 
   --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-lifted: rgba(0, 0, 0, 0.6);
   --on-accent: #ffffff;
 
   --font-ui: Inter, system-ui, 'Segoe UI', sans-serif;

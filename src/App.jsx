@@ -9,8 +9,10 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import AgentSidebar from './components/AgentSidebar.jsx';
+import AgentDock from './components/AgentDock.jsx';
+import ExplorerPanel from './components/ExplorerPanel.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
+import TopBar from './components/TopBar.jsx';
 import { DRAG_TYPE, agentById } from './agents.js';
 
 const nodeTypes = { terminal: TerminalNode };
@@ -56,25 +58,29 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="board" onDragOver={onDragOver} onDrop={onDrop}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          minZoom={0.1}
-          deleteKeyCode={null}
-          proOptions={{ hideAttribution: true }}
-          colorMode="dark"
-        >
-          <Background gap={24} />
-          <Controls />
-          <MiniMap pannable zoomable />
-        </ReactFlow>
+      <TopBar activeFolder={null} />
+      <div className="workspace">
+        <AgentDock />
+        <main className="board" onDragOver={onDragOver} onDrop={onDrop}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            minZoom={0.1}
+            deleteKeyCode={null}
+            proOptions={{ hideAttribution: true }}
+            colorMode="dark"
+          >
+            <Background gap={24} />
+            <Controls position="bottom-left" />
+            <MiniMap position="bottom-right" pannable zoomable />
+          </ReactFlow>
+        </main>
+        <ExplorerPanel />
       </div>
-      <AgentSidebar />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Agent Board
 
-Une grande map où tu glisses des agents IA (Claude Code, Codex, Gemini CLI…) depuis la barre de droite. Chaque agent tourne dans un vrai terminal, et tu peux en mettre autant que tu veux côte à côte.
+Une grande map où tu glisses des agents IA (Claude Code, Codex, Gemini CLI…) depuis le dock de gauche. Chaque agent tourne dans un vrai terminal, et tu peux en mettre autant que tu veux côte à côte.
 
 ## Lancer le projet
 
@@ -23,10 +23,16 @@ electron/
   agents.cjs       quelle commande lancer pour chaque agent
 src/
   App.jsx          la map (React Flow) + le drop qui crée une case
-  agents.js        catalogue affiché dans la barre (nom, couleur, logo)
+  agents.js        catalogue affiché dans le dock (nom, couleur, logo)
+  assets/agents/   logos des agents (<id>.svg ou .png), initiales si absent
   components/
-    AgentSidebar.jsx   la barre de droite, cartes glissables
+    TopBar.jsx         barre du haut : nom, dossier actif, paramètres
+    AgentDock.jsx      dock de gauche, carrés glissables avec infobulle
+    ExplorerPanel.jsx  explorateur de documents à droite (repliable)
+    AgentLogo.jsx      logo d'un agent ou ses initiales
     TerminalNode.jsx   une case = xterm.js branché sur un PTY
+  lib/terminalTheme.js thème xterm construit depuis les variables CSS
+  theme.css        toutes les couleurs (variables CSS)
   styles.css
 ```
 
@@ -40,7 +46,7 @@ Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty �
 ## Déjà en place
 
 - Map avec pan, zoom et minimap.
-- Drag & drop depuis la barre, la case apparaît là où tu lâches.
+- Drag & drop depuis le dock, la case apparaît là où tu lâches.
 - Cases déplaçables par la barre de titre, redimensionnables quand elles sont sélectionnées, le terminal suit la taille.
 - Bouton × qui tue le processus et retire la case. Tous les agents sont tués quand l'app se ferme.
 - Points d'accroche à gauche et à droite : tu peux déjà tracer des liens, ils ne font rien pour l'instant.
