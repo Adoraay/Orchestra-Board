@@ -19,11 +19,14 @@ const clamp = (v, min, max, fallback) => (isNum(v) ? Math.min(max, Math.max(min,
 
 function sanitizeData(type, data = {}) {
   switch (type) {
-    case 'terminal':
+    case 'terminal': {
+      const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
       return {
         agentId: typeof data.agentId === 'string' ? data.agentId.slice(0, 64) : 'shell',
         cwd: typeof data.cwd === 'string' ? data.cwd.slice(0, 1024) : null,
+        ...(label && { label }), // nom choisi par double-clic sur le titre
       };
+    }
     case 'note':
       return { text: text(data.text) };
     default:

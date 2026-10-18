@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('pty', {
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
   kill: (id) => ipcRenderer.send('pty:kill', id),
   ack: (id) => ipcRenderer.send('pty:ack', id),
+  rename: (id, name) => ipcRenderer.send('pty:rename', id, name),
   onData: (id, cb) => {
     const channel = `pty:data:${id}`;
     const listener = (_e, data) => cb(data);

@@ -6,11 +6,11 @@ import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
 import FinishBubble from './FinishBubble.jsx';
 import StatusDot from './StatusDot.jsx';
+import TerminalTitle from './TerminalTitle.jsx';
 import { useBoard } from '../context/BoardContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useFloatingDrag from '../hooks/useFloatingDrag.js';
 import useResizeMode from '../hooks/useResizeMode.js';
-import { baseName } from '../lib/paths.js';
 import { terminalFont, terminalTheme } from '../lib/terminalTheme.js';
 
 // Un nœud de la map = une fenêtre avec un vrai terminal dedans.
@@ -30,6 +30,10 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
   const { resizing, headerProps, stopResizing } = useResizeMode(selected);
   const agent = agentById(data.agentId);
+  // Nom affiché partout (titre, bulle, notifications) : celui choisi par double-clic, sinon celui de l'agent.
+  const name = data.label || agent.name;
+  const nameRef = useRef(name);
+  nameRef.current = name;
 
   // Case restaurée au démarrage d'un agent qui sait reprendre (Claude Code) : on demande avant de lancer.
   const askResume = Boolean(data.restored && agent.resumeArgs);
@@ -68,7 +72,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     termRef.current = term;
     fitRef.current = fit;
     if (!askResumeAtMount.current) {
-      window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows }).then((result) => {
+      window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, label: nameRef.current, cols: term.cols, rows: term.rows }).then((result) => {
         if (disposed) return;
         if (result?.buffer) term.write(result.buffer);
         applyStatus(result?.status);
@@ -116,7 +120,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     const term = termRef.current;
     if (!term) return;
     updateNodeData(id, { restored: false });
-    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows, resume });
+    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, label: name, cols: term.cols, rows: term.rows, resume });
     term.focus();
   };
 
@@ -126,13 +130,19 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     if (!term) return;
     setExited(false);
     term.write('\r\n');
-    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows });
+    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, label: name, cols: term.cols, rows: term.rows });
     term.focus();
   };
 
   const close = () => {
     window.pty.kill(id);
     deleteElements({ nodes: [{ id }] });
+  };
+
+  // Double-clic sur le titre : nom propre à cette case (vide = nom de l'agent), repris par les notifications.
+  const rename = (label) => {
+    updateNodeData(id, { label: label || undefined });
+    window.pty.rename(id, label || agent.name);
   };
 
   // Paramètre « Confirmer avant de fermer une case qui travaille » : on demande dans la barre de titre.
@@ -163,7 +173,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       {/* Requis par React Flow pour afficher les liens ; le tracé réel est calculé par FloatingEdge */}
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
-      <FinishBubble agent={agent} finished={finished} />
+      <FinishBubble agent={agent} name={name} finished={finished} />
 
       <div
         ref={floating.ref}
@@ -171,13 +181,11 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
         onAnimationEnd={floating.onAnimationEnd}
         onPointerDownCapture={select}
       >
-        {/* Glisser = déplacer la case, vrai clic = mode redimensionnement */}
-        <header className="terminal-header drag-handle" {...headerProps}>
+        {/* Glisser = déplacer la case, vrai clic = mode redimensionnement, double-clic sur le nom = renommer.
+            nopan : le double-clic ne zoome pas la map. */}
+        <header className="terminal-header drag-handle nopan" {...headerProps}>
           <AgentLogo agent={agent} size={18} />
-          <span className="terminal-title">
-            {agent?.name}
-            {data.cwd && <span className="terminal-folder" title={data.cwd}> · {baseName(data.cwd)}</span>}
-          </span>
+          <TerminalTitle name={name} cwd={data.cwd} onRename={rename} onEditStart={stopResizing} />
           {exited ? <span className="badge">terminé</span> : <StatusDot status={status} />}
           <span className="header-actions">
             {exited && (
@@ -188,7 +196,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
             )}
             {confirmingClose ? (
               <span className="close-confirm nodrag">
-                {agent.name} travaille encore. Fermer ?
+                {name} travaille encore. Fermer ?
                 <button className="tab-confirm danger" onClick={close}>Fermer</button>
                 <button className="tab-confirm" onClick={() => setConfirmingClose(false)}>Annuler</button>
               </span>
@@ -203,7 +211,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
           <div className="terminal-mount" ref={containerRef} />
           {askResume && (
             <div className="resume-prompt">
-              <p>Reprendre la dernière conversation de {agent.name} dans ce dossier ?</p>
+              <p>Reprendre la dernière conversation de {name} dans ce dossier ?</p>
               <div className="resume-actions">
                 <button className="text-button primary" onClick={() => launch(true)}>
                   <History size={15} />

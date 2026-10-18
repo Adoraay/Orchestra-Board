@@ -52,6 +52,11 @@ function info(id) {
     : null;
 }
 
+function rename(id, name) {
+  const e = entries.get(id);
+  if (e) e.name = name;
+}
+
 // La fin a été vue : clic sur la case ou saisie dans son terminal.
 function acknowledge(id) {
   const e = entries.get(id);
@@ -102,4 +107,4 @@ function onOutput(id) {
   e.quietTimer = setTimeout(() => set(id, e, 'done'), QUIET_DELAY);
 }
 
-module.exports = { init, register, unregister, info, acknowledge, onHook, onInput, onOutput };
+module.exports = { init, register, unregister, info, rename, acknowledge, onHook, onInput, onOutput };

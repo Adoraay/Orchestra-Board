@@ -24,47 +24,56 @@ Sous Windows, si `npm install` échoue sur node-pty, installe les « Desktop dev
 ## Structure
 
 ```
-electron/
-  main.cjs           fenêtre Electron + routes IPC
-  preload.cjs        pont sécurisé : window.pty, window.fs, window.settings, window.agents
-  ptyManager.cjs     un vrai PTY (node-pty) par case de la map, shell choisi dans les paramètres
-  settingsStore.cjs  settings.json (apparence, agents, général), validé à chaque lecture/écriture
-  agentsHandlers.cjs logos des agents ajoutés, bouton « Tester » (where / which)
-  fsHandlers.cjs     lecture des dossiers pour l'explorateur, choix d'un dossier
-src/
-  App.jsx            la map (React Flow) + le drop qui crée une case
-  agents.js          affichage des agents (initiales, logos)
-  assets/agents/     logos des agents de base (<id>.svg ou .png)
-  context/           SettingsContext (paramètres, agents), WorkspaceContext (racine, dossier actif)
-  components/        barre du haut, dock, explorateur, cases terminal, paramètres
-  hooks/             effet « flotter puis se fixer », mode redimensionnement
-  lib/               thème xterm, chemins
-  theme.css          toutes les couleurs (variables CSS)
+electron/                 côté Node : système, terminaux, fichiers
+  main.cjs                fenêtre, routes IPC, notifications Windows
+  preload.cjs             seul pont vers l'interface (window.pty, fs, settings, agents, workspace, agentEvents)
+  ptyManager.cjs          un vrai PTY (node-pty) par case, dernières sorties gardées pour les tableaux fermés
+  agentStatus.cjs         statut de chaque case (inactif / travaille / attend / a fini)
+  hookServer.cjs          petit serveur local (127.0.0.1 + jeton) qui reçoit les hooks de Claude Code
+  claudeHooks.cjs         fichier --settings par case Claude, avec les hooks qui préviennent Orchestra
+  settingsStore.cjs       settings.json : apparence, agents, général (validé à chaque lecture/écriture)
+  workspaceStore.cjs      workspace.json : tableaux, cases, liens, dessins, notes, vue
+  agentsHandlers.cjs      logos des agents ajoutés, bouton « Tester » (where / which)
+  fsHandlers.cjs          lecture des dossiers pour l'explorateur, choix d'un dossier
+src/                      interface React
+  App.jsx                 chargement, onglets de tableaux, map (React Flow)
+  components/             barres, dock, explorateur, cases (terminal, post-it, texte), paramètres, écran de démarrage
+  context/                SettingsContext, WorkspaceContext, BoardContext
+  hooks/                  tableaux, historique Ctrl+Z, raccourcis, stylo, notifications, effets des cases
+  lib/                    thème xterm, chemins, (dé)sérialisation des tableaux
+  assets/                 logos des agents, logo Orchestra, son de fin de tâche
+  theme.css               toutes les couleurs (variables CSS)
   styles.css
-scripts/launcher.cs  source de launcher.exe (lancement sans terminal)
+design/                   identité visuelle validée (logos, écran de démarrage) : ne pas modifier
+build/                    icône de l'app (générée par npm run build:icon)
+scripts/                  source de launcher.exe, génération de l'icône
 ```
 
 Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty → le CLI. La sortie fait le chemin inverse via `pty:data:<id>`.
 
+Données de l'app : `%APPDATA%\Orchestra\` (`settings.json`, `workspace.json`, `logos\`, `hooks\`).
+
 ## Ajouter un agent
 
-Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, couleur). Le bouton « Tester » vérifie que la commande existe. Les paramètres sont dans `%APPDATA%\Orchestra\settings.json`.
+Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, couleur). Le bouton « Tester » vérifie que la commande existe.
 
-## Déjà en place
+## Ce qui marche déjà
 
-- Map avec pan, zoom et minimap.
-- Drag & drop depuis le dock, la case apparaît là où tu lâches.
-- Cases déplaçables par la barre de titre, redimensionnables quand elles sont sélectionnées, le terminal suit la taille.
-- Bouton × qui tue le processus et retire la case. Tous les agents sont tués quand l'app se ferme.
-- Points d'accroche à gauche et à droite : tu peux déjà tracer des liens, ils ne font rien pour l'instant.
+- **Map** infinie avec pan, zoom, minimap et grille ; plusieurs **tableaux** en onglets (créer, renommer, supprimer). Les agents des autres tableaux continuent en arrière-plan.
+- **Agents** : glisser un agent du dock sur la map (aperçu en pointillés) ouvre un vrai terminal dans le dossier actif de l'explorateur. Claude Code, Codex, Gemini CLI, Terminal, et tes propres agents.
+- **Cases** : déplacement avec effet « soulever puis fixer », sélection au clic, sélection multiple par rectangle au clic droit (et déplacement en groupe), redimensionnement après un clic sur la barre de titre, renommage par double-clic sur le titre (ex. « Claude design »), bouton « relancer », confirmation avant de fermer un agent qui travaille.
+- **Statuts** : pastille grise / orange / jaune / verte (hooks pour Claude Code, activité du terminal pour les autres).
+- **Fin de tâche** : lueur verte, bulle « Claude design a terminé sa tâche » (avec le nom de la case), son, notification Windows (un clic ramène sur la case), point vert sur l'onglet d'un tableau fermé.
+- **Barre d'outils** : Sélection, Stylo (clic droit pour gommer), Post-it, Texte (rotation, taille), Lien par deux clics (clic droit pour supprimer un lien) ; Ctrl+Z / Ctrl+Y.
+- **Sauvegarde** de tout à chaque changement ; au redémarrage, les agents sont relancés et proposent de reprendre leur conversation (`claude --continue`, `codex resume --last`, `gemini --resume latest`).
+- **Paramètres** : thème et couleur d'accent en direct, police des terminaux, grille, agents, racine de l'explorateur, shell, notifications.
+- **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
 
-## Prochaines étapes
+## Ce qui reste à faire
 
-1. **Sauvegarde de la disposition** : enregistrer `nodes` et `edges` dans un JSON (via IPC, `app.getPath('userData')`) et les recharger au démarrage. Choisir un dossier de travail (`cwd`) par case.
-2. **Statut des agents** : savoir qui travaille, qui attend, qui a fini. Pour Claude Code, utiliser les hooks (`Stop`, `Notification`) qui appellent un petit serveur HTTP local lancé par `main.cjs`. Afficher une pastille de couleur dans la barre de titre.
-3. **Liens qui transmettent** : quand le hook `Stop` de A arrive, lire son dernier message dans le transcript, puis l'écrire dans le PTY de B (en bracketed paste : `\x1b[200~` + texte + `\x1b[201~`, puis `\r` séparément). Mettre une limite de tours par lien pour éviter les boucles A→B→A.
-4. **Option plus robuste** : un serveur MCP local avec un outil `send_to_agent(nom, message)`, autorisé seulement pour les liens tracés sur la map.
-5. **Cases qui « flottent »** : quand on attrape une case, elle se soulève (léger `scale` ~1.03, ombre plus large et plus floue, petite inclinaison qui suit la vitesse du déplacement). Quand on la lâche, mini animation de « fixation » au tableau : elle redescend avec un léger rebond (ressort), l'ombre se resserre et le contour s'accentue brièvement puis revient à la normale. React Flow donne `onNodeDragStart` / `onNodeDragStop` et met la classe `dragging` sur le node, ce qui suffit pour piloter les transitions CSS.
-6. **Notification de fin de tâche** : quand un agent a fini de répondre (hook `Stop`, cf. étape 2), lueur verte qui pulse autour de sa case, petit son (fichier court joué via `new Audio()`), et une bulle au-dessus de la case : « [nom de l'agent] a terminé sa tâche ». La lueur et la bulle disparaissent après quelques secondes ou quand on clique sur la case. En option, une notification système Electron (`new Notification(...)`) si la fenêtre n'a pas le focus.
+1. **Branches Git** (prochaine étape) : glisser un carré « Branche » sur une case pour faire travailler l'agent sur une autre branche, dans son propre `git worktree`.
+2. **Liens qui transmettent** : quand A termine, sa dernière réponse est envoyée à B avec une consigne, avec une limite de tours.
+3. **Finitions** : confirmation avant de fermer l'app quand un agent travaille, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
+4. **(Optionnel)** serveur MCP pour que les agents s'envoient des messages eux-mêmes.
 
-Pièges à garder en tête : un agent bloqué sur une demande de permission bloque toute la chaîne, et React StrictMode monte les composants deux fois en dev (le `ptyManager` ignore déjà un deuxième `create` sur le même id).
+Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.

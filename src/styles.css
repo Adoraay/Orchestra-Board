@@ -914,3 +914,27 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .splash-backdrop { animation: splash-out 0.4s ease 1s forwards; }
 }
+
+/* Rectangle de sélection au clic droit (outil Sélection) */
+.selection-box {
+  position: absolute;
+  z-index: 5;
+  border: 1.5px dashed var(--accent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  pointer-events: none;
+}
+
+/* Renommer une case : double-clic sur son titre */
+.terminal-title-input {
+  flex: 1;
+  min-width: 80px;
+  max-width: 260px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}

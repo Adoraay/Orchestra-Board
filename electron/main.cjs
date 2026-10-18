@@ -84,6 +84,9 @@ function notifyFinished(id, info) {
 
 agentStatus.init(sendStatus, notifyFinished);
 
+// Nom d'une case choisi dans l'interface (double-clic sur son titre).
+const cleanName = (name) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : null);
+
 // Commande à taper dans le shell : celle de l'agent, + reprise de conversation, + hooks pour Claude Code.
 function buildCommand(id, agent, resume) {
   if (!agent.command) return null;
@@ -96,13 +99,13 @@ function buildCommand(id, agent, resume) {
 // L'interface envoie seulement l'id de l'agent : la commande à lancer vient des paramètres.
 // Renvoie { buffer, status } : buffer = dernières sorties si le terminal tournait déjà (case d'un
 // autre tableau qu'on rouvre), status = statut actuel de la case.
-ipcMain.handle('pty:create', (_e, { id, agentId, cwd, cols, rows, resume }) => {
+ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume }) => {
   const settings = settingsStore.load();
   const agent = settings.agents.find((a) => a.id === agentId);
   if (typeof id !== 'string' || !agent) return null;
 
   const existing = agentStatus.info(id);
-  if (!existing) agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity', { name: agent.name, cwd, notify: Boolean(agent.command) });
+  if (!existing) agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
   const result = ptyManager.create(
     { id, command: existing ? null : buildCommand(id, agent, resume), shell: settings.general.shell, cwd, cols, rows },
     (id, data) => {
@@ -125,6 +128,10 @@ ipcMain.on('pty:write', (_e, id, data) => {
 });
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
 ipcMain.on('pty:ack', (_e, id) => agentStatus.acknowledge(id)); // clic sur une case qui a fini
+ipcMain.on('pty:rename', (_e, id, name) => {
+  const clean = cleanName(name);
+  if (clean) agentStatus.rename(id, clean); // nom repris par la notification Windows
+});
 ipcMain.on('pty:kill', (_e, id) => {
   ptyManager.kill(id);
   agentStatus.unregister(id);

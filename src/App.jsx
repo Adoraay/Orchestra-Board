@@ -29,6 +29,7 @@ import { useSettings } from './context/SettingsContext.jsx';
 import { useWorkspace } from './context/WorkspaceContext.jsx';
 import useBoardHistory from './hooks/useBoardHistory.js';
 import useBoardShortcuts from './hooks/useBoardShortcuts.js';
+import useBoxSelection from './hooks/useBoxSelection.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useBoards from './hooks/useBoards.js';
@@ -40,7 +41,7 @@ const BOARD_HINTS = {
   pen: 'LMB pour dessiner · RMB pour supprimer',
   note: 'Clique sur la map pour poser un post-it',
   text: 'Clique sur la map pour écrire un texte',
-  link: 'Clique sur une case, puis sur une autre pour les relier',
+  link: 'Clique sur une case, puis sur une autre pour les relier · RMB sur un lien pour le supprimer',
 };
 const NODE_SIZE = { width: 640, height: 400 };
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
@@ -107,6 +108,27 @@ function Board({ initial, onChange, focusRequest }) {
   const [linkSource, setLinkSource] = useState(null); // case cliquée en premier avec l'outil Lien
   const board = useMemo(() => ({ tool, linkSource }), [tool, linkSource]);
   const pen = usePenDrawing({ enabled: tool === 'pen', onStroke: (s) => setStrokes((all) => [...all, s]) });
+
+  // Rectangle de sélection au clic droit (outil Sélection) : les cases touchées deviennent la sélection.
+  const boxSelection = useBoxSelection({
+    enabled: tool === 'select',
+    onSelect: (ids) => {
+      const chosen = new Set(ids);
+      setNodes((nds) => nds.map((n) => (Boolean(n.selected) === chosen.has(n.id) ? n : { ...n, selected: chosen.has(n.id) })));
+      setEdges((eds) => eds.map((e) => (e.selected ? { ...e, selected: false } : e)));
+      setSelectedStroke(null);
+    },
+  });
+  // Le stylo (clic gauche) et le rectangle (clic droit) écoutent les mêmes événements de la map.
+  const pointerHandlers = Object.fromEntries(
+    ['onPointerDown', 'onPointerMove', 'onPointerUp', 'onPointerCancel'].map((name) => [
+      name,
+      (event) => {
+        pen.handlers[name](event);
+        boxSelection.handlers[name](event);
+      },
+    ]),
+  );
 
   // Un trait choisi désélectionne cases et liens (et inversement, via onNodeClick / onEdgeClick).
   const selectStroke = useCallback(
@@ -256,7 +278,8 @@ function Board({ initial, onChange, focusRequest }) {
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        {...pen.handlers}
+        {...pointerHandlers}
+        onContextMenu={(e) => e.preventDefault()}
       >
         <BoardContext.Provider value={board}>
           <ReactFlow
@@ -269,6 +292,11 @@ function Board({ initial, onChange, focusRequest }) {
             onPaneClick={onPaneClick}
             onNodeClick={onNodeClick}
             onEdgeClick={() => setSelectedStroke(null)}
+            onEdgeContextMenu={(event, edge) => {
+              // Outil Lien : clic droit sur un lien = le supprimer (comme les traits du stylo).
+              event.preventDefault();
+              if (tool === 'link') setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+            }}
             onMoveEnd={(_event, v) => setViewport(v)}
             defaultViewport={initial.viewport ?? undefined}
             nodesDraggable={tool === 'select'}
@@ -303,6 +331,7 @@ function Board({ initial, onChange, focusRequest }) {
             {tool === 'link' && <kbd>Échap</kbd>}
           </div>
         )}
+        {boxSelection.box && <div className="selection-box" style={boxSelection.box} />}
         {previewPos && draggedAgentId && (
           <DropPreview agent={agentById(draggedAgentId)} position={previewPos} size={NODE_SIZE} />
         )}
