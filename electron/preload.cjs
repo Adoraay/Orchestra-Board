@@ -36,6 +36,12 @@ contextBridge.exposeInMainWorld('pty', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  onStatus: (id, cb) => {
+    const channel = `pty:status:${id}`;
+    const listener = (_e, info) => cb(info);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   onExit: (id, cb) => {
     const channel = `pty:exit:${id}`;
     const listener = (_e, code) => cb(code);

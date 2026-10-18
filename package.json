@@ -9,7 +9,8 @@
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
     "start": "electron .",
-    "build:launcher": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /target:winexe /codepage:65001 /out:launcher.exe /r:System.Windows.Forms.dll scripts\\launcher.cs",
+    "build:icon": "electron scripts/make-icon.cjs",
+    "build:launcher": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /target:winexe /codepage:65001 /out:launcher.exe /win32icon:build\\icon.ico /r:System.Windows.Forms.dll scripts\\launcher.cs",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "dependencies": {

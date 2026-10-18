@@ -4,6 +4,7 @@ import { History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
+import StatusDot from './StatusDot.jsx';
 import { useBoard } from '../context/BoardContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useFloatingDrag from '../hooks/useFloatingDrag.js';
@@ -20,6 +21,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const { tool, linkSource } = useBoard();
   const { accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
+  const [status, setStatus] = useState('idle');
   const { deleteElements, updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
@@ -48,7 +50,11 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     let ready = askResumeAtMount.current;
     const offInput = term.onData((d) => window.pty.write(id, d));
     const offData = window.pty.onData(id, (d) => ready && term.write(d));
-    const offExit = window.pty.onExit(id, () => setExited(true));
+    const offExit = window.pty.onExit(id, () => {
+      setExited(true);
+      setStatus('idle');
+    });
+    const offStatus = window.pty.onStatus(id, (info) => info && setStatus(info.status));
 
     termRef.current = term;
     fitRef.current = fit;
@@ -56,6 +62,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows }).then((result) => {
         if (disposed) return;
         if (result?.buffer) term.write(result.buffer);
+        if (result?.status) setStatus(result.status.status);
         ready = true;
       });
     }
@@ -75,6 +82,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       offInput.dispose();
       offData();
       offExit();
+      offStatus();
       term.dispose();
       termRef.current = null;
     };
@@ -151,7 +159,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
             {agent?.name}
             {data.cwd && <span className="terminal-folder" title={data.cwd}> · {baseName(data.cwd)}</span>}
           </span>
-          {exited && <span className="badge">terminé</span>}
+          {exited ? <span className="badge">terminé</span> : <StatusDot status={status} />}
           <span className="header-actions">
             {exited && (
               <button className="header-button nodrag" onClick={restart} title="Relancer">

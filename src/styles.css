@@ -89,6 +89,7 @@ button { font: inherit; color: inherit; }
 .titlebar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 9px;
   height: 38px;
   padding: 0 14px;
@@ -96,7 +97,7 @@ button { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
-.titlebar-logo { display: block; flex-shrink: 0; border-radius: 6px; }
+.titlebar-logo { display: block; flex-shrink: 0; }
 .titlebar-name { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; }
 .topbar-folder {
   display: flex;
@@ -801,3 +802,24 @@ kbd {
 }
 .tab-confirm.danger:hover { border-color: var(--danger); color: var(--danger); }
 .tab-add { flex-shrink: 0; }
+
+/* Pastille de statut (PLAN.md §3.2) */
+.status-dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.6;
+  transition: background 150ms, opacity 150ms;
+}
+.status-dot.working { background: var(--accent); opacity: 1; animation: status-pulse 1.2s ease-in-out infinite; }
+.status-dot.waiting { background: var(--warning); opacity: 1; }
+.status-dot.done { background: var(--success); opacity: 1; }
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent); transform: scale(0.85); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot.working { animation: none; }
+}

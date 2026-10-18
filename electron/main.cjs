@@ -6,6 +6,9 @@ const fsHandlers = require('./fsHandlers.cjs');
 const settingsStore = require('./settingsStore.cjs');
 const agentsHandlers = require('./agentsHandlers.cjs');
 const workspaceStore = require('./workspaceStore.cjs');
+const hookServer = require('./hookServer.cjs');
+const claudeHooks = require('./claudeHooks.cjs');
+const agentStatus = require('./agentStatus.cjs');
 
 let win;
 
@@ -26,6 +29,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     title: 'Orchestra',
+    icon: path.join(__dirname, '..', 'build', 'icon.ico'), // barre des tâches (généré par npm run build:icon)
     backgroundColor: '#1f1e1d', // = --bg de src/theme.css, évite un flash avant le chargement du CSS
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -49,22 +53,52 @@ function send(channel, ...args) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args);
 }
 
+agentStatus.init((id, info) => send(`pty:status:${id}`, info));
+
+// Commande à taper dans le shell : celle de l'agent, + reprise de conversation, + hooks pour Claude Code.
+function buildCommand(id, agent, resume) {
+  if (!agent.command) return null;
+  let command = agent.command;
+  if (resume && agent.resumeArgs) command += ` ${agent.resumeArgs}`;
+  if (agent.hooks === 'claude') command += ` --settings "${claudeHooks.writeSettings(id)}"`;
+  return command;
+}
+
 // L'interface envoie seulement l'id de l'agent : la commande à lancer vient des paramètres.
-// Renvoie { buffer } si le terminal tournait déjà (case d'un autre tableau qu'on rouvre).
+// Renvoie { buffer, status } : buffer = dernières sorties si le terminal tournait déjà (case d'un
+// autre tableau qu'on rouvre), status = statut actuel de la case.
 ipcMain.handle('pty:create', (_e, { id, agentId, cwd, cols, rows, resume }) => {
   const settings = settingsStore.load();
   const agent = settings.agents.find((a) => a.id === agentId);
   if (typeof id !== 'string' || !agent) return null;
-  return ptyManager.create(
-    // resume : reprendre la dernière conversation (claude --continue) après un redémarrage de l'app.
-    { id, command: resume && agent.resumeArgs ? `${agent.command} ${agent.resumeArgs}` : agent.command, shell: settings.general.shell, cwd, cols, rows },
-    (id, data) => send(`pty:data:${id}`, data),
-    (id, code) => send(`pty:exit:${id}`, code),
+
+  const existing = agentStatus.info(id);
+  if (!existing) agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity');
+  const result = ptyManager.create(
+    { id, command: existing ? null : buildCommand(id, agent, resume), shell: settings.general.shell, cwd, cols, rows },
+    (id, data) => {
+      agentStatus.onOutput(id);
+      send(`pty:data:${id}`, data);
+    },
+    (id, code) => {
+      agentStatus.unregister(id);
+      claudeHooks.removeSettings(id);
+      send(`pty:exit:${id}`, code);
+    },
   );
+  return { ...result, status: agentStatus.info(id) };
 });
-ipcMain.on('pty:write', (_e, id, data) => ptyManager.write(id, data));
+ipcMain.on('pty:write', (_e, id, data) => {
+  if (typeof data !== 'string') return;
+  agentStatus.onInput(id, data);
+  ptyManager.write(id, data);
+});
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
-ipcMain.on('pty:kill', (_e, id) => ptyManager.kill(id));
+ipcMain.on('pty:kill', (_e, id) => {
+  ptyManager.kill(id);
+  agentStatus.unregister(id);
+  claudeHooks.removeSettings(id);
+});
 
 fsHandlers.register(() => win);
 settingsStore.register();
@@ -73,9 +107,13 @@ workspaceStore.register();
 
 // Pas de barre de menu File / Edit / View.
 Menu.setApplicationMenu(null);
+// Identité propre dans la barre des tâches (sinon Windows regroupe la fenêtre sous « Electron »).
+app.setAppUserModelId('com.orchestraboard.orchestra');
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   migrateOldUserData();
+  claudeHooks.clearAll();
+  await hookServer.start(agentStatus.onHook);
   createWindow();
 });
 
