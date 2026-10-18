@@ -31,6 +31,7 @@ electron/                 côté Node : système, terminaux, fichiers
   agentStatus.cjs         statut de chaque case (inactif / travaille / attend / a fini)
   hookServer.cjs          petit serveur local (127.0.0.1 + jeton) qui reçoit les hooks de Claude Code
   claudeHooks.cjs         fichiers --settings (hooks, outils autorisés) et --mcp-config par case Claude
+  claudeTrust.cjs         dossier marqué « de confiance » dans ~/.claude.json avant de lancer Claude
   settingsStore.cjs       settings.json : apparence, agents, général (validé à chaque lecture/écriture)
   workspaceStore.cjs      workspace.json : tableaux, cases, liens, dessins, notes, vue
   agentsHandlers.cjs      logos des agents ajoutés, bouton « Tester » (where / which)

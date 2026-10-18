@@ -15,7 +15,7 @@ const BUILTIN_AGENTS = [
 
 const DEFAULTS = {
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots' },
-  general: { rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay' },
+  general: { rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true },
 };
 
 const THEMES = ['standard'];
@@ -94,6 +94,7 @@ function sanitize(input) {
       notifySound: g.notifySound !== false,
       notifyDesktop: g.notifyDesktop !== false,
       linkMode: pick(g.linkMode, LINK_MODES, DEFAULTS.general.linkMode),
+      trustFolders: g.trustFolders !== false,
     },
   };
 }

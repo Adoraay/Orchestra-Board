@@ -8,6 +8,7 @@ const agentsHandlers = require('./agentsHandlers.cjs');
 const workspaceStore = require('./workspaceStore.cjs');
 const hookServer = require('./hookServer.cjs');
 const claudeHooks = require('./claudeHooks.cjs');
+const claudeTrust = require('./claudeTrust.cjs');
 const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
@@ -138,6 +139,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
   if (typeof id !== 'string' || !agent) return null;
 
   const existing = agentStatus.info(id);
+  if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
   const result = ptyManager.create(
     { id, command: existing ? null : buildCommand(id, agent, resume), shell: settings.general.shell, cwd, cols, rows },

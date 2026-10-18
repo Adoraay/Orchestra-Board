@@ -71,6 +71,11 @@ export default function GeneralTab() {
           <input type="checkbox" checked={general.notifyDesktop} onChange={(e) => update({ notifyDesktop: e.target.checked })} />
           Notification Windows quand l'app n'est pas au premier plan
         </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={general.trustFolders} onChange={(e) => update({ trustFolders: e.target.checked })} />
+          Faire confiance aux dossiers ouverts par Orchestra
+        </label>
+        <span className="hint">Claude Code ne demande plus « Do you trust the files in this folder? » (réglage enregistré dans ~/.claude.json).</span>
       </div>
     </div>
   );
