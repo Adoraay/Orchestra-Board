@@ -4,7 +4,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import AgentLogo from './AgentLogo.jsx';
 import AgentForm from './AgentForm.jsx';
 
-const ORDER_TYPE = 'application/agent-board-order';
+const ORDER_TYPE = 'application/orchestra-agent-order';
 
 // Liste des agents du dock (PLAN.md §3.3) : réordonnables, masquables, et suppression des agents ajoutés.
 // settings.agents = la version enregistrée ; agents = la même liste avec initiales et logos pour l'affichage.

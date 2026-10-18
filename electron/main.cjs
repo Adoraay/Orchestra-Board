@@ -1,5 +1,6 @@
+const fs = require('fs');
 const path = require('path');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const ptyManager = require('./ptyManager.cjs');
 const fsHandlers = require('./fsHandlers.cjs');
 const settingsStore = require('./settingsStore.cjs');
@@ -8,10 +9,23 @@ const workspaceStore = require('./workspaceStore.cjs');
 
 let win;
 
+// Le projet s'appelait « agent-board » : on reprend une fois ses paramètres, agents et tableaux.
+function migrateOldUserData() {
+  const current = app.getPath('userData');
+  const old = path.join(app.getPath('appData'), 'agent-board');
+  if (fs.existsSync(path.join(current, 'settings.json')) || !fs.existsSync(old)) return;
+  fs.mkdirSync(current, { recursive: true });
+  for (const name of ['settings.json', 'workspace.json', 'logos']) {
+    const from = path.join(old, name);
+    if (fs.existsSync(from)) fs.cpSync(from, path.join(current, name), { recursive: true });
+  }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1400,
     height: 900,
+    title: 'Orchestra',
     backgroundColor: '#1f1e1d', // = --bg de src/theme.css, évite un flash avant le chargement du CSS
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -22,6 +36,10 @@ function createWindow() {
 
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
+    // Sans menu, plus de raccourci pour les outils de développement : F12 en mode dev.
+    win.webContents.on('before-input-event', (_e, input) => {
+      if (input.type === 'keyDown' && input.key === 'F12') win.webContents.toggleDevTools();
+    });
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
@@ -32,11 +50,12 @@ function send(channel, ...args) {
 }
 
 // L'interface envoie seulement l'id de l'agent : la commande à lancer vient des paramètres.
+// Renvoie { buffer } si le terminal tournait déjà (case d'un autre tableau qu'on rouvre).
 ipcMain.handle('pty:create', (_e, { id, agentId, cwd, cols, rows, resume }) => {
   const settings = settingsStore.load();
   const agent = settings.agents.find((a) => a.id === agentId);
-  if (typeof id !== 'string' || !agent) return;
-  ptyManager.create(
+  if (typeof id !== 'string' || !agent) return null;
+  return ptyManager.create(
     // resume : reprendre la dernière conversation (claude --continue) après un redémarrage de l'app.
     { id, command: resume && agent.resumeArgs ? `${agent.command} ${agent.resumeArgs}` : agent.command, shell: settings.general.shell, cwd, cols, rows },
     (id, data) => send(`pty:data:${id}`, data),
@@ -52,7 +71,13 @@ settingsStore.register();
 agentsHandlers.register(() => win);
 workspaceStore.register();
 
-app.whenReady().then(createWindow);
+// Pas de barre de menu File / Edit / View.
+Menu.setApplicationMenu(null);
+
+app.whenReady().then(() => {
+  migrateOldUserData();
+  createWindow();
+});
 
 // Pas de processus orphelins : on tue tous les agents en quittant.
 app.on('before-quit', () => ptyManager.killAll());

@@ -2,11 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const { app, ipcMain } = require('electron');
 
-// Disposition de la map (PLAN.md §3.4), dans userData/workspace.json.
+// Tableaux et disposition de chaque map (PLAN.md §3.4), dans userData/workspace.json.
 const ID = /^[\w-]{1,128}$/;
 const MAX_TEXT = 20000;
 const MAX_STROKES = 2000;
 const MAX_POINTS = 5000;
+const MAX_BOARDS = 50;
+const MAX_NAME = 40;
 
 const filePath = () => path.join(app.getPath('userData'), 'workspace.json');
 
@@ -46,7 +48,8 @@ function sanitizeNode(n) {
   };
 }
 
-function sanitize(input) {
+// Contenu d'un tableau : cases, liens, dessins et vue.
+function sanitizeContent(input) {
   const nodes = (Array.isArray(input?.nodes) ? input.nodes : []).map(sanitizeNode).filter(Boolean);
   const ids = new Set(nodes.map((n) => n.id));
   const edges = (Array.isArray(input?.edges) ? input.edges : [])
@@ -59,7 +62,29 @@ function sanitize(input) {
     .filter((s) => s.points.length > 1);
   const v = input?.viewport;
   const viewport = isNum(v?.x) && isNum(v?.y) && isNum(v?.zoom) ? { x: v.x, y: v.y, zoom: clamp(v.zoom, 0.1, 4, 1) } : null;
-  return { version: 1, nodes, edges, strokes, viewport };
+  return { nodes, edges, strokes, viewport };
+}
+
+const DEFAULT_NAME = 'Tableau 1';
+
+function sanitizeName(name, index) {
+  return typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : `Tableau ${index + 1}`;
+}
+
+// Plusieurs tableaux (pages). Un ancien fichier à un seul tableau (version 1) devient « Tableau 1 ».
+function sanitize(input) {
+  const rawBoards = Array.isArray(input?.boards) ? input.boards : input?.nodes ? [{ id: 'board-1', name: DEFAULT_NAME, ...input }] : [];
+  const seen = new Set();
+  const boards = [];
+  for (const raw of rawBoards.slice(0, MAX_BOARDS)) {
+    if (!raw || !ID.test(raw.id) || seen.has(raw.id)) continue;
+    seen.add(raw.id);
+    boards.push({ id: raw.id, name: sanitizeName(raw.name, boards.length), ...sanitizeContent(raw) });
+  }
+  if (!boards.length) boards.push({ id: 'board-1', name: DEFAULT_NAME, ...sanitizeContent(null) });
+
+  const activeBoardId = seen.has(input?.activeBoardId) ? input.activeBoardId : boards[0].id;
+  return { version: 2, activeBoardId, boards };
 }
 
 function load() {

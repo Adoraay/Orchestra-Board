@@ -4,7 +4,10 @@ const path = require('path');
 const pty = require('node-pty');
 
 // Un PTY par nœud de la map, indexé par l'id du nœud.
-const terminals = new Map();
+// Il continue de tourner quand on change de tableau ; ses dernières sorties sont gardées
+// pour les réafficher quand la case revient à l'écran.
+const terminals = new Map(); // id -> { term, buffer }
+const MAX_BUFFER = 256 * 1024; // caractères
 
 // Shell choisi dans les paramètres (Général).
 function resolveShell(name) {
@@ -33,8 +36,10 @@ function safeCwd(cwd) {
 }
 
 // command et shell viennent des paramètres, lus côté Node (jamais envoyés par l'interface).
+// Renvoie { buffer } : vide pour un nouveau terminal, les dernières sorties s'il tournait déjà.
 function create({ id, command, shell, cwd, cols = 100, rows = 30 }, onData, onExit) {
-  if (terminals.has(id)) return; // déjà lancé (ex : React StrictMode monte deux fois)
+  // Déjà lancé (case d'un tableau qu'on rouvre, ou React StrictMode qui monte deux fois).
+  if (terminals.has(id)) return { buffer: terminals.get(id).buffer };
 
   const term = pty.spawn(resolveShell(shell), [], {
     name: 'xterm-256color',
@@ -44,30 +49,35 @@ function create({ id, command, shell, cwd, cols = 100, rows = 30 }, onData, onEx
     env: process.env,
   });
 
-  term.onData((data) => onData(id, data));
+  const entry = { term, buffer: '' };
+  term.onData((data) => {
+    entry.buffer = (entry.buffer + data).slice(-MAX_BUFFER);
+    onData(id, data);
+  });
   term.onExit(({ exitCode }) => {
     terminals.delete(id);
     onExit(id, exitCode);
   });
 
-  terminals.set(id, term);
+  terminals.set(id, entry);
 
   // On démarre un shell puis on tape la commande de l'agent :
   // le PATH de l'utilisateur est chargé et le terminal reste ouvert si l'agent quitte.
   if (command) setTimeout(() => term.write(command + '\r'), 300);
+  return { buffer: '' };
 }
 
 function write(id, data) {
-  terminals.get(id)?.write(data);
+  terminals.get(id)?.term.write(data);
 }
 
 function resize(id, cols, rows) {
-  const term = terminals.get(id);
+  const term = terminals.get(id)?.term;
   if (term && cols > 0 && rows > 0) term.resize(cols, rows);
 }
 
 function kill(id) {
-  terminals.get(id)?.kill();
+  terminals.get(id)?.term.kill();
   terminals.delete(id);
 }
 

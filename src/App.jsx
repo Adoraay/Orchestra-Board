@@ -5,6 +5,7 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  ReactFlowProvider,
   addEdge,
   useEdgesState,
   useNodesState,
@@ -21,6 +22,7 @@ import SettingsModal from './components/SettingsModal.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
 import TextNode from './components/TextNode.jsx';
 import Toast from './components/Toast.jsx';
+import TitleBar from './components/TitleBar.jsx';
 import TopBar from './components/TopBar.jsx';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
@@ -28,8 +30,7 @@ import { useWorkspace } from './context/WorkspaceContext.jsx';
 import useBoardHistory from './hooks/useBoardHistory.js';
 import useBoardShortcuts from './hooks/useBoardShortcuts.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
-import useWorkspaceSave from './hooks/useWorkspaceSave.js';
-import { deserializeWorkspace } from './lib/workspace.js';
+import useBoards from './hooks/useBoards.js';
 
 const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode };
 const NOTE_SIZE = { width: 180, height: 180 };
@@ -43,27 +44,50 @@ const BOARD_HINTS = {
 const NODE_SIZE = { width: 640, height: 400 };
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
 
-// La map sauvegardée est chargée avant d'afficher le tableau : elle devient son état de départ
-// (et pas une étape que Ctrl+Z pourrait annuler).
+// Les tableaux sauvegardés sont chargés avant l'affichage : chaque map part de son état sauvegardé
+// (et pas d'une étape que Ctrl+Z pourrait annuler).
 export default function App() {
-  const [initial, setInitial] = useState(null);
+  const [saved, setSaved] = useState(null);
 
   useEffect(() => {
-    window.workspace.get().then((saved) => setInitial(deserializeWorkspace(saved)));
+    window.workspace.get().then(setSaved);
   }, []);
 
-  return initial ? <Board initial={initial} /> : null;
+  return saved ? <Workspace saved={saved} /> : null;
 }
 
-function Board({ initial }) {
+// Barre du haut avec les onglets des tableaux, tableau ouvert, explorateur et paramètres.
+function Workspace({ saved }) {
+  const boards = useBoards(saved);
+  const { activeId, content, updateContent } = boards;
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
+
+  return (
+    <div className="app">
+      <TitleBar />
+      <TopBar boards={boards} onOpenSettings={() => setSettingsOpen(true)} />
+      <div className="workspace">
+        {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
+        <ReactFlowProvider key={activeId}>
+          <Board initial={content[activeId]} onChange={onBoardChange} />
+        </ReactFlowProvider>
+        <ExplorerPanel />
+      </div>
+      {settingsOpen && <SettingsModal onClose={closeSettings} />}
+    </div>
+  );
+}
+
+// Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
+function Board({ initial, onChange }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
   const { screenToFlowPosition } = useReactFlow();
   const { activeFolder, homeDir } = useWorkspace();
   const [toast, setToast] = useState(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const { settings, agentById } = useSettings();
   const grid = settings.appearance.grid;
 
@@ -112,7 +136,11 @@ function Board({ initial }) {
   );
 
   const history = useBoardHistory({ nodes, edges, strokes, setNodes, setEdges, setStrokes });
-  useWorkspaceSave({ nodes, edges, strokes, viewport });
+
+  // Le contenu remonte à chaque changement : c'est ce qui est sauvegardé et relu quand on revient sur l'onglet.
+  useEffect(() => {
+    onChange({ nodes, edges, strokes, viewport });
+  }, [nodes, edges, strokes, viewport, onChange]);
 
   // Suppr retire le trait ou les liens choisis. Les cases se ferment avec leur bouton ×.
   useBoardShortcuts({
@@ -212,70 +240,65 @@ function Board({ initial }) {
   );
 
   return (
-    <div className="app">
-      <TopBar onOpenSettings={() => setSettingsOpen(true)} />
-      <div className="workspace">
-        <AgentDock draggedAgentId={draggedAgentId} onDragStart={setDraggedAgentId} onDragEnd={endDrag} />
-        <main
-          className={`board tool-${tool}`}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          {...pen.handlers}
-        >
-          <BoardContext.Provider value={board}>
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onPaneClick={onPaneClick}
-              onNodeClick={onNodeClick}
-              onEdgeClick={() => setSelectedStroke(null)}
-              onMoveEnd={(_event, v) => setViewport(v)}
-              defaultViewport={initial.viewport ?? undefined}
-              nodesDraggable={tool === 'select'}
-              nodesConnectable={false}
-              elementsSelectable={tool === 'select'}
-              panOnDrag={tool === 'pen' ? [1] : true}
-              minZoom={0.1}
-              deleteKeyCode={null}
-              multiSelectionKeyCode={null}
-              selectionKeyCode={null}
-              proOptions={{ hideAttribution: true }}
-              colorMode="dark"
-            >
-              {GRID_VARIANTS[grid] && <Background variant={GRID_VARIANTS[grid]} gap={24} />}
-              <Controls position="bottom-left" />
-              <MiniMap position="bottom-right" pannable zoomable />
-              <DrawingLayer
-                strokes={strokes}
-                draft={pen.draft}
-                selectedId={selectedStroke}
-                selectable={tool === 'select'}
-                erasable={tool === 'select' || tool === 'pen'}
-                onSelect={selectStroke}
-                onDelete={deleteStroke}
-              />
-            </ReactFlow>
-          </BoardContext.Provider>
-          <BoardToolbar tool={tool} onChange={setTool} />
-          {BOARD_HINTS[tool] && (
-            <div className="board-hint" role="status">
-              {tool === 'link' && linkSource ? 'Clique sur la case à relier' : BOARD_HINTS[tool]}
-              {tool === 'link' && <kbd>Échap</kbd>}
-            </div>
-          )}
-          {previewPos && draggedAgentId && (
-            <DropPreview agent={agentById(draggedAgentId)} position={previewPos} size={NODE_SIZE} />
-          )}
-          {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
-        </main>
-        <ExplorerPanel />
-      </div>
-      {settingsOpen && <SettingsModal onClose={closeSettings} />}
-    </div>
+    <>
+      <AgentDock draggedAgentId={draggedAgentId} onDragStart={setDraggedAgentId} onDragEnd={endDrag} />
+      <main
+        className={`board tool-${tool}`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        {...pen.handlers}
+      >
+        <BoardContext.Provider value={board}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onPaneClick={onPaneClick}
+            onNodeClick={onNodeClick}
+            onEdgeClick={() => setSelectedStroke(null)}
+            onMoveEnd={(_event, v) => setViewport(v)}
+            defaultViewport={initial.viewport ?? undefined}
+            nodesDraggable={tool === 'select'}
+            nodesConnectable={false}
+            elementsSelectable={tool === 'select'}
+            panOnDrag={tool === 'pen' ? [1] : true}
+            minZoom={0.1}
+            deleteKeyCode={null}
+            multiSelectionKeyCode={null}
+            selectionKeyCode={null}
+            proOptions={{ hideAttribution: true }}
+            colorMode="dark"
+          >
+            {GRID_VARIANTS[grid] && <Background variant={GRID_VARIANTS[grid]} gap={24} />}
+            <Controls position="bottom-left" />
+            <MiniMap position="bottom-right" pannable zoomable />
+            <DrawingLayer
+              strokes={strokes}
+              draft={pen.draft}
+              selectedId={selectedStroke}
+              selectable={tool === 'select'}
+              erasable={tool === 'select' || tool === 'pen'}
+              onSelect={selectStroke}
+              onDelete={deleteStroke}
+            />
+          </ReactFlow>
+        </BoardContext.Provider>
+        <BoardToolbar tool={tool} onChange={setTool} />
+        {BOARD_HINTS[tool] && (
+          <div className="board-hint" role="status">
+            {tool === 'link' && linkSource ? 'Clique sur la case à relier' : BOARD_HINTS[tool]}
+            {tool === 'link' && <kbd>Échap</kbd>}
+          </div>
+        )}
+        {previewPos && draggedAgentId && (
+          <DropPreview agent={agentById(draggedAgentId)} position={previewPos} size={NODE_SIZE} />
+        )}
+        {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
+      </main>
+    </>
   );
 }

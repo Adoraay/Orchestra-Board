@@ -1,17 +1,23 @@
 import { Folder, Settings } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
+import BoardTabs from './BoardTabs.jsx';
 
-// Barre du haut : nom de l'app, dossier actif (donné au prochain agent), paramètres.
-export default function TopBar({ onOpenSettings }) {
+// Barre sous le titre : onglets des tableaux, dossier actif (donné au prochain agent), paramètres.
+export default function TopBar({ boards, onOpenSettings }) {
   const { activeFolder, homeDir } = useWorkspace();
 
   return (
     <header className="topbar">
-      <div className="topbar-brand">
-        <span className="brand-dot" />
-        Agent Board
-      </div>
+      <BoardTabs
+        boards={boards.boards}
+        activeId={boards.activeId}
+        onSelect={boards.setActiveId}
+        onCreate={boards.createBoard}
+        onRename={boards.renameBoard}
+        onDelete={boards.deleteBoard}
+        agentCount={boards.agentCount}
+      />
 
       <div className="topbar-folder" title={activeFolder || undefined}>
         <Folder size={15} />

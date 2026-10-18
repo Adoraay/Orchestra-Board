@@ -23,4 +23,4 @@ export function decorateAgent(agent, customLogos) {
 export const MISSING_AGENT = { id: 'missing', name: 'Agent supprimé', initials: '?', command: null };
 
 // Type MIME maison pour le drag & drop depuis le dock.
-export const DRAG_TYPE = 'application/agent-board';
+export const DRAG_TYPE = 'application/orchestra-agent';

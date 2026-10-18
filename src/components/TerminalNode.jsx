@@ -42,15 +42,22 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     term.open(containerRef.current);
     fit.fit();
 
-    // Clavier -> PTY, PTY -> écran
+    // Clavier -> PTY, PTY -> écran. Si le terminal tournait déjà (tableau qu'on rouvre), on réaffiche
+    // d'abord ses dernières sorties : ce qui arrive avant est déjà dedans, on le met de côté.
+    let disposed = false;
+    let ready = askResumeAtMount.current;
     const offInput = term.onData((d) => window.pty.write(id, d));
-    const offData = window.pty.onData(id, (d) => term.write(d));
+    const offData = window.pty.onData(id, (d) => ready && term.write(d));
     const offExit = window.pty.onExit(id, () => setExited(true));
 
     termRef.current = term;
     fitRef.current = fit;
     if (!askResumeAtMount.current) {
-      window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows });
+      window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows }).then((result) => {
+        if (disposed) return;
+        if (result?.buffer) term.write(result.buffer);
+        ready = true;
+      });
     }
 
     // Quand la case change de taille, le terminal suit.
@@ -63,6 +70,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     observer.observe(containerRef.current);
 
     return () => {
+      disposed = true;
       observer.disconnect();
       offInput.dispose();
       offData();

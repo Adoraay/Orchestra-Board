@@ -1,4 +1,6 @@
-# Agent Board
+# Orchestra
+
+*« soit le maestro de ton Orchestre d'IA ! »*
 
 Une grande map où tu glisses des agents IA (Claude Code, Codex, Gemini CLI…) depuis le dock de gauche. Chaque agent tourne dans un vrai terminal, et tu peux en mettre autant que tu veux côte à côte.
 
@@ -11,10 +13,10 @@ npm install      # installe tout et recompile node-pty pour Electron
 npm run dev      # lance Vite + Electron avec rechargement à chaud
 ```
 
-Pour lancer l'app sans terminal : double-clic sur `launcher\AgentBoard.vbs` (reconstruit l'interface puis ouvre l'app). Pour un raccourci sur le Bureau :
+Pour lancer l'app sans terminal : double-clic sur `launcher.exe` à la racine du projet (reconstruit l'interface puis ouvre l'app, détails d'une erreur dans `launcher.log`). Il doit rester à la racine. Pour le recompiler après une modification de `scripts/launcher.cs` :
 
-```powershell
-powershell -ExecutionPolicy Bypass -File launcher\creer-raccourci.ps1
+```bash
+npm run build:launcher
 ```
 
 Sous Windows, si `npm install` échoue sur node-pty, installe les « Desktop development with C++ » de Visual Studio Build Tools et Python 3, puis relance `npm install`.
@@ -39,14 +41,14 @@ src/
   lib/               thème xterm, chemins
   theme.css          toutes les couleurs (variables CSS)
   styles.css
-launcher/            lancement sans terminal + raccourci Bureau
+scripts/launcher.cs  source de launcher.exe (lancement sans terminal)
 ```
 
 Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty → le CLI. La sortie fait le chemin inverse via `pty:data:<id>`.
 
 ## Ajouter un agent
 
-Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, couleur). Le bouton « Tester » vérifie que la commande existe. Les paramètres sont dans `%APPDATA%\agent-board\settings.json`.
+Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, couleur). Le bouton « Tester » vérifie que la commande existe. Les paramètres sont dans `%APPDATA%\Orchestra\settings.json`.
 
 ## Déjà en place
 
