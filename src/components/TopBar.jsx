@@ -4,7 +4,7 @@ import { displayPath } from '../lib/paths.js';
 import BoardTabs from './BoardTabs.jsx';
 
 // Barre sous le titre : onglets des tableaux, dossier actif (donné au prochain agent), paramètres.
-export default function TopBar({ boards, onOpenSettings }) {
+export default function TopBar({ boards, boardsWithNews, onOpenSettings }) {
   const { activeFolder, homeDir } = useWorkspace();
 
   return (
@@ -17,6 +17,7 @@ export default function TopBar({ boards, onOpenSettings }) {
         onRename={boards.renameBoard}
         onDelete={boards.deleteBoard}
         agentCount={boards.agentCount}
+        boardsWithNews={boardsWithNews}
       />
 
       <div className="topbar-folder" title={activeFolder || undefined}>

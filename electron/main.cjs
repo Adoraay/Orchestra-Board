@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Notification, ipcMain } = require('electron');
 const ptyManager = require('./ptyManager.cjs');
 const fsHandlers = require('./fsHandlers.cjs');
 const settingsStore = require('./settingsStore.cjs');
@@ -53,7 +53,33 @@ function send(channel, ...args) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args);
 }
 
-agentStatus.init((id, info) => send(`pty:status:${id}`, info));
+// Statut envoyé à la case (pty:status:<id>) et à l'app entière (agent:status), qui gère le son et les
+// onglets, y compris pour les cases des tableaux fermés.
+function sendStatus(id, info) {
+  send(`pty:status:${id}`, info);
+  send('agent:status', id, info);
+}
+
+// Fenêtre pas au premier plan : notification Windows. Un clic ramène l'app et centre la map sur la case.
+function notifyFinished(id, info) {
+  if (!settingsStore.load().general.notifyDesktop || !Notification.isSupported()) return;
+  if (win && !win.isDestroyed() && win.isFocused()) return;
+  const notification = new Notification({
+    title: `${info.name} a terminé sa tâche`,
+    body: info.cwd ? path.basename(info.cwd) || info.cwd : '',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+  });
+  notification.on('click', () => {
+    if (!win || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    send('agent:focus', id);
+  });
+  notification.show();
+}
+
+agentStatus.init(sendStatus, notifyFinished);
 
 // Commande à taper dans le shell : celle de l'agent, + reprise de conversation, + hooks pour Claude Code.
 function buildCommand(id, agent, resume) {
@@ -73,7 +99,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, cols, rows, resume }) => {
   if (typeof id !== 'string' || !agent) return null;
 
   const existing = agentStatus.info(id);
-  if (!existing) agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity');
+  if (!existing) agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity', { name: agent.name, cwd, notify: Boolean(agent.command) });
   const result = ptyManager.create(
     { id, command: existing ? null : buildCommand(id, agent, resume), shell: settings.general.shell, cwd, cols, rows },
     (id, data) => {
@@ -83,6 +109,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, cols, rows, resume }) => {
     (id, code) => {
       agentStatus.unregister(id);
       claudeHooks.removeSettings(id);
+      send('agent:status', id, null);
       send(`pty:exit:${id}`, code);
     },
   );
@@ -94,10 +121,12 @@ ipcMain.on('pty:write', (_e, id, data) => {
   ptyManager.write(id, data);
 });
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
+ipcMain.on('pty:ack', (_e, id) => agentStatus.acknowledge(id)); // clic sur une case qui a fini
 ipcMain.on('pty:kill', (_e, id) => {
   ptyManager.kill(id);
   agentStatus.unregister(id);
   claudeHooks.removeSettings(id);
+  send('agent:status', id, null);
 });
 
 fsHandlers.register(() => win);

@@ -25,11 +25,26 @@ contextBridge.exposeInMainWorld('workspace', {
   saveSync: (workspace) => ipcRenderer.sendSync('workspace:saveSync', workspace),
 });
 
+// Événements de toutes les cases : statuts (son, onglets) et clic sur une notification Windows.
+contextBridge.exposeInMainWorld('agentEvents', {
+  onStatus: (cb) => {
+    const listener = (_e, id, info) => cb(id, info);
+    ipcRenderer.on('agent:status', listener);
+    return () => ipcRenderer.removeListener('agent:status', listener);
+  },
+  onFocusRequest: (cb) => {
+    const listener = (_e, id) => cb(id);
+    ipcRenderer.on('agent:focus', listener);
+    return () => ipcRenderer.removeListener('agent:focus', listener);
+  },
+});
+
 contextBridge.exposeInMainWorld('pty', {
   create: (opts) => ipcRenderer.invoke('pty:create', opts),
   write: (id, data) => ipcRenderer.send('pty:write', id, data),
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
   kill: (id) => ipcRenderer.send('pty:kill', id),
+  ack: (id) => ipcRenderer.send('pty:ack', id),
   onData: (id, cb) => {
     const channel = `pty:data:${id}`;
     const listener = (_e, data) => cb(data);

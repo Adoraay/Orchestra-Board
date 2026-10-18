@@ -30,6 +30,7 @@ import { useWorkspace } from './context/WorkspaceContext.jsx';
 import useBoardHistory from './hooks/useBoardHistory.js';
 import useBoardShortcuts from './hooks/useBoardShortcuts.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
+import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useBoards from './hooks/useBoards.js';
 
 const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode };
@@ -63,15 +64,16 @@ function Workspace({ saved }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
+  const { boardsWithNews, focusRequest } = useAgentNotifications(boards);
 
   return (
     <div className="app">
       <TitleBar />
-      <TopBar boards={boards} onOpenSettings={() => setSettingsOpen(true)} />
+      <TopBar boards={boards} boardsWithNews={boardsWithNews} onOpenSettings={() => setSettingsOpen(true)} />
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
-          <Board initial={content[activeId]} onChange={onBoardChange} />
+          <Board initial={content[activeId]} onChange={onBoardChange} focusRequest={focusRequest} />
         </ReactFlowProvider>
         <ExplorerPanel />
       </div>
@@ -81,11 +83,18 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange }) {
+function Board({ initial, onChange, focusRequest }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+
+  // Clic sur une notification Windows : on centre la map sur la case (après sa mesure si le tableau vient de s'ouvrir).
+  useEffect(() => {
+    if (!focusRequest) return;
+    const timer = setTimeout(() => fitView({ nodes: [{ id: focusRequest.id }], duration: 400, padding: 0.3, maxZoom: 1 }), 120);
+    return () => clearTimeout(timer);
+  }, [focusRequest, fitView]);
   const { activeFolder, homeDir } = useWorkspace();
   const [toast, setToast] = useState(null);
   const { settings, agentById } = useSettings();

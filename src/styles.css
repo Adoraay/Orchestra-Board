@@ -823,3 +823,72 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .status-dot.working { animation: none; }
 }
+
+/* Fin de tâche (PLAN.md §3.6) : lueur verte qui pulse 3 fois puis reste faible, bulle au-dessus */
+.terminal-node.finished {
+  border-color: var(--success);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--success) 50%, transparent), 0 0 18px color-mix(in srgb, var(--success) 30%, transparent);
+  animation: finished-glow 1.1s ease-in-out 3;
+}
+@keyframes finished-glow {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--success) 50%, transparent), 0 0 18px color-mix(in srgb, var(--success) 30%, transparent); }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 75%, transparent), 0 0 42px color-mix(in srgb, var(--success) 55%, transparent); }
+}
+.finish-bubble {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 1px solid color-mix(in srgb, var(--success) 55%, var(--border));
+  border-radius: 999px;
+  background: var(--surface-2);
+  box-shadow: 0 8px 22px var(--shadow);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  animation: bubble-in 220ms ease-out;
+  pointer-events: none;
+}
+/* petite pointe vers la case */
+.finish-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 6px solid transparent;
+  border-top-color: var(--surface-2);
+  transform: translateX(-50%);
+}
+@keyframes bubble-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+}
+
+.tab-news {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-node.finished, .finish-bubble { animation: none; }
+}
+
+/* Confirmation de fermeture d'une case qui travaille */
+.close-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  color: var(--warning);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: default;
+}

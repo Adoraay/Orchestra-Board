@@ -4,7 +4,7 @@ import { Plus, X } from 'lucide-react';
 const MAX_NAME = 40;
 
 // Onglets des tableaux (pages) dans la barre du haut : clic = ouvrir, double-clic = renommer.
-export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRename, onDelete, agentCount }) {
+export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRename, onDelete, agentCount, boardsWithNews }) {
   const [renaming, setRenaming] = useState(null);
   const [confirming, setConfirming] = useState(null);
   const cancelRename = useRef(false); // Échap : le blur qui suit ne doit pas enregistrer
@@ -60,6 +60,7 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
             onClick={() => onSelect(board.id)}
             onDoubleClick={() => setRenaming(board.id)}
           >
+            {boardsWithNews.has(board.id) && <span className="tab-news" title="Un agent a terminé sa tâche" />}
             <span className="board-tab-name">{board.name}</span>
             {boards.length > 1 && (
               <button

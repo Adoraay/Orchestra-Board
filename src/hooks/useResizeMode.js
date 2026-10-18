@@ -29,7 +29,7 @@ export default function useResizeMode(selected) {
     onClick: (event) => {
       const start = downAt.current;
       downAt.current = null;
-      if (!start || event.target.closest('button')) return;
+      if (!start || event.target.closest('button, .nodrag')) return;
       const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
       if (moved < CLICK_TOLERANCE) setResizing(true);
     },

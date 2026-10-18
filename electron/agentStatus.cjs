@@ -1,23 +1,43 @@
 // Statut de chaque case : idle (gris), working (orange), waiting (jaune), done (vert).
 // Claude Code : donné par ses hooks. Les autres agents : déduit de l'activité du terminal.
+// unseen : l'agent a fini et personne n'a encore regardé (lueur verte, PLAN.md §3.6).
 const QUIET_DELAY = 2500; // ms sans sortie après une commande = « a fini »
 
-const entries = new Map(); // id -> { mode, status, armed, quietTimer, sessionId, transcriptPath }
+const entries = new Map(); // id -> { mode, status, unseen, armed, quietTimer, sessionId, transcriptPath, name, cwd }
 let emit = () => {};
+let onFinish = () => {};
 
-function init(onChange) {
+// onChange(id, info) à chaque changement, finished(id, info) quand un agent vient de finir.
+function init(onChange, finished) {
   emit = onChange;
+  onFinish = finished;
 }
 
 function set(id, entry, status) {
   if (entry.status === status) return;
+  const justFinished = entry.notify && status === 'done' && (entry.status === 'working' || entry.status === 'waiting');
   entry.status = status;
+  if (status === 'working') entry.unseen = false;
+  if (justFinished) entry.unseen = true;
   emit(id, info(id));
+  if (justFinished) onFinish(id, info(id));
 }
 
-// mode : 'hooks' (Claude Code) ou 'activity' (les autres)
-function register(id, mode) {
-  entries.set(id, { mode, status: 'idle', armed: false, quietTimer: null, sessionId: null, transcriptPath: null });
+// mode : 'hooks' (Claude Code) ou 'activity' (les autres). meta : { name, cwd } pour les notifications,
+// notify : false pour un simple terminal (sa pastille change, mais pas de lueur, de son ni de notification).
+function register(id, mode, meta = {}) {
+  entries.set(id, {
+    mode,
+    status: 'idle',
+    unseen: false,
+    armed: false,
+    quietTimer: null,
+    sessionId: null,
+    transcriptPath: null,
+    name: meta.name ?? '',
+    cwd: meta.cwd ?? null,
+    notify: meta.notify !== false,
+  });
 }
 
 function unregister(id) {
@@ -27,7 +47,17 @@ function unregister(id) {
 
 function info(id) {
   const e = entries.get(id);
-  return e ? { status: e.status, sessionId: e.sessionId, transcriptPath: e.transcriptPath } : null;
+  return e
+    ? { status: e.status, unseen: e.unseen, sessionId: e.sessionId, transcriptPath: e.transcriptPath, name: e.name, cwd: e.cwd }
+    : null;
+}
+
+// La fin a été vue : clic sur la case ou saisie dans son terminal.
+function acknowledge(id) {
+  const e = entries.get(id);
+  if (!e?.unseen) return;
+  e.unseen = false;
+  emit(id, info(id));
 }
 
 // Événements des hooks de Claude Code.
@@ -52,11 +82,15 @@ function onHook(id, payload) {
   }
 }
 
+// Une frappe vaut « vu ». Les séquences qui commencent par Échap sont ignorées : ce sont surtout les
+// réponses automatiques de xterm aux programmes (position du curseur, focus), pas l'utilisateur.
 // Agents sans hooks : Entrée « arme » la case, la sortie qui suit = travaille, le silence = a fini.
 // Sans Entrée avant, la sortie (démarrage, écho des touches, animations) ne change rien.
 function onInput(id, data) {
   const e = entries.get(id);
-  if (e?.mode === 'activity' && data.includes('\r')) e.armed = true;
+  if (!e || data.startsWith('\x1b')) return;
+  acknowledge(id);
+  if (e.mode === 'activity' && data.includes('\r')) e.armed = true;
 }
 
 function onOutput(id) {
@@ -68,4 +102,4 @@ function onOutput(id) {
   e.quietTimer = setTimeout(() => set(id, e, 'done'), QUIET_DELAY);
 }
 
-module.exports = { init, register, unregister, info, onHook, onInput, onOutput };
+module.exports = { init, register, unregister, info, acknowledge, onHook, onInput, onOutput };

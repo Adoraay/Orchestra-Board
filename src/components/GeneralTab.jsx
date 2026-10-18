@@ -56,7 +56,6 @@ export default function GeneralTab() {
           <input type="checkbox" checked={general.notifyDesktop} onChange={(e) => update({ notifyDesktop: e.target.checked })} />
           Notification Windows quand l'app n'est pas au premier plan
         </label>
-        <span className="hint">Ces trois options prendront effet avec les statuts des agents.</span>
       </div>
     </div>
   );

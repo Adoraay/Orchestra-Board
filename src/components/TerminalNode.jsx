@@ -4,6 +4,7 @@ import { History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
+import FinishBubble from './FinishBubble.jsx';
 import StatusDot from './StatusDot.jsx';
 import { useBoard } from '../context/BoardContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
@@ -22,6 +23,8 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const { accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
   const [status, setStatus] = useState('idle');
+  const [finished, setFinished] = useState(false); // a fini et pas encore vu : lueur verte (PLAN.md §3.6)
+  const [confirmingClose, setConfirmingClose] = useState(false);
   const { deleteElements, updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
@@ -53,8 +56,14 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     const offExit = window.pty.onExit(id, () => {
       setExited(true);
       setStatus('idle');
+      setFinished(false);
     });
-    const offStatus = window.pty.onStatus(id, (info) => info && setStatus(info.status));
+    const applyStatus = (info) => {
+      if (!info) return;
+      setStatus(info.status);
+      setFinished(info.unseen);
+    };
+    const offStatus = window.pty.onStatus(id, applyStatus);
 
     termRef.current = term;
     fitRef.current = fit;
@@ -62,7 +71,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows }).then((result) => {
         if (disposed) return;
         if (result?.buffer) term.write(result.buffer);
-        if (result?.status) setStatus(result.status.status);
+        applyStatus(result?.status);
         ready = true;
       });
     }
@@ -126,9 +135,18 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     deleteElements({ nodes: [{ id }] });
   };
 
+  // Paramètre « Confirmer avant de fermer une case qui travaille » : on demande dans la barre de titre.
+  const busy = !exited && (status === 'working' || status === 'waiting');
+  const requestClose = () => {
+    if (busy && settings.general.confirmClose) setConfirmingClose(true);
+    else close();
+  };
+
   // Clic n'importe où (terminal compris) = case choisie. En capture, car xterm
   // intercepte les clics dans le terminal. Désélectionne aussi les autres cases.
+  // Le clic vaut aussi « vu » pour un agent qui a fini.
   const select = () => {
+    if (finished) window.pty.ack(id);
     if (tool !== 'link' && !selected) store.getState().addSelectedNodes([id]);
   };
 
@@ -145,10 +163,11 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       {/* Requis par React Flow pour afficher les liens ; le tracé réel est calculé par FloatingEdge */}
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
+      <FinishBubble agent={agent} finished={finished} />
 
       <div
         ref={floating.ref}
-        className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${linkSource === id ? 'link-source' : ''} ${floating.animClass}`}
+        className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${linkSource === id ? 'link-source' : ''} ${finished ? 'finished' : ''} ${floating.animClass}`}
         onAnimationEnd={floating.onAnimationEnd}
         onPointerDownCapture={select}
       >
@@ -167,7 +186,15 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
                 Relancer
               </button>
             )}
-            <button className="close nodrag" onClick={close} title="Fermer"><X size={15} /></button>
+            {confirmingClose ? (
+              <span className="close-confirm nodrag">
+                {agent.name} travaille encore. Fermer ?
+                <button className="tab-confirm danger" onClick={close}>Fermer</button>
+                <button className="tab-confirm" onClick={() => setConfirmingClose(false)}>Annuler</button>
+              </span>
+            ) : (
+              <button className="close nodrag" onClick={requestClose} title="Fermer"><X size={15} /></button>
+            )}
           </span>
         </header>
 
