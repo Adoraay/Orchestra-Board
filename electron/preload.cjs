@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('agents', {
   testCommand: (command) => ipcRenderer.invoke('agents:testCommand', command),
 });
 
+contextBridge.exposeInMainWorld('workspace', {
+  get: () => ipcRenderer.invoke('workspace:get'),
+  set: (workspace) => ipcRenderer.invoke('workspace:set', workspace),
+  saveSync: (workspace) => ipcRenderer.sendSync('workspace:saveSync', workspace),
+});
+
 contextBridge.exposeInMainWorld('pty', {
   create: (opts) => ipcRenderer.invoke('pty:create', opts),
   write: (id, data) => ipcRenderer.send('pty:write', id, data),

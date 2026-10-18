@@ -28,6 +28,8 @@ import { useWorkspace } from './context/WorkspaceContext.jsx';
 import useBoardHistory from './hooks/useBoardHistory.js';
 import useBoardShortcuts from './hooks/useBoardShortcuts.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
+import useWorkspaceSave from './hooks/useWorkspaceSave.js';
+import { deserializeWorkspace } from './lib/workspace.js';
 
 const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode };
 const NOTE_SIZE = { width: 180, height: 180 };
@@ -41,9 +43,22 @@ const BOARD_HINTS = {
 const NODE_SIZE = { width: 640, height: 400 };
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
 
+// La map sauvegardée est chargée avant d'afficher le tableau : elle devient son état de départ
+// (et pas une étape que Ctrl+Z pourrait annuler).
 export default function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [initial, setInitial] = useState(null);
+
+  useEffect(() => {
+    window.workspace.get().then((saved) => setInitial(deserializeWorkspace(saved)));
+  }, []);
+
+  return initial ? <Board initial={initial} /> : null;
+}
+
+function Board({ initial }) {
+  const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
+  const [viewport, setViewport] = useState(initial.viewport);
   const { screenToFlowPosition } = useReactFlow();
   const { activeFolder, homeDir } = useWorkspace();
   const [toast, setToast] = useState(null);
@@ -54,7 +69,7 @@ export default function App() {
 
   // Barre d'outils (PLAN.md §3.8)
   const [tool, setTool] = useState('select');
-  const [strokes, setStrokes] = useState([]);
+  const [strokes, setStrokes] = useState(initial.strokes);
   const [selectedStroke, setSelectedStroke] = useState(null);
   const [linkSource, setLinkSource] = useState(null); // case cliquée en premier avec l'outil Lien
   const board = useMemo(() => ({ tool, linkSource }), [tool, linkSource]);
@@ -97,6 +112,7 @@ export default function App() {
   );
 
   const history = useBoardHistory({ nodes, edges, strokes, setNodes, setEdges, setStrokes });
+  useWorkspaceSave({ nodes, edges, strokes, viewport });
 
   // Suppr retire le trait ou les liens choisis. Les cases se ferment avec leur bouton ×.
   useBoardShortcuts({
@@ -218,6 +234,8 @@ export default function App() {
               onPaneClick={onPaneClick}
               onNodeClick={onNodeClick}
               onEdgeClick={() => setSelectedStroke(null)}
+              onMoveEnd={(_event, v) => setViewport(v)}
+              defaultViewport={initial.viewport ?? undefined}
               nodesDraggable={tool === 'select'}
               nodesConnectable={false}
               elementsSelectable={tool === 'select'}

@@ -4,10 +4,11 @@ const { app, ipcMain } = require('electron');
 
 // Paramètres de l'app (PLAN.md §3.3), dans userData/settings.json.
 // Agents de base : toujours présents, seuls leur ordre et « masqué » sont modifiables.
+// resumeArgs : reprendre la dernière conversation du dossier après un redémarrage de l'app.
 const BUILTIN_AGENTS = [
-  { id: 'claude-code', name: 'Claude Code', command: 'claude', color: '#d97757' },
-  { id: 'codex', name: 'Codex', command: 'codex', color: '#10a37f' },
-  { id: 'gemini', name: 'Gemini CLI', command: 'gemini', color: '#4285f4' },
+  { id: 'claude-code', name: 'Claude Code', command: 'claude', color: '#d97757', resumeArgs: '--continue' },
+  { id: 'codex', name: 'Codex', command: 'codex', color: '#10a37f', resumeArgs: 'resume --last' },
+  { id: 'gemini', name: 'Gemini CLI', command: 'gemini', color: '#4285f4', resumeArgs: '--resume latest' },
   { id: 'shell', name: 'Terminal', command: null, color: '#8b93a7' }, // juste un terminal vide
 ];
 

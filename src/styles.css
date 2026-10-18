@@ -325,7 +325,24 @@ button { font: inherit; color: inherit; }
   color: var(--danger);
 }
 
-.terminal-body { flex: 1; padding: 4px; min-height: 0; overflow: hidden; background: var(--terminal-bg); }
+.terminal-body { position: relative; flex: 1; padding: 4px; min-height: 0; overflow: hidden; background: var(--terminal-bg); }
+
+/* Case restaurée : reprendre ou non la conversation précédente */
+.resume-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px;
+  background: color-mix(in srgb, var(--terminal-bg) 92%, transparent);
+  text-align: center;
+}
+.resume-prompt p { margin: 0; color: var(--text); }
+.resume-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 /* xterm 5.5 retire toujours 15 px pour sa barre, même masquée : on lui donne 15 px de plus, rognés. */
 .terminal-mount { width: calc(100% + 15px); height: 100%; }
 

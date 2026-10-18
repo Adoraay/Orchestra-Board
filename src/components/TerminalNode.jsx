@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Handle, NodeResizer, Position, useReactFlow, useStoreApi } from '@xyflow/react';
-import { RotateCcw, X } from 'lucide-react';
+import { History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
@@ -20,11 +20,15 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const { tool, linkSource } = useBoard();
   const { accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
-  const { deleteElements } = useReactFlow();
+  const { deleteElements, updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
   const { resizing, headerProps, stopResizing } = useResizeMode(selected);
   const agent = agentById(data.agentId);
+
+  // Case restaurée au démarrage d'un agent qui sait reprendre (Claude Code) : on demande avant de lancer.
+  const askResume = Boolean(data.restored && agent.resumeArgs);
+  const askResumeAtMount = useRef(askResume);
 
   useEffect(() => {
     const term = new Terminal({
@@ -45,7 +49,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
 
     termRef.current = term;
     fitRef.current = fit;
-    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows });
+    if (!askResumeAtMount.current) {
+      window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows });
+    }
 
     // Quand la case change de taille, le terminal suit.
     const observer = new ResizeObserver(() => {
@@ -80,6 +86,14 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       } catch {}
     }
   }, [id, accent, terminalFontSize]);
+
+  const launch = (resume) => {
+    const term = termRef.current;
+    if (!term) return;
+    updateNodeData(id, { restored: false });
+    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, cols: term.cols, rows: term.rows, resume });
+    term.focus();
+  };
 
   // Le processus s'est terminé : on relance l'agent dans la même case et le même dossier.
   const restart = () => {
@@ -144,6 +158,21 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
         {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
         <div className="terminal-body nodrag nowheel" onPointerDown={stopResizing}>
           <div className="terminal-mount" ref={containerRef} />
+          {askResume && (
+            <div className="resume-prompt">
+              <p>Reprendre la dernière conversation de {agent.name} dans ce dossier ?</p>
+              <div className="resume-actions">
+                <button className="text-button primary" onClick={() => launch(true)}>
+                  <History size={15} />
+                  Reprendre la conversation
+                </button>
+                <button className="text-button" onClick={() => launch(false)}>
+                  <MessageSquarePlus size={15} />
+                  Nouvelle conversation
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
