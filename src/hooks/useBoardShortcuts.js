@@ -6,20 +6,31 @@ function isTyping(target) {
   return target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]') !== null);
 }
 
-// Raccourcis du tableau : V/P/N/T/L pour les outils, Échap = Sélection, Suppr = supprimer la sélection.
-export default function useBoardShortcuts({ onTool, onEscape, onDelete }) {
-  const handlers = useRef({ onTool, onEscape, onDelete });
-  handlers.current = { onTool, onEscape, onDelete };
+// Raccourcis du tableau : V/P/N/T/L pour les outils, Échap = Sélection, Suppr = supprimer la sélection,
+// Ctrl+Z = annuler, Ctrl+Y ou Ctrl+Maj+Z = rétablir.
+export default function useBoardShortcuts({ onTool, onEscape, onDelete, onUndo, onRedo }) {
+  const handlers = useRef({ onTool, onEscape, onDelete, onUndo, onRedo });
+  handlers.current = { onTool, onEscape, onDelete, onUndo, onRedo };
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return;
-      if (document.querySelector('.modal-backdrop')) return; // paramètres ouverts
+      // Dans un champ ou un terminal, Ctrl+Z garde son sens habituel.
+      if (isTyping(event.target) || document.querySelector('.modal-backdrop')) return;
+
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+        if (key === 'z' && !event.shiftKey) handlers.current.onUndo();
+        else if (key === 'y' || (key === 'z' && event.shiftKey)) handlers.current.onRedo();
+        else return;
+        event.preventDefault();
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
 
       if (event.key === 'Escape') return handlers.current.onEscape();
       if (event.key === 'Delete' || event.key === 'Backspace') return handlers.current.onDelete();
 
-      const tool = TOOLS.find((t) => t.key.toLowerCase() === event.key.toLowerCase());
+      const tool = TOOLS.find((t) => t.key.toLowerCase() === key);
       if (tool) handlers.current.onTool(tool.id);
     };
     window.addEventListener('keydown', onKeyDown);

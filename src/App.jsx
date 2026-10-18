@@ -25,6 +25,7 @@ import TopBar from './components/TopBar.jsx';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
 import { useWorkspace } from './context/WorkspaceContext.jsx';
+import useBoardHistory from './hooks/useBoardHistory.js';
 import useBoardShortcuts from './hooks/useBoardShortcuts.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
 
@@ -95,9 +96,13 @@ export default function App() {
     [tool, linkSource, setEdges],
   );
 
+  const history = useBoardHistory({ nodes, edges, strokes, setNodes, setEdges, setStrokes });
+
   // Suppr retire le trait ou les liens choisis. Les cases se ferment avec leur bouton ×.
   useBoardShortcuts({
     onTool: setTool,
+    onUndo: history.undo,
+    onRedo: history.redo,
     onEscape: () => {
       if (linkSource) return setLinkSource(null); // premier Échap : annule la source
       setTool('select');

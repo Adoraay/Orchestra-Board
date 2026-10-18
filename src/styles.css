@@ -629,16 +629,74 @@ kbd {
 }
 .note-input::placeholder { color: var(--note-text); opacity: 0.45; }
 
-.text-node {
+.text-node { color: var(--text); line-height: 1.35; }
+.text-box {
+  position: relative;
   min-width: 40px;
   padding: 2px 6px;
   border: 1.5px dashed transparent;
   border-radius: 6px;
-  color: var(--text);
-  font-size: 18px;
-  line-height: 1.35;
 }
-.text-node.selected { border-color: var(--accent); }
+.text-box.selected { border-color: var(--accent); }
+
+/* Contrôles d'un texte choisi : ils tournent avec lui */
+.text-control {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  box-shadow: 0 2px 8px var(--shadow);
+  font-size: 12px;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+.text-control:hover { color: var(--text); border-color: var(--accent); }
+.text-control.rotate { top: -34px; cursor: grab; }
+.text-control.rotate:active { cursor: grabbing; }
+/* petit trait qui relie la flèche au texte */
+.text-control.rotate::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1.5px;
+  height: 9px;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+.text-control.trash { bottom: -34px; }
+.text-control.trash:hover { color: var(--danger); border-color: var(--danger); }
+.text-control.resize {
+  top: auto;
+  left: auto;
+  right: -6px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  border: none;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: none;
+  cursor: nwse-resize;
+}
+.angle-label {
+  position: absolute;
+  left: calc(100% + 6px);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .text-content { white-space: pre; }
 .text-input-free {
   display: block;
