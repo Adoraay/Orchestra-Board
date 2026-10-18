@@ -16,6 +16,9 @@
   --shadow: rgba(0, 0, 0, 0.45);
   --shadow-lifted: rgba(0, 0, 0, 0.6);
   --on-accent: #ffffff;
+  --glow: #ffffff; /* halo de la case source en mode Lien */
+  --note-bg: #efe2a2;
+  --note-text: #3b3526;
 
   --font-ui: Inter, system-ui, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
@@ -27,6 +30,7 @@
 .react-flow {
   --xy-background-color: var(--bg);
   --xy-background-pattern-dots-color: var(--border);
+  --xy-background-pattern-lines-color: color-mix(in srgb, var(--border) 45%, transparent);
   --xy-edge-stroke: var(--text-muted);
   --xy-edge-stroke-selected: var(--accent);
   --xy-connectionline-stroke: var(--accent);

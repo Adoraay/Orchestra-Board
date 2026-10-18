@@ -1,7 +1,11 @@
 import { Folder, Settings } from 'lucide-react';
+import { useWorkspace } from '../context/WorkspaceContext.jsx';
+import { displayPath } from '../lib/paths.js';
 
 // Barre du haut : nom de l'app, dossier actif (donné au prochain agent), paramètres.
-export default function TopBar({ activeFolder }) {
+export default function TopBar({ onOpenSettings }) {
+  const { activeFolder, homeDir } = useWorkspace();
+
   return (
     <header className="topbar">
       <div className="topbar-brand">
@@ -12,11 +16,12 @@ export default function TopBar({ activeFolder }) {
       <div className="topbar-folder" title={activeFolder || undefined}>
         <Folder size={15} />
         <span className="muted">Dossier actif :</span>
-        <span className={activeFolder ? '' : 'muted'}>{activeFolder || 'aucun'}</span>
+        <span className={activeFolder ? 'topbar-path' : 'muted'}>
+          {activeFolder ? displayPath(activeFolder, homeDir) : 'aucun'}
+        </span>
       </div>
 
-      {/* Les paramètres arrivent à l'étape 5 */}
-      <button className="icon-button" title="Paramètres" disabled>
+      <button className="icon-button" title="Paramètres" onClick={onOpenSettings}>
         <Settings size={17} />
       </button>
     </header>

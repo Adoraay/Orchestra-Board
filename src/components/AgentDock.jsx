@@ -1,4 +1,5 @@
-import { AGENTS, DRAG_TYPE } from '../agents.js';
+import { DRAG_TYPE } from '../agents.js';
+import { useSettings } from '../context/SettingsContext.jsx';
 import AgentLogo from './AgentLogo.jsx';
 
 // Image vide pour masquer le « fantôme » du navigateur : seul l'aperçu de la map doit se voir.
@@ -7,6 +8,8 @@ emptyDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAA
 
 // Dock de gauche : un carré par agent, le nom en infobulle, à glisser sur la map.
 export default function AgentDock({ draggedAgentId, onDragStart, onDragEnd }) {
+  const { visibleAgents } = useSettings();
+
   const handleDragStart = (event, agentId) => {
     event.dataTransfer.setData(DRAG_TYPE, agentId);
     event.dataTransfer.effectAllowed = 'move';
@@ -16,7 +19,7 @@ export default function AgentDock({ draggedAgentId, onDragStart, onDragEnd }) {
 
   return (
     <nav className="dock" aria-label="Agents">
-      {AGENTS.map((agent) => (
+      {visibleAgents.map((agent) => (
         <div
           key={agent.id}
           className={`dock-item ${draggedAgentId === agent.id ? 'dragging' : ''}`}

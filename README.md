@@ -11,37 +11,42 @@ npm install      # installe tout et recompile node-pty pour Electron
 npm run dev      # lance Vite + Electron avec rechargement à chaud
 ```
 
+Pour lancer l'app sans terminal : double-clic sur `launcher\AgentBoard.vbs` (reconstruit l'interface puis ouvre l'app). Pour un raccourci sur le Bureau :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File launcher\creer-raccourci.ps1
+```
+
 Sous Windows, si `npm install` échoue sur node-pty, installe les « Desktop development with C++ » de Visual Studio Build Tools et Python 3, puis relance `npm install`.
 
 ## Structure
 
 ```
 electron/
-  main.cjs         fenêtre Electron + routes IPC vers les terminaux
-  preload.cjs      pont sécurisé : window.pty.create/write/resize/kill/onData
-  ptyManager.cjs   un vrai PTY (node-pty) par case de la map
-  agents.cjs       quelle commande lancer pour chaque agent
+  main.cjs           fenêtre Electron + routes IPC
+  preload.cjs        pont sécurisé : window.pty, window.fs, window.settings, window.agents
+  ptyManager.cjs     un vrai PTY (node-pty) par case de la map, shell choisi dans les paramètres
+  settingsStore.cjs  settings.json (apparence, agents, général), validé à chaque lecture/écriture
+  agentsHandlers.cjs logos des agents ajoutés, bouton « Tester » (where / which)
+  fsHandlers.cjs     lecture des dossiers pour l'explorateur, choix d'un dossier
 src/
-  App.jsx          la map (React Flow) + le drop qui crée une case
-  agents.js        catalogue affiché dans le dock (nom, couleur, logo)
-  assets/agents/   logos des agents (<id>.svg ou .png), initiales si absent
-  components/
-    TopBar.jsx         barre du haut : nom, dossier actif, paramètres
-    AgentDock.jsx      dock de gauche, carrés glissables avec infobulle
-    ExplorerPanel.jsx  explorateur de documents à droite (repliable)
-    AgentLogo.jsx      logo d'un agent ou ses initiales
-    TerminalNode.jsx   une case = xterm.js branché sur un PTY
-  lib/terminalTheme.js thème xterm construit depuis les variables CSS
-  theme.css        toutes les couleurs (variables CSS)
+  App.jsx            la map (React Flow) + le drop qui crée une case
+  agents.js          affichage des agents (initiales, logos)
+  assets/agents/     logos des agents de base (<id>.svg ou .png)
+  context/           SettingsContext (paramètres, agents), WorkspaceContext (racine, dossier actif)
+  components/        barre du haut, dock, explorateur, cases terminal, paramètres
+  hooks/             effet « flotter puis se fixer », mode redimensionnement
+  lib/               thème xterm, chemins
+  theme.css          toutes les couleurs (variables CSS)
   styles.css
+launcher/            lancement sans terminal + raccourci Bureau
 ```
 
 Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty → le CLI. La sortie fait le chemin inverse via `pty:data:<id>`.
 
 ## Ajouter un agent
 
-1. Une ligne dans `electron/agents.cjs` avec la commande à taper.
-2. Une ligne dans `src/agents.js` avec le même id, le nom et la couleur.
+Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, couleur). Le bouton « Tester » vérifie que la commande existe. Les paramètres sont dans `%APPDATA%\agent-board\settings.json`.
 
 ## Déjà en place
 

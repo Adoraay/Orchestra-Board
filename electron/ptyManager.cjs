@@ -1,23 +1,46 @@
+const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const pty = require('node-pty');
-const agents = require('./agents.cjs');
 
 // Un PTY par nœud de la map, indexé par l'id du nœud.
 const terminals = new Map();
 
-function defaultShell() {
-  if (process.platform === 'win32') return 'powershell.exe';
-  return process.env.SHELL || '/bin/bash';
+// Shell choisi dans les paramètres (Général).
+function resolveShell(name) {
+  const win = process.platform === 'win32';
+  switch (name) {
+    case 'powershell': return 'powershell.exe';
+    case 'pwsh': return win ? 'pwsh.exe' : 'pwsh';
+    case 'cmd': return 'cmd.exe';
+    case 'bash': {
+      // Sous Windows on préfère Git Bash : « bash.exe » tout court lance souvent WSL.
+      const gitBash = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe');
+      if (win) return fs.existsSync(gitBash) ? gitBash : 'bash.exe';
+      return '/bin/bash';
+    }
+    default:
+      return win ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
+  }
 }
 
-function create({ id, agentId, cwd, cols = 100, rows = 30 }, onData, onExit) {
+// Le dossier vient de l'interface : on vérifie qu'il existe, sinon dossier personnel.
+function safeCwd(cwd) {
+  try {
+    if (typeof cwd === 'string' && path.isAbsolute(cwd) && fs.statSync(cwd).isDirectory()) return cwd;
+  } catch {}
+  return os.homedir();
+}
+
+// command et shell viennent des paramètres, lus côté Node (jamais envoyés par l'interface).
+function create({ id, command, shell, cwd, cols = 100, rows = 30 }, onData, onExit) {
   if (terminals.has(id)) return; // déjà lancé (ex : React StrictMode monte deux fois)
 
-  const term = pty.spawn(defaultShell(), [], {
+  const term = pty.spawn(resolveShell(shell), [], {
     name: 'xterm-256color',
     cols,
     rows,
-    cwd: cwd || os.homedir(),
+    cwd: safeCwd(cwd),
     env: process.env,
   });
 
@@ -31,7 +54,6 @@ function create({ id, agentId, cwd, cols = 100, rows = 30 }, onData, onExit) {
 
   // On démarre un shell puis on tape la commande de l'agent :
   // le PATH de l'utilisateur est chargé et le terminal reste ouvert si l'agent quitte.
-  const command = agents[agentId]?.command;
   if (command) setTimeout(() => term.write(command + '\r'), 300);
 }
 

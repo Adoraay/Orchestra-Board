@@ -1,6 +1,9 @@
 const path = require('path');
 const { app, BrowserWindow, ipcMain } = require('electron');
 const ptyManager = require('./ptyManager.cjs');
+const fsHandlers = require('./fsHandlers.cjs');
+const settingsStore = require('./settingsStore.cjs');
+const agentsHandlers = require('./agentsHandlers.cjs');
 
 let win;
 
@@ -27,9 +30,13 @@ function send(channel, ...args) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args);
 }
 
-ipcMain.handle('pty:create', (_e, opts) => {
+// L'interface envoie seulement l'id de l'agent : la commande à lancer vient des paramètres.
+ipcMain.handle('pty:create', (_e, { id, agentId, cwd, cols, rows }) => {
+  const settings = settingsStore.load();
+  const agent = settings.agents.find((a) => a.id === agentId);
+  if (typeof id !== 'string' || !agent) return;
   ptyManager.create(
-    opts,
+    { id, command: agent.command, shell: settings.general.shell, cwd, cols, rows },
     (id, data) => send(`pty:data:${id}`, data),
     (id, code) => send(`pty:exit:${id}`, code),
   );
@@ -37,6 +44,10 @@ ipcMain.handle('pty:create', (_e, opts) => {
 ipcMain.on('pty:write', (_e, id, data) => ptyManager.write(id, data));
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
 ipcMain.on('pty:kill', (_e, id) => ptyManager.kill(id));
+
+fsHandlers.register(() => win);
+settingsStore.register();
+agentsHandlers.register(() => win);
 
 app.whenReady().then(createWindow);
 

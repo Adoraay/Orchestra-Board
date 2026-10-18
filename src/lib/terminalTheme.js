@@ -1,6 +1,7 @@
 // xterm ne lit pas le CSS : on lui passe les valeurs des variables de theme.css.
+// Lues sur <body> pour inclure l'accent choisi dans les paramètres.
 const cssVar = (name) =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  getComputedStyle(document.body).getPropertyValue(name).trim();
 
 // '#c96442' + 0.3 -> 'rgba(201, 100, 66, 0.3)'
 function withAlpha(hex, alpha) {

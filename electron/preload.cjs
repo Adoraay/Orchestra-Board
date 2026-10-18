@@ -1,6 +1,24 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Seule porte entre l'interface (React) et les terminaux.
+// Seule porte entre l'interface (React) et le système.
+contextBridge.exposeInMainWorld('fs', {
+  listDir: (dirPath) => ipcRenderer.invoke('fs:listDir', dirPath),
+  homeDir: () => ipcRenderer.invoke('fs:homeDir'),
+  pickFolder: (defaultPath) => ipcRenderer.invoke('dialog:pickFolder', defaultPath),
+});
+
+contextBridge.exposeInMainWorld('settings', {
+  get: () => ipcRenderer.invoke('settings:get'),
+  set: (settings) => ipcRenderer.invoke('settings:set', settings),
+});
+
+contextBridge.exposeInMainWorld('agents', {
+  logos: () => ipcRenderer.invoke('agents:logos'),
+  pickLogo: (agentId) => ipcRenderer.invoke('agents:pickLogo', agentId),
+  deleteLogo: (file) => ipcRenderer.invoke('agents:deleteLogo', file),
+  testCommand: (command) => ipcRenderer.invoke('agents:testCommand', command),
+});
+
 contextBridge.exposeInMainWorld('pty', {
   create: (opts) => ipcRenderer.invoke('pty:create', opts),
   write: (id, data) => ipcRenderer.send('pty:write', id, data),
