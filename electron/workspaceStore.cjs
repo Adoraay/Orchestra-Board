@@ -60,7 +60,7 @@ function sanitizeNode(n) {
 // Réglages d'un lien (PLAN.md §3.5) : consigne avec {reponse}, limite de tours, actif ou non.
 function sanitizeLink(data = {}) {
   return {
-    prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '{reponse}',
+    prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '', // vide = pas encore configuré
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),
     enabled: data.enabled !== false,
   };
@@ -74,7 +74,7 @@ function sanitizeContent(input) {
     .filter((e) => e && ID.test(e.id) && ids.has(e.source) && ids.has(e.target))
     .map((e) => {
       const data = sanitizeLink(e.data);
-      return { id: e.id, source: e.source, target: e.target, type: 'floating', animated: data.enabled, data };
+      return { id: e.id, source: e.source, target: e.target, type: 'floating', data };
     });
   const strokes = (Array.isArray(input?.strokes) ? input.strokes : [])
     .slice(0, MAX_STROKES)

@@ -1,7 +1,14 @@
-import { BaseEdge, Position, getBezierPath, useInternalNode } from '@xyflow/react';
+import { useEffect, useReducer } from 'react';
+import { BaseEdge, Position, getBezierPath, useInternalNode, useReactFlow } from '@xyflow/react';
+import LinkLabel from './LinkLabel.jsx';
 import { useBoard } from '../context/BoardContext.jsx';
+import { useSettings } from '../context/SettingsContext.jsx';
+import { DEFAULT_LINK } from '../lib/links.js';
 
 const PULSE_DURATION = 1200; // ms : un point lumineux parcourt le lien à chaque transmission
+const SENDING_FOR = 2000; // ms pendant lesquels le lien reste « en cours de transfert » après un envoi
+const LABEL_ROOM = { horizontal: 320, vertical: 90 }; // écart minimal entre les cases pour l'étiquette
+const ARROW = { length: 9, half: 5 };
 
 // Milieu du côté demandé de la case.
 function sidePoint(node, side) {
@@ -36,17 +43,47 @@ function pickSides(source, target) {
   return dy > 0 ? [Position.Bottom, Position.Top] : [Position.Top, Position.Bottom];
 }
 
+// Pointe de flèche qui entre dans la case cible par le côté choisi.
+function arrowPath(tip, side) {
+  const d = { [Position.Left]: [1, 0], [Position.Right]: [-1, 0], [Position.Top]: [0, 1], [Position.Bottom]: [0, -1] }[side];
+  const bx = tip.x - d[0] * ARROW.length;
+  const by = tip.y - d[1] * ARROW.length;
+  const px = -d[1] * ARROW.half;
+  const py = d[0] * ARROW.half;
+  return `M ${bx + px} ${by + py} L ${tip.x} ${tip.y} L ${bx - px} ${by - py}`;
+}
+
+// État affiché : réglages du lien d'abord (pause, sans consigne), puis dernier événement de transmission.
+function linkState(link, event) {
+  if (!link.enabled) return 'disabled';
+  if (!link.prompt.trim()) return 'unconfigured';
+  if (event?.state === 'sent') return Date.now() - event.at < SENDING_FOR ? 'sending' : 'ready';
+  if (event?.state === 'queued' || event?.state === 'limit' || event?.state === 'error') return event.state;
+  return 'ready';
+}
+
 // Lien qui part du côté de A le plus proche de B (PLAN.md §3.8), coloré selon son état (§3.5).
-export default function FloatingEdge({ id, source, target, data, markerEnd, style }) {
+export default function FloatingEdge({ id, source, target, data, style }) {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   const event = useBoard().linkEvents[id];
+  const { agentById } = useSettings();
+  const { setEdges, setNodes } = useReactFlow();
+  const [, rerender] = useReducer((n) => n + 1, 0);
+
+  // Fin de la période « en cours de transfert » : on redessine pour revenir à « prêt ».
+  useEffect(() => {
+    if (event?.state !== 'sent') return;
+    const timer = setTimeout(rerender, Math.max(0, SENDING_FOR - (Date.now() - event.at)));
+    return () => clearTimeout(timer);
+  }, [event]);
+
   if (!sourceNode?.measured?.width || !targetNode?.measured?.width) return null;
 
   const [sourceSide, targetSide] = pickSides(sourceNode, targetNode);
   const from = sidePoint(sourceNode, sourceSide);
   const to = sidePoint(targetNode, targetSide);
-  const [path] = getBezierPath({
+  const [path, labelX, labelY] = getBezierPath({
     sourceX: from.x,
     sourceY: from.y,
     sourcePosition: sourceSide,
@@ -55,17 +92,42 @@ export default function FloatingEdge({ id, source, target, data, markerEnd, styl
     targetPosition: targetSide,
   });
 
-  const state = data?.enabled === false ? 'disabled' : event?.state;
-  const pulsing = state === 'sent' && Date.now() - event.at < PULSE_DURATION;
+  const link = { ...DEFAULT_LINK, ...data };
+  const state = linkState(link, event);
+  const pulsing = event?.state === 'sent' && Date.now() - event.at < PULSE_DURATION;
+  const horizontal = sourceSide === Position.Left || sourceSide === Position.Right;
+  const roomy = horizontal ? Math.abs(to.x - from.x) >= LABEL_ROOM.horizontal : Math.abs(to.y - from.y) >= LABEL_ROOM.vertical;
+  const turns = event && typeof event.turns === 'number' ? event.turns : 0;
+  const targetName = targetNode.data?.label || agentById(targetNode.data?.agentId).name;
+
+  // Clic sur l'étiquette = ce lien seul choisi, son panneau s'ouvre.
+  const open = () => {
+    setNodes((nds) => nds.map((n) => (n.selected ? { ...n, selected: false } : n)));
+    setEdges((eds) => eds.map((e) => (Boolean(e.selected) === (e.id === id) ? e : { ...e, selected: e.id === id })));
+  };
 
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} className={state ? `link-${state}` : undefined} />
+      <BaseEdge id={id} path={path} style={style} className={`link-${state}`} />
+      <path d={arrowPath(to, targetSide)} className={`react-flow__edge-path link-arrow link-${state}`} />
       {pulsing && (
         <circle key={event.at} r="5" className="link-pulse">
           <animateMotion dur={`${PULSE_DURATION}ms`} path={path} fill="freeze" />
           <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.85;1" dur={`${PULSE_DURATION}ms`} fill="freeze" />
         </circle>
+      )}
+      {roomy && (
+        <LinkLabel
+          x={labelX}
+          y={labelY}
+          state={state}
+          prompt={link.prompt}
+          targetName={targetName}
+          turns={turns}
+          maxTurns={link.maxTurns}
+          message={event?.message}
+          onOpen={open}
+        />
       )}
     </>
   );

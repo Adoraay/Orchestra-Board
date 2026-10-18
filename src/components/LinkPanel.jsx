@@ -5,6 +5,7 @@ import { DEFAULT_LINK, MAX_TURNS } from '../lib/links.js';
 function statusText(event, targetName) {
   const turns = event.maxTurns ? ` (tour ${event.turns} / ${event.maxTurns})` : '';
   switch (event.state) {
+    case 'ready': return `Prêt, compteur remis à zéro${turns}`;
     case 'sent': return `Réponse transmise à ${targetName}${turns}`;
     case 'queued': return `En attente : ${targetName} travaille encore${turns}`;
     case 'limit': return `Limite de ${event.maxTurns} tours atteinte. Écris toi-même à la source pour relancer la chaîne.`;
@@ -51,7 +52,8 @@ export default function LinkPanel({ edge, nodes, event, onChange, onDelete, onCl
         />
       </label>
       <p className="hint">
-        <code>{'{reponse}'}</code> est remplacé par la dernière réponse de {source.name}. Sans lui, la réponse est ajoutée à la fin.
+        <code>{'{reponse}'}</code> est remplacé par la dernière réponse de {source.name}. Sans lui, la réponse est ajoutée
+        à la fin. Sans consigne, le lien ne transmet rien.
       </p>
 
       <label className="link-field inline">

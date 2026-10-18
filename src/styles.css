@@ -1090,10 +1090,50 @@ kbd {
 .link-status.limit, .link-status.error { color: var(--danger); }
 .link-delete { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
 
-.react-flow__edge-path.link-disabled { stroke-dasharray: 2 6; opacity: 0.45; animation: none; }
-.react-flow__edge-path.link-queued { stroke: var(--warning); }
-.react-flow__edge-path.link-limit, .react-flow__edge-path.link-error { stroke: var(--danger); }
+/* Trait selon l'état : sans consigne = pointillés gris, prêt = orange plein, transfert = tirets qui
+   avancent, en attente = jaune, limite ou erreur = rouge, en pause = gris fin */
+.react-flow__edge-path.link-unconfigured { stroke: var(--text-muted); stroke-dasharray: 6 6; }
+.react-flow__edge-path.link-ready { stroke: var(--accent); stroke-width: 1.5; }
+.react-flow__edge-path.link-sending { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 10 7; animation: link-flow 0.6s linear infinite; }
+.react-flow__edge-path.link-queued { stroke: var(--warning); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.react-flow__edge-path.link-limit, .react-flow__edge-path.link-error { stroke: var(--danger); stroke-width: 1.5; }
+.react-flow__edge-path.link-disabled { stroke: var(--border); stroke-width: 1; }
+.react-flow__edge.selected .react-flow__edge-path { stroke-width: 2.5; }
+.react-flow__edge-path.link-arrow { stroke-dasharray: none; animation: none; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes link-flow {
+  to { stroke-dashoffset: -17; }
+}
+
+/* Étiquette au milieu du lien (seulement s'il y a la place) */
+.link-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 260px;
+  padding: 6px 14px;
+  border: 1.5px solid var(--accent);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: all;
+  cursor: pointer;
+}
+.tool-pen .link-label, .tool-link .link-label, .tool-note .link-label, .tool-text .link-label { pointer-events: none; }
+.link-label-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.link-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.link-label-turns { flex-shrink: 0; margin-left: auto; padding-left: 6px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.link-label.unconfigured { border-style: dashed; border-color: var(--warning); }
+.link-label.unconfigured .link-label-dot, .link-label.queued .link-label-dot { background: var(--warning); }
+.link-label.queued { border-color: var(--warning); }
+.link-label.sending .link-label-dot { background: var(--accent); animation: status-pulse 1.2s ease-in-out infinite; }
+.link-label.limit, .link-label.error { border-color: var(--danger); }
+.link-label.limit .link-label-dot, .link-label.error .link-label-dot { background: var(--danger); }
+.link-label.disabled { border-color: var(--border); color: var(--text-muted); }
+.link-label:hover { background: var(--surface); }
 .link-pulse { fill: var(--accent-hover); filter: drop-shadow(0 0 4px var(--accent)); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
-  .link-panel { animation: none; }
+  .link-panel, .react-flow__edge-path.link-sending, .link-label.sending .link-label-dot { animation: none; }
 }

@@ -92,7 +92,7 @@ function buildText(prompt, reply) {
 // Collage entre crochets (le CLI le reçoit comme un collage, pas comme une frappe), puis Entrée à part.
 function deliver(target, item) {
   const link = findLink(item.linkId);
-  if (!link || !link.enabled) return;
+  if (!link || !link.enabled || !link.prompt.trim()) return;
   chains.set(target, item.chain);
   deps.write(target, PASTE_START + item.text.replace(/\r?\n/g, '\r') + PASTE_END);
   setTimeout(() => {
@@ -124,7 +124,7 @@ function flush(target) {
 
 function onStop(id, payload) {
   if (!deps.status(id)) return;
-  const outgoing = (links.get(id) ?? []).filter((l) => l.enabled);
+  const outgoing = (links.get(id) ?? []).filter((l) => l.enabled && l.prompt.trim());
   if (!outgoing.length) return;
   const chain = chains.get(id) ?? newChain();
   chains.set(id, chain);
@@ -154,9 +154,12 @@ function onStop(id, payload) {
   }, READ_DELAY);
 }
 
-// Entrée tapée par l'utilisateur dans une case : nouvelle chaîne, compteurs à zéro.
+// Entrée tapée par l'utilisateur dans une case : nouvelle chaîne, compteurs à zéro (affichés sur ses liens).
 function onUserInput(id) {
+  const used = chains.get(id)?.counts.size > 0;
   chains.set(id, newChain());
+  if (!used) return;
+  for (const link of links.get(id) ?? []) deps.emit(link.id, { state: 'ready', turns: 0, maxTurns: link.maxTurns });
 }
 
 // Statut d'une case : B a fini, on envoie la suite. null = case fermée ou processus terminé.

@@ -173,7 +173,7 @@ function Board({ initial, onChange, focusRequest }) {
         setLinkSource(linkSource ? null : node.id);
         return;
       }
-      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', animated: true, data: { ...DEFAULT_LINK } }, eds));
+      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', data: { ...DEFAULT_LINK } }, eds));
       setLinkSource(null);
     },
     [tool, linkSource, setEdges],
@@ -187,8 +187,7 @@ function Board({ initial, onChange, focusRequest }) {
       setEdges((eds) =>
         eds.map((e) => {
           if (e.id !== id) return e;
-          const data = { ...DEFAULT_LINK, ...e.data, ...patch };
-          return { ...e, data, animated: data.enabled };
+          return { ...e, data: { ...DEFAULT_LINK, ...e.data, ...patch } };
         }),
       ),
     [setEdges],
