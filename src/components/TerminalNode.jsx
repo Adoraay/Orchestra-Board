@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Handle, NodeResizer, Position, useReactFlow, useStoreApi } from '@xyflow/react';
-import { History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
+import { GitBranch, History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
+import BranchBar from './BranchBar.jsx';
 import FinishBubble from './FinishBubble.jsx';
 import StatusDot from './StatusDot.jsx';
 import TerminalTitle from './TerminalTitle.jsx';
@@ -19,7 +20,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
-  const { tool, linkSource } = useBoard();
+  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker } = useBoard();
   const { accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
   const [status, setStatus] = useState('idle');
@@ -34,6 +35,10 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const name = data.label || agent.name;
   const nameRef = useRef(name);
   nameRef.current = name;
+  // Dossier où tourne l'agent : le worktree de sa branche (PLAN.md §3.10), sinon le dossier choisi au dépôt.
+  const runDir = data.worktree ?? data.cwd;
+  const runDirRef = useRef(runDir);
+  runDirRef.current = runDir;
 
   // Case restaurée au démarrage d'un agent qui sait reprendre (Claude Code) : on demande avant de lancer.
   const askResume = Boolean(data.restored && agent.resumeArgs);
@@ -72,7 +77,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     termRef.current = term;
     fitRef.current = fit;
     if (!askResumeAtMount.current) {
-      window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, label: nameRef.current, cols: term.cols, rows: term.rows }).then((result) => {
+      window.pty.create({ id, agentId: data.agentId, cwd: runDirRef.current, label: nameRef.current, cols: term.cols, rows: term.rows }).then((result) => {
         if (disposed) return;
         if (result?.buffer) term.write(result.buffer);
         applyStatus(result?.status);
@@ -120,7 +125,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     const term = termRef.current;
     if (!term) return;
     updateNodeData(id, { restored: false });
-    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, label: name, cols: term.cols, rows: term.rows, resume });
+    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume });
     term.focus();
   };
 
@@ -130,7 +135,23 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     if (!term) return;
     setExited(false);
     term.write('\r\n');
-    window.pty.create({ id, agentId: data.agentId, cwd: data.cwd, label: name, cols: term.cols, rows: term.rows });
+    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows });
+    term.focus();
+  };
+
+  // Branche choisie dans la barre : l'agent est relancé dans le worktree, sauf s'il y tourne déjà.
+  const switchBranch = (dir, branch) => {
+    setBranchPicker(null);
+    updateNodeData(id, { branch, worktree: dir, restored: false });
+    const term = termRef.current;
+    if (dir === runDir || !term) return;
+    window.pty.kill(id);
+    setExited(false);
+    setStatus('idle');
+    setFinished(false);
+    setConfirmingClose(false);
+    term.reset();
+    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows });
     term.focus();
   };
 
@@ -147,6 +168,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
 
   // Paramètre « Confirmer avant de fermer une case qui travaille » : on demande dans la barre de titre.
   const busy = !exited && (status === 'working' || status === 'waiting');
+  const pickingBranch = branchPicker === id;
   const requestClose = () => {
     if (busy && settings.general.confirmClose) setConfirmingClose(true);
     else close();
@@ -174,10 +196,23 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
       <FinishBubble agent={agent} name={name} finished={finished} />
+      {pickingBranch && (
+        <BranchBar dir={runDir} busy={busy} name={name} onClose={() => setBranchPicker(null)} onSwitched={switchBranch} />
+      )}
+      {data.branch && !pickingBranch && (
+        <button
+          className="branch-notch nodrag nopan"
+          title="Changer de branche"
+          onClick={() => tool === 'select' && setBranchPicker(id)}
+        >
+          <GitBranch size={12} />
+          <span className="branch-name">{data.branch}</span>
+        </button>
+      )}
 
       <div
         ref={floating.ref}
-        className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${linkSource === id ? 'link-source' : ''} ${finished ? 'finished' : ''} ${floating.animClass}`}
+        className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${linkSource === id ? 'link-source' : ''} ${finished ? 'finished' : ''} ${branchTarget === id ? 'branch-target' : ''} ${floating.animClass}`}
         onAnimationEnd={floating.onAnimationEnd}
         onPointerDownCapture={select}
       >

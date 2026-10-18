@@ -25,6 +25,12 @@ contextBridge.exposeInMainWorld('workspace', {
   saveSync: (workspace) => ipcRenderer.sendSync('workspace:saveSync', workspace),
 });
 
+contextBridge.exposeInMainWorld('git', {
+  isRepo: (cwd) => ipcRenderer.invoke('git:isRepo', cwd),
+  listBranches: (cwd, fetch) => ipcRenderer.invoke('git:listBranches', cwd, fetch),
+  ensureWorktree: (cwd, branch) => ipcRenderer.invoke('git:ensureWorktree', cwd, branch),
+});
+
 // Événements de toutes les cases : statuts (son, onglets) et clic sur une notification Windows.
 contextBridge.exposeInMainWorld('agentEvents', {
   onStatus: (cb) => {

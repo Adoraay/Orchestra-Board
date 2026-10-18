@@ -106,7 +106,12 @@ function Board({ initial, onChange, focusRequest }) {
   const [strokes, setStrokes] = useState(initial.strokes);
   const [selectedStroke, setSelectedStroke] = useState(null);
   const [linkSource, setLinkSource] = useState(null); // case cliquée en premier avec l'outil Lien
-  const board = useMemo(() => ({ tool, linkSource }), [tool, linkSource]);
+  const [branchTarget, setBranchTarget] = useState(null); // case survolée en glissant « Branche »
+  const [branchPicker, setBranchPicker] = useState(null); // case dont la barre des branches est ouverte
+  const board = useMemo(
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker }),
+    [tool, linkSource, branchTarget, branchPicker],
+  );
   const pen = usePenDrawing({ enabled: tool === 'pen', onStroke: (s) => setStrokes((all) => [...all, s]) });
 
   // Rectangle de sélection au clic droit (outil Sélection) : les cases touchées deviennent la sélection.
@@ -219,15 +224,26 @@ function Board({ initial, onChange, focusRequest }) {
 
   // getData n'est pas lisible pendant dragover : on garde l'agent glissé ici.
   const [draggedAgentId, setDraggedAgentId] = useState(null);
+  const [draggingBranch, setDraggingBranch] = useState(false);
   const [previewPos, setPreviewPos] = useState(null); // souris, relative à la map
 
   const endDrag = useCallback(() => {
     setDraggedAgentId(null);
+    setDraggingBranch(false);
+    setBranchTarget(null);
     setPreviewPos(null);
   }, []);
 
   const onDragOver = useCallback(
     (event) => {
+      // « Branche » se lâche seulement sur une case terminal : elle s'allume au survol.
+      if (draggingBranch) {
+        event.preventDefault();
+        const target = event.target.closest?.('.react-flow__node-terminal')?.dataset.id ?? null;
+        event.dataTransfer.dropEffect = target ? 'link' : 'none';
+        setBranchTarget(target);
+        return;
+      }
       if (!draggedAgentId) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
@@ -236,17 +252,38 @@ function Board({ initial, onChange, focusRequest }) {
       const y = event.clientY - rect.top;
       setPreviewPos((p) => (p && p.x === x && p.y === y ? p : { x, y }));
     },
-    [draggedAgentId],
+    [draggedAgentId, draggingBranch],
   );
 
   const onDragLeave = useCallback((event) => {
-    if (!event.currentTarget.contains(event.relatedTarget)) setPreviewPos(null);
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    setPreviewPos(null);
+    setBranchTarget(null);
   }, []);
+
+  // « Branche » lâché sur une case : barre des branches si son dossier est un dépôt Git.
+  const openBranchPicker = useCallback(
+    (nodeId) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      window.git.isRepo(node.data.worktree ?? node.data.cwd).then((result) => {
+        if (result.error) setToast({ id: Date.now(), text: result.error });
+        else setBranchPicker(nodeId);
+      });
+    },
+    [nodes],
+  );
 
   // Lâcher un agent du dock = créer un terminal centré sous la souris, là où était l'aperçu.
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
+      if (draggingBranch) {
+        const nodeId = branchTarget;
+        endDrag();
+        if (nodeId) openBranchPicker(nodeId);
+        return;
+      }
       const agentId = draggedAgentId;
       endDrag();
       if (!agentId || agentById(agentId).id !== agentId) return;
@@ -267,12 +304,18 @@ function Board({ initial, onChange, focusRequest }) {
         }),
       );
     },
-    [draggedAgentId, endDrag, screenToFlowPosition, setNodes, activeFolder, homeDir, agentById],
+    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, setNodes, activeFolder, homeDir, agentById],
   );
 
   return (
     <>
-      <AgentDock draggedAgentId={draggedAgentId} onDragStart={setDraggedAgentId} onDragEnd={endDrag} />
+      <AgentDock
+        draggedAgentId={draggedAgentId}
+        draggingBranch={draggingBranch}
+        onDragStart={setDraggedAgentId}
+        onBranchDragStart={() => setDraggingBranch(true)}
+        onDragEnd={endDrag}
+      />
       <main
         className={`board tool-${tool}`}
         onDragOver={onDragOver}

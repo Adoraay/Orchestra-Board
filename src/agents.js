@@ -24,3 +24,4 @@ export const MISSING_AGENT = { id: 'missing', name: 'Agent supprimé', initials:
 
 // Type MIME maison pour le drag & drop depuis le dock.
 export const DRAG_TYPE = 'application/orchestra-agent';
+export const BRANCH_DRAG_TYPE = 'application/orchestra-branch';

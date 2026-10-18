@@ -9,6 +9,7 @@ const workspaceStore = require('./workspaceStore.cjs');
 const hookServer = require('./hookServer.cjs');
 const claudeHooks = require('./claudeHooks.cjs');
 const agentStatus = require('./agentStatus.cjs');
+const gitHandlers = require('./git.cjs');
 
 let win;
 
@@ -143,6 +144,7 @@ fsHandlers.register(() => win);
 settingsStore.register();
 agentsHandlers.register(() => win);
 workspaceStore.register();
+gitHandlers.register();
 
 // Pas de barre de menu File / Edit / View.
 Menu.setApplicationMenu(null);

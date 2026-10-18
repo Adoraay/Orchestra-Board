@@ -157,6 +157,9 @@ button { font: inherit; color: inherit; }
 }
 .dock-item:hover .tooltip, .tool-button:hover .tooltip { opacity: 1; transform: translate(0, -50%); }
 .dock-item.dragging .tooltip { opacity: 0; }
+.dock-separator { width: 28px; height: 1px; margin: 2px 0; background: var(--border); }
+.dock-branch { color: var(--text-muted); }
+.dock-branch:hover, .dock-branch.dragging { color: var(--accent); }
 
 .agent-logo { display: block; flex-shrink: 0; object-fit: contain; }
 .agent-logo.fallback {
@@ -937,4 +940,100 @@ kbd {
   color: var(--text);
   font: inherit;
   outline: none;
+}
+
+/* Branches Git (PLAN.md §3.10) : case survolée par « Branche », barre des branches, encoche */
+.terminal-node.branch-target { border-color: var(--accent); }
+.react-flow__node:has(.branch-bar) { z-index: 1000 !important; } /* la barre passe au-dessus des cases voisines */
+.branch-bar {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--branch-bar-bg);
+  box-shadow: 0 12px 28px var(--shadow);
+  animation: bubble-in-bar 150ms ease-out;
+  cursor: default;
+}
+@keyframes bubble-in-bar {
+  from { opacity: 0; transform: translateY(-4px); }
+}
+.branch-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+.branch-search:focus-within { border-color: var(--accent); }
+.branch-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.branch-list { max-height: 220px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.branch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.branch-row:hover { background: var(--surface-2); }
+.branch-row.remote { color: var(--text-muted); }
+.branch-row.current { color: var(--accent); }
+.branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.branch-message { margin: 0; padding: 5px 8px; color: var(--text-muted); font-size: 12px; }
+.branch-message.error { color: var(--danger); }
+.branch-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  color: var(--warning);
+  font-size: 12px;
+}
+.branch-notch {
+  position: absolute;
+  top: calc(100% - 1.5px);
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 80%;
+  padding: 3px 10px 4px;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+.branch-notch:hover { color: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  .branch-bar { animation: none; }
 }

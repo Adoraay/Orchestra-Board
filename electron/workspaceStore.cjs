@@ -21,10 +21,13 @@ function sanitizeData(type, data = {}) {
   switch (type) {
     case 'terminal': {
       const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
+      const branch = typeof data.branch === 'string' ? data.branch.slice(0, 255) : '';
+      const worktree = typeof data.worktree === 'string' ? data.worktree.slice(0, 1024) : '';
       return {
         agentId: typeof data.agentId === 'string' ? data.agentId.slice(0, 64) : 'shell',
         cwd: typeof data.cwd === 'string' ? data.cwd.slice(0, 1024) : null,
         ...(label && { label }), // nom choisi par double-clic sur le titre
+        ...(branch && worktree && { branch, worktree }), // branche Git choisie et dossier où l'agent tourne
       };
     }
     case 'note':

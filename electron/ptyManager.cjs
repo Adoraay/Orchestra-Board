@@ -55,6 +55,8 @@ function create({ id, command, shell, cwd, cols = 100, rows = 30 }, onData, onEx
     onData(id, data);
   });
   term.onExit(({ exitCode }) => {
+    // Terminal tué puis relancé sous le même id (changement de branche) : la fin de l'ancien ne compte pas.
+    if (terminals.get(id) !== entry) return;
     terminals.delete(id);
     onExit(id, exitCode);
   });
