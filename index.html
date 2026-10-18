@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Orchestra</title>
+    <!-- Avant que React affiche l'écran de démarrage : même fond que lui (splash.css), pas de flash. -->
+    <style>#root:empty { position: fixed; inset: 0; background: #262624; }</style>
   </head>
   <body>
     <div id="root"></div>

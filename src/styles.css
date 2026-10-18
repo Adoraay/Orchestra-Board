@@ -892,3 +892,25 @@ kbd {
   white-space: nowrap;
   cursor: default;
 }
+
+/* Écran de démarrage (src/components/splash.css, copie de design/, gardée identique).
+   Le fond gris est un élément à part, sous l'animation, qui disparaît en fondu au même moment :
+   avec la carte graphique, Windows n'affichait plus le fond quand il était dans le même élément
+   que l'animation (écran noir autour du logo). */
+.splash { background: transparent; }
+.splash-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: #262624; /* = fond de splash.css */
+  pointer-events: none;
+  /* splash-tick : variation invisible, pour que toute la fenêtre soit redessinée à chaque image */
+  animation: splash-tick 0.2s linear infinite alternate, splash-out 0.8s ease 3.9s forwards;
+}
+@keyframes splash-tick {
+  from { opacity: 0.999; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-backdrop { animation: splash-out 0.4s ease 1s forwards; }
+}

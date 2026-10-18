@@ -30,13 +30,16 @@ function createWindow() {
     height: 900,
     title: 'Orchestra',
     icon: path.join(__dirname, '..', 'build', 'icon.ico'), // barre des tâches (généré par npm run build:icon)
-    backgroundColor: '#1f1e1d', // = --bg de src/theme.css, évite un flash avant le chargement du CSS
+    backgroundColor: '#262624', // = fond de l'écran de démarrage (splash.css) : aucun flash au lancement
+    show: false, // affichée quand la page est prête, pour ne jamais montrer une fenêtre vide
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+
+  win.once('ready-to-show', () => win.show());
 
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);

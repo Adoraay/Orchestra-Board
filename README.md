@@ -1,6 +1,6 @@
 # Orchestra
 
-*« soit le maestro de ton Orchestre d'IA ! »*
+*« Sois le maestro de ton orchestre d'IA ! »*
 
 Une grande map où tu glisses des agents IA (Claude Code, Codex, Gemini CLI…) depuis le dock de gauche. Chaque agent tourne dans un vrai terminal, et tu peux en mettre autant que tu veux côte à côte.
 

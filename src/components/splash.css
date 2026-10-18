@@ -1,0 +1,68 @@
+/* Écran de démarrage Orchestra — environ 5 s au total */
+.splash {
+  --logo: 112px;          /* taille du logo */
+  --gap: 20px;            /* espace logo / nom */
+  --name-h: 64px;         /* hauteur du nom */
+  --name-w: calc(var(--name-h) * 5.556);            /* ratio du SVG du nom */
+  --shift: calc((var(--gap) + var(--name-w)) / 2);  /* décalage pour centrer le logo seul */
+  --overlap: calc(var(--gap) + var(--logo) * 0.3);  /* le nom sort de derrière le logo */
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background: #262624;
+  animation: splash-out 0.8s ease 3.9s forwards;
+}
+/* tout le bloc glisse vers la gauche : le logo part du centre */
+.splash-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  transform: translateX(var(--shift));
+  animation: lockup-slide 1.4s cubic-bezier(.65,0,.35,1) 0.9s forwards;
+}
+.splash-mark {
+  position: relative;
+  z-index: 2;
+  width: var(--logo);
+  height: var(--logo);
+  overflow: visible;
+  opacity: 0;
+  transform: scale(0.6);
+  animation: mark-in 0.7s cubic-bezier(.2,.8,.2,1) 0.1s forwards;
+}
+/* fenêtre qui commence sous le logo : le nom est caché tant qu'il est derrière */
+.splash-name-window {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  margin-left: calc(-1 * var(--overlap));
+  padding-left: var(--overlap);
+}
+.splash-name {
+  display: block;
+  height: var(--name-h);
+  width: var(--name-w);
+  opacity: 0;
+  transform: translateX(calc(-1 * (var(--name-w) + var(--overlap))));
+  animation: name-out 1.4s cubic-bezier(.65,0,.35,1) 0.9s forwards;
+}
+@keyframes mark-in {
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes lockup-slide {
+  to { transform: translateX(0); }
+}
+@keyframes name-out {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes splash-out {
+  to { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-lockup, .splash-mark, .splash-name { animation: none; opacity: 1; transform: none; }
+  .splash { animation: splash-out 0.4s ease 1s forwards; }
+}

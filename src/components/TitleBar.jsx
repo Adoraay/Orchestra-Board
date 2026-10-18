@@ -1,4 +1,4 @@
-import logo from '../../design/orchestra-mark.svg';
+import logo from '../assets/orchestra-mark.svg';
 
 // Barre tout en haut : logo (sans fond) et nom de l'app, centrés.
 export default function TitleBar() {
