@@ -1,5 +1,6 @@
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
+html, body { overflow: hidden; } /* l'app ne défile jamais en entier : rien qui dépasse ne fait apparaître de barre */
 body { font-family: var(--font-ui); font-size: 13px; background: var(--bg); color: var(--text); }
 button { font: inherit; color: inherit; }
 
@@ -662,25 +663,40 @@ kbd {
   font-size: 11px;
   text-align: center;
 }
+.agents-bar-chevron { transition: transform 200ms ease; }
+.agents-bar-tab.open .agents-bar-chevron { transform: rotate(180deg); }
+/* Ouverture : la hauteur passe de 0 à celle du contenu (grille 0fr -> 1fr), la languette monte avec.
+   Rien ne dépasse de la map pendant l'animation : pas de barre de défilement fugace. */
+.agents-bar-slide {
+  display: grid;
+  grid-template-rows: 0fr;
+  max-width: 100%;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  transition: grid-template-rows 220ms cubic-bezier(0.2, 0.8, 0.2, 1), background 220ms, border-color 220ms, box-shadow 220ms;
+}
+.agents-bar-slide.open {
+  grid-template-rows: 1fr;
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: 0 -6px 18px var(--shadow);
+}
+.agents-bar-clip { min-height: 0; max-width: 100%; overflow: hidden; }
 .agents-bar {
   display: flex;
   align-items: center;
   gap: 14px;
-  max-width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  background: var(--surface);
-  box-shadow: 0 -6px 18px var(--shadow);
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
-  animation: agents-bar-in 150ms ease-out;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+.agents-bar-slide.open .agents-bar { opacity: 1; transform: none; }
 .agents-bar::-webkit-scrollbar { display: none; }
-@keyframes agents-bar-in {
-  from { opacity: 0; transform: translateY(8px); }
-}
 .agents-bar-empty { padding: 2px 6px; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
 .agents-bar-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .agents-bar-group + .agents-bar-group { padding-left: 14px; border-left: 1px solid var(--border); }
@@ -705,8 +721,19 @@ kbd {
 .agent-chip:hover { border-color: var(--accent); transform: translateY(-1px); }
 .agent-chip.finished { border-color: var(--success); }
 .agent-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-chip.editing { border-color: var(--accent); cursor: text; }
+.agent-chip.editing:hover { transform: none; }
+.agent-chip-input {
+  width: 130px;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+}
 @media (prefers-reduced-motion: reduce) {
-  .agents-bar { animation: none; }
+  .agents-bar-slide, .agents-bar, .agents-bar-chevron { transition: none; }
 }
 
 /* Post-it et texte libre (PLAN.md §3.8) */
