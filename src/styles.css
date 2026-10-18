@@ -1093,7 +1093,7 @@ kbd {
 /* Trait selon l'état : sans consigne = pointillés gris, prêt = orange plein, transfert = tirets qui
    avancent, en attente = jaune, limite ou erreur = rouge, en pause = gris fin */
 .react-flow__edge-path.link-unconfigured { stroke: var(--text-muted); stroke-dasharray: 6 6; }
-.react-flow__edge-path.link-ready { stroke: var(--accent); stroke-width: 1.5; }
+.react-flow__edge-path.link-ready, .react-flow__edge-path.link-delegate { stroke: var(--accent); stroke-width: 1.5; }
 .react-flow__edge-path.link-sending { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 10 7; animation: link-flow 0.6s linear infinite; }
 .react-flow__edge-path.link-queued { stroke: var(--warning); stroke-width: 1.5; stroke-dasharray: 6 5; }
 .react-flow__edge-path.link-limit, .react-flow__edge-path.link-error { stroke: var(--danger); stroke-width: 1.5; }
@@ -1132,8 +1132,29 @@ kbd {
 .link-label.limit, .link-label.error { border-color: var(--danger); }
 .link-label.limit .link-label-dot, .link-label.error .link-label-dot { background: var(--danger); }
 .link-label.disabled { border-color: var(--border); color: var(--text-muted); }
+.link-label.delegate svg { color: var(--accent); }
 .link-label:hover { background: var(--surface); }
 .link-pulse { fill: var(--accent-hover); filter: drop-shadow(0 0 4px var(--accent)); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   .link-panel, .react-flow__edge-path.link-sending, .link-label.sending .link-label-dot { animation: none; }
 }
+
+/* Type et sens d'un lien (PLAN.md §3.11) */
+.link-modes { display: flex; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.link-mode {
+  flex: 1;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.link-mode:hover { color: var(--text); }
+.link-mode.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent-hover); }
+.link-direction { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.link-direction .text-button { display: inline-flex; align-items: center; gap: 6px; }
+.mode-option { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.mode-option input { accent-color: var(--accent); margin: 2px 0 0; }
+.mode-option > span { display: flex; flex-direction: column; gap: 2px; }
+.mode-option-label { color: var(--text); }

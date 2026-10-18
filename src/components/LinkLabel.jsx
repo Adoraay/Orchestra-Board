@@ -1,5 +1,5 @@
 import { EdgeLabelRenderer } from '@xyflow/react';
-import { Pause } from 'lucide-react';
+import { Network, Pause } from 'lucide-react';
 
 // Étiquette au milieu d'un lien (affichée seulement s'il y a la place) : état du lien et tours.
 // Un clic ouvre le panneau du lien.
@@ -8,6 +8,7 @@ export default function LinkLabel({ x, y, state, prompt, targetName, turns, maxT
   switch (state) {
     case 'unconfigured': text = 'Configurer le lien'; break;
     case 'disabled': text = 'Lien en pause'; break;
+    case 'delegate': text = 'Délégation'; break;
     case 'sending': text = `Transmission à ${targetName}…`; break;
     case 'queued': text = `En attente de ${targetName}…`; break;
     case 'limit': text = 'Limite de tours atteinte'; break;
@@ -24,7 +25,9 @@ export default function LinkLabel({ x, y, state, prompt, targetName, turns, maxT
         onClick={onOpen}
         title="Réglages du lien"
       >
-        {state === 'disabled' ? <Pause size={13} /> : <span className="link-label-dot" />}
+        {state === 'disabled' && <Pause size={13} />}
+        {state === 'delegate' && <Network size={13} />}
+        {state !== 'disabled' && state !== 'delegate' && <span className="link-label-dot" />}
         <span className="link-label-text">{text}</span>
         {showTurns && <span className="link-label-turns">{turns}/{maxTurns}</span>}
       </button>

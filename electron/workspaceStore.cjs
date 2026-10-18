@@ -57,9 +57,12 @@ function sanitizeNode(n) {
   };
 }
 
-// Réglages d'un lien (PLAN.md §3.5) : consigne avec {reponse}, limite de tours, actif ou non.
+// Réglages d'un lien (PLAN.md §3.5, §3.11) : type, consigne avec {reponse}, limite de tours, actif ou non,
+// dans les deux sens ou non.
 function sanitizeLink(data = {}) {
   return {
+    mode: data.mode === 'delegate' ? 'delegate' : 'relay',
+    bidirectional: data.bidirectional === true,
     prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '', // vide = pas encore configuré
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),
     enabled: data.enabled !== false,

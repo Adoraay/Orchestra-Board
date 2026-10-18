@@ -48,6 +48,14 @@ const BOARD_HINTS = {
 const NODE_SIZE = { width: 640, height: 400 };
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
 
+// Nom par défaut d'une nouvelle case : « Claude Code 1 », « Claude Code 2 »… (plus petit numéro libre du tableau).
+function numberedName(agentName, nodes) {
+  const used = new Set(nodes.map((n) => n.data?.label));
+  let n = 1;
+  while (used.has(`${agentName} ${n}`)) n++;
+  return `${agentName} ${n}`;
+}
+
 // Les tableaux sauvegardés sont chargés avant l'affichage : chaque map part de son état sauvegardé
 // (et pas d'une étape que Ctrl+Z pourrait annuler).
 export default function App() {
@@ -173,10 +181,10 @@ function Board({ initial, onChange, focusRequest }) {
         setLinkSource(linkSource ? null : node.id);
         return;
       }
-      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', data: { ...DEFAULT_LINK } }, eds));
+      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', data: { ...DEFAULT_LINK, mode: settings.general.linkMode } }, eds));
       setLinkSource(null);
     },
-    [tool, linkSource, setEdges],
+    [tool, linkSource, setEdges, settings.general.linkMode],
   );
 
   // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).
@@ -322,7 +330,7 @@ function Board({ initial, onChange, focusRequest }) {
           position: { x: center.x - NODE_SIZE.width / 2, y: center.y - NODE_SIZE.height / 2 },
           dragHandle: '.drag-handle',
           style: { ...NODE_SIZE },
-          data: { agentId, cwd },
+          data: { agentId, cwd, label: numberedName(agentById(agentId).name, nds) },
         }),
       );
     },
@@ -405,6 +413,9 @@ function Board({ initial, onChange, focusRequest }) {
             event={linkEvents[panelEdge.id]}
             onChange={(patch) => updateLink(panelEdge.id, patch)}
             onDelete={() => setEdges((eds) => eds.filter((e) => e.id !== panelEdge.id))}
+            onSwap={() =>
+              setEdges((eds) => eds.map((e) => (e.id === panelEdge.id ? { ...e, source: e.target, target: e.source } : e)))
+            }
             onClose={() => setEdges((eds) => eds.map((e) => (e.selected ? { ...e, selected: false } : e)))}
           />
         )}

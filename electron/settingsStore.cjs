@@ -15,12 +15,13 @@ const BUILTIN_AGENTS = [
 
 const DEFAULTS = {
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots' },
-  general: { rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true },
+  general: { rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay' },
 };
 
 const THEMES = ['standard'];
 const GRIDS = ['dots', 'lines', 'none'];
 const SHELLS = ['default', 'powershell', 'pwsh', 'cmd', 'bash'];
+const LINK_MODES = ['relay', 'delegate']; // type des nouveaux liens (PLAN.md §3.11)
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const CUSTOM_ID = /^custom-[a-z0-9]{4,32}$/;
 const LOGO_FILE = /^custom-[a-z0-9]{4,32}\.(png|jpg|jpeg|svg|webp|gif)$/;
@@ -92,6 +93,7 @@ function sanitize(input) {
       confirmClose: g.confirmClose !== false,
       notifySound: g.notifySound !== false,
       notifyDesktop: g.notifyDesktop !== false,
+      linkMode: pick(g.linkMode, LINK_MODES, DEFAULTS.general.linkMode),
     },
   };
 }

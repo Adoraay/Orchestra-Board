@@ -53,13 +53,15 @@ function arrowPath(tip, side) {
   return `M ${bx + px} ${by + py} L ${tip.x} ${tip.y} L ${bx - px} ${by - py}`;
 }
 
-// État affiché : réglages du lien d'abord (pause, sans consigne), puis dernier événement de transmission.
+// État affiché : réglages du lien d'abord (pause, Transmission sans consigne), puis dernier événement.
+// Au repos, une Délégation est « delegate », une Transmission configurée est « ready ».
 function linkState(link, event) {
   if (!link.enabled) return 'disabled';
-  if (!link.prompt.trim()) return 'unconfigured';
-  if (event?.state === 'sent') return Date.now() - event.at < SENDING_FOR ? 'sending' : 'ready';
+  if (link.mode === 'relay' && !link.prompt.trim()) return 'unconfigured';
+  const rest = link.mode === 'delegate' ? 'delegate' : 'ready';
+  if (event?.state === 'sent') return Date.now() - event.at < SENDING_FOR ? 'sending' : rest;
   if (event?.state === 'queued' || event?.state === 'limit' || event?.state === 'error') return event.state;
-  return 'ready';
+  return rest;
 }
 
 // Lien qui part du côté de A le plus proche de B (PLAN.md §3.8), coloré selon son état (§3.5).
@@ -98,7 +100,9 @@ export default function FloatingEdge({ id, source, target, data, style }) {
   const horizontal = sourceSide === Position.Left || sourceSide === Position.Right;
   const roomy = horizontal ? Math.abs(to.x - from.x) >= LABEL_ROOM.horizontal : Math.abs(to.y - from.y) >= LABEL_ROOM.vertical;
   const turns = event && typeof event.turns === 'number' ? event.turns : 0;
-  const targetName = targetNode.data?.label || agentById(targetNode.data?.agentId).name;
+  // Dans un lien à double sens, le message peut aller vers la source : event.to dit vers qui.
+  const toNode = event?.to === source ? sourceNode : targetNode;
+  const targetName = toNode.data?.label || agentById(toNode.data?.agentId).name;
 
   // Clic sur l'étiquette = ce lien seul choisi, son panneau s'ouvre.
   const open = () => {
@@ -110,6 +114,7 @@ export default function FloatingEdge({ id, source, target, data, style }) {
     <>
       <BaseEdge id={id} path={path} style={style} className={`link-${state}`} />
       <path d={arrowPath(to, targetSide)} className={`react-flow__edge-path link-arrow link-${state}`} />
+      {link.bidirectional && <path d={arrowPath(from, sourceSide)} className={`react-flow__edge-path link-arrow link-${state}`} />}
       {pulsing && (
         <circle key={event.at} r="5" className="link-pulse">
           <animateMotion dur={`${PULSE_DURATION}ms`} path={path} fill="freeze" />

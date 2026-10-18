@@ -1,5 +1,6 @@
 import { FolderInput, Home } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
+import { LINK_MODES } from '../lib/links.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
 
@@ -41,6 +42,20 @@ export default function GeneralTab() {
         </select>
         <span className="hint">S'applique aux prochaines cases (ou après « Relancer »).</span>
       </label>
+
+      <div className="field">
+        <span className="field-label">Type des nouveaux liens</span>
+        {LINK_MODES.map((mode) => (
+          <label key={mode.id} className="mode-option">
+            <input type="radio" name="link-mode" checked={general.linkMode === mode.id} onChange={() => update({ linkMode: mode.id })} />
+            <span>
+              <span className="mode-option-label">{mode.label}</span>
+              <span className="hint">{mode.description}</span>
+            </span>
+          </label>
+        ))}
+        <span className="hint">Chaque lien peut ensuite changer de type dans son panneau.</span>
+      </div>
 
       <div className="field">
         <span className="field-label">Comportement</span>

@@ -12,9 +12,10 @@ const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 
 let deps = { write: () => {}, status: () => null, arm: () => {}, emit: () => {} };
-let links = new Map(); // source -> [{ id, source, target, prompt, maxTurns, enabled }]
-const chains = new Map(); // case -> { counts: Map(linkId -> envois) }
-const queues = new Map(); // case cible -> [{ linkId, text, chain, turns }]
+// Un lien « dans les deux sens » donne deux entrées (key = id, puis id:r), chacune avec son compteur.
+let links = new Map(); // source -> [{ key, id, source, target, prompt, maxTurns, enabled }]
+const chains = new Map(); // case -> { counts: Map(key -> envois) }
+const queues = new Map(); // case cible -> [{ key, text, chain, turns }]
 
 const newChain = () => ({ counts: new Map() });
 
@@ -25,18 +26,20 @@ function init(d) {
 }
 
 // Appelé à chaque sauvegarde de workspace.json (déjà validé), tous tableaux confondus.
+// Seuls les liens en Transmission envoient tout seuls ; la Délégation passe par les outils MCP.
 function setLinks(workspace) {
   links = new Map();
+  const add = (link) => links.set(link.source, [...(links.get(link.source) ?? []), link]);
   for (const board of workspace.boards) {
     for (const edge of board.edges) {
-      const list = links.get(edge.source) ?? [];
-      list.push({ id: edge.id, source: edge.source, target: edge.target, ...edge.data });
-      links.set(edge.source, list);
+      if (edge.data.mode !== 'relay') continue;
+      add({ ...edge.data, key: edge.id, id: edge.id, source: edge.source, target: edge.target });
+      if (edge.data.bidirectional) add({ ...edge.data, key: `${edge.id}:r`, id: edge.id, source: edge.target, target: edge.source });
     }
   }
 }
 
-const findLink = (id) => [...links.values()].flat().find((l) => l.id === id);
+const findLink = (key) => [...links.values()].flat().find((l) => l.key === key);
 
 function readTail(file) {
   const fd = fs.openSync(file, 'r');
@@ -91,7 +94,7 @@ function buildText(prompt, reply) {
 
 // Collage entre crochets (le CLI le reçoit comme un collage, pas comme une frappe), puis Entrée à part.
 function deliver(target, item) {
-  const link = findLink(item.linkId);
+  const link = findLink(item.key);
   if (!link || !link.enabled || !link.prompt.trim()) return;
   chains.set(target, item.chain);
   deps.write(target, PASTE_START + item.text.replace(/\r?\n/g, '\r') + PASTE_END);
@@ -99,7 +102,7 @@ function deliver(target, item) {
     deps.arm(target);
     deps.write(target, '\r');
   }, ENTER_DELAY);
-  deps.emit(link.id, { state: 'sent', turns: item.turns, maxTurns: link.maxTurns });
+  deps.emit(link.id, { state: 'sent', to: target, turns: item.turns, maxTurns: link.maxTurns });
 }
 
 // B travaille ou attend une permission : on garde le message pour quand il aura fini.
@@ -110,11 +113,11 @@ function flush(target) {
   const status = deps.status(target);
   if (!status) {
     queues.delete(target);
-    for (const item of queue) deps.emit(item.linkId, { state: 'error', message: "L'agent cible n'est plus lancé" });
+    for (const item of queue) deps.emit(item.id, { state: 'error', message: "L'agent cible n'est plus lancé" });
     return;
   }
   if (status === 'working' || status === 'waiting') {
-    for (const item of queue) deps.emit(item.linkId, { state: 'queued', turns: item.turns, maxTurns: findLink(item.linkId)?.maxTurns });
+    for (const item of queue) deps.emit(item.id, { state: 'queued', to: target, turns: item.turns, maxTurns: findLink(item.key)?.maxTurns });
     return;
   }
   // Un message à la fois : le suivant part quand B aura fini de traiter celui-ci.
@@ -136,7 +139,7 @@ function onStop(id, payload) {
         deps.emit(link.id, { state: 'error', message: 'Réponse introuvable dans le transcript' });
         continue;
       }
-      const used = chain.counts.get(link.id) ?? 0;
+      const used = chain.counts.get(link.key) ?? 0;
       if (used >= link.maxTurns) {
         deps.emit(link.id, { state: 'limit', turns: used, maxTurns: link.maxTurns });
         continue;
@@ -145,9 +148,9 @@ function onStop(id, payload) {
         deps.emit(link.id, { state: 'error', message: "L'agent cible n'est pas lancé" });
         continue;
       }
-      chain.counts.set(link.id, used + 1);
+      chain.counts.set(link.key, used + 1);
       const queue = queues.get(link.target) ?? [];
-      queue.push({ linkId: link.id, text: buildText(link.prompt, reply), chain, turns: used + 1 });
+      queue.push({ key: link.key, id: link.id, text: buildText(link.prompt, reply), chain, turns: used + 1 });
       queues.set(link.target, queue);
       flush(link.target);
     }
