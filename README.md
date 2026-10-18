@@ -38,6 +38,7 @@ electron/                 côté Node : système, terminaux, fichiers
   fsHandlers.cjs          lecture des dossiers pour l'explorateur, choix d'un dossier
   git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add)
   linkRelay.cjs           liens en Transmission : réponse de A envoyée dans le terminal de B, file d'attente, limite de tours
+  usage.cjs               utilisation (quotas) : cache /usage de Claude (+ /usage invisible), rate_limits de Codex
   delegation.cjs          liens en Délégation : outils list_agents, send_to_agent, wait_for_replies
   mcpServer.cjs           serveur MCP « orchestra » lancé par chaque Claude (stdio), relaie ses appels à l'app
 src/                      interface React
@@ -68,6 +69,7 @@ Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, cou
 - **Agents** : glisser un agent du dock sur la map (aperçu en pointillés) ouvre un vrai terminal dans le dossier actif de l'explorateur. Claude Code, Codex, Gemini CLI, Terminal, et tes propres agents.
 - **Cases** : déplacement avec effet « soulever puis fixer », sélection au clic, sélection multiple par rectangle au clic droit (et déplacement en groupe), redimensionnement après un clic sur la barre de titre, renommage par double-clic sur le titre (ex. « Claude design »), bouton « relancer », confirmation avant de fermer un agent qui travaille.
 - **Statuts** : pastille grise / orange / jaune / verte (hooks pour Claude Code, activité du terminal pour les autres). La languette « Agents actifs » en bas de la map ouvre la liste de tous les agents lancés (tous tableaux) ; un clic centre la map sur l'agent.
+- **Utilisation** : languette « Utilisation » sur le bord droit de la map : quota de session et de la semaine de Claude (mis à jour par un `/usage` invisible), limites de Codex.
 - **Confiance** : Claude Code ne demande plus de faire confiance à chaque dossier ouvert par Orchestra (désactivable dans Général).
 - **Fin de tâche** : lueur verte, bulle « Claude design a terminé sa tâche » (avec le nom de la case), son, notification Windows (un clic ramène sur la case), point vert sur l'onglet d'un tableau fermé.
 - **Barre d'outils** : Sélection, Stylo (clic droit pour gommer), Post-it, Texte (rotation, taille), Lien par deux clics (clic droit pour supprimer un lien) ; Ctrl+Z / Ctrl+Y.
@@ -80,8 +82,7 @@ Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, cou
 
 ## Ce qui reste à faire
 
-1. **Utilisation des agents** (prochaine étape) : onglet caché qui montre le quota de Claude et de Codex.
-1. **Finitions** : confirmation avant de fermer l'app quand un agent travaille, raccourcis, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
+1. **Finitions** (prochaine étape) : confirmation avant de fermer l'app quand un agent travaille, raccourcis, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
 2. **Plus tard** : orchestration avec Codex et Gemini CLI.
 
 Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.

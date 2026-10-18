@@ -13,6 +13,7 @@ const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
 const delegation = require('./delegation.cjs');
+const usage = require('./usage.cjs');
 
 let win;
 
@@ -193,6 +194,7 @@ workspaceStore.register((workspace) => {
   delegation.setWorkspace(workspace);
 });
 gitHandlers.register();
+usage.register();
 
 // Pas de barre de menu File / Edit / View.
 Menu.setApplicationMenu(null);
@@ -207,5 +209,8 @@ app.whenReady().then(async () => {
 });
 
 // Pas de processus orphelins : on tue tous les agents en quittant.
-app.on('before-quit', () => ptyManager.killAll());
+app.on('before-quit', () => {
+  ptyManager.killAll();
+  usage.stop();
+});
 app.on('window-all-closed', () => app.quit());

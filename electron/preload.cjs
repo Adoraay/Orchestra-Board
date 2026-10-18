@@ -31,6 +31,12 @@ contextBridge.exposeInMainWorld('git', {
   ensureWorktree: (cwd, branch) => ipcRenderer.invoke('git:ensureWorktree', cwd, branch),
 });
 
+// Utilisation (quotas) de Claude Code et Codex. refresh(agentId, force) peut lancer un /usage invisible.
+contextBridge.exposeInMainWorld('usage', {
+  get: (agentId) => ipcRenderer.invoke('usage:get', agentId),
+  refresh: (agentId, force) => ipcRenderer.invoke('usage:refresh', agentId, force === true),
+});
+
 // État des liens entre agents : envoyé, en attente, limite atteinte, erreur.
 contextBridge.exposeInMainWorld('links', {
   onEvent: (cb) => {

@@ -736,6 +736,100 @@ kbd {
   .agents-bar-slide, .agents-bar, .agents-bar-chevron { transition: none; }
 }
 
+/* Utilisation des agents : languette sur le bord droit de la map, panneau qui glisse vers la gauche */
+.usage-wrap {
+  position: absolute;
+  top: 14px;
+  right: 0;
+  z-index: 7;
+  display: flex;
+  align-items: flex-start;
+}
+.usage-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 6px;
+  border: 1px solid var(--border);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 150ms;
+}
+.usage-tab:hover, .usage-tab.open { color: var(--text); }
+.usage-tab.open { color: var(--accent); }
+.usage-tab-label { writing-mode: vertical-rl; }
+.usage-slide {
+  display: grid;
+  grid-template-columns: 0fr;
+  border: 1px solid transparent;
+  border-right: none;
+  border-radius: var(--radius-md) 0 var(--radius-md) var(--radius-md);
+  transition: grid-template-columns 220ms cubic-bezier(0.2, 0.8, 0.2, 1), background 220ms, border-color 220ms, box-shadow 220ms;
+}
+.usage-slide.open {
+  grid-template-columns: 1fr;
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: -6px 6px 18px var(--shadow);
+}
+.usage-clip { min-width: 0; overflow: hidden; }
+.usage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 280px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity 180ms, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.usage-slide.open .usage-panel { opacity: 1; transform: none; }
+.usage-header { display: flex; align-items: center; justify-content: space-between; min-height: 26px; }
+.usage-title { font-weight: 600; }
+.icon-button.spinning svg { animation: usage-spin 0.9s linear infinite; }
+@keyframes usage-spin { to { transform: rotate(360deg); } }
+.usage-agents { display: flex; flex-wrap: wrap; gap: 6px; }
+.usage-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 150ms, color 150ms;
+}
+.usage-agent:hover { color: var(--text); }
+.usage-agent.active { border-color: var(--accent); color: var(--text); }
+.usage-body { display: flex; flex-direction: column; gap: 12px; }
+.usage-limit { display: flex; flex-direction: column; gap: 5px; }
+.usage-limit-row { display: flex; justify-content: space-between; gap: 10px; }
+.usage-percent { font-variant-numeric: tabular-nums; font-weight: 600; }
+.usage-percent.ok { color: var(--text); }
+.usage-percent.warning { color: var(--warning); }
+.usage-percent.danger { color: var(--danger); }
+.usage-meter { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.usage-meter-fill { height: 100%; border-radius: 999px; transition: width 400ms ease; }
+.usage-meter-fill.ok { background: var(--accent); }
+.usage-meter-fill.warning { background: var(--warning); }
+.usage-meter-fill.danger { background: var(--danger); }
+.usage-breakdown { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.usage-footer { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--border); }
+.usage-error { color: var(--danger); }
+@media (prefers-reduced-motion: reduce) {
+  .usage-slide, .usage-panel, .usage-meter-fill { transition: none; }
+  .icon-button.spinning svg { animation: none; }
+}
+
 /* Post-it et texte libre (PLAN.md §3.8) */
 .tool-note .react-flow__pane { cursor: copy; }
 .tool-text .react-flow__pane { cursor: text; }
@@ -1153,7 +1247,7 @@ kbd {
 .link-panel {
   position: absolute;
   top: 14px;
-  right: 14px;
+  right: 46px; /* à côté de la languette « Utilisation » */
   z-index: 7;
   display: flex;
   flex-direction: column;

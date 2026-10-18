@@ -22,6 +22,7 @@ import LinkPanel from './components/LinkPanel.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
+import UsagePanel from './components/UsagePanel.jsx';
 import TextNode from './components/TextNode.jsx';
 import Toast from './components/Toast.jsx';
 import TitleBar from './components/TitleBar.jsx';
@@ -78,17 +79,23 @@ function Workspace({ saved }) {
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
   const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
   const [agentsBarOpen, setAgentsBarOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
+  const [usageAgent, setUsageAgent] = useState('claude-code');
 
-  const agentsBar = (
-    <AgentsBar
-      boards={boards.boards}
-      content={content}
-      activeId={activeId}
-      running={running}
-      open={agentsBarOpen}
-      onToggle={() => setAgentsBarOpen((o) => !o)}
-      onFocus={focusAgent}
-    />
+  // Panneaux posés sur la map : leur état vit ici, car la map est recréée à chaque changement de tableau.
+  const overlays = (
+    <>
+      <UsagePanel open={usageOpen} onToggle={() => setUsageOpen((o) => !o)} agentId={usageAgent} onSelectAgent={setUsageAgent} />
+      <AgentsBar
+        boards={boards.boards}
+        content={content}
+        activeId={activeId}
+        running={running}
+        open={agentsBarOpen}
+        onToggle={() => setAgentsBarOpen((o) => !o)}
+        onFocus={focusAgent}
+      />
+    </>
   );
 
   return (
@@ -98,7 +105,7 @@ function Workspace({ saved }) {
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
-          <Board initial={content[activeId]} onChange={onBoardChange} focusRequest={focusRequest} onFocusDone={clearFocus} agentsBar={agentsBar} />
+          <Board initial={content[activeId]} onChange={onBoardChange} focusRequest={focusRequest} onFocusDone={clearFocus} overlays={overlays} />
         </ReactFlowProvider>
         <ExplorerPanel />
       </div>
@@ -108,7 +115,7 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest, onFocusDone, agentsBar }) {
+function Board({ initial, onChange, focusRequest, onFocusDone, overlays }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
@@ -424,7 +431,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, agentsBar }) {
           </div>
         )}
         {boxSelection.box && <div className="selection-box" style={boxSelection.box} />}
-        {agentsBar}
+        {overlays}
         {panelEdge && (
           <LinkPanel
             key={panelEdge.id}

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { ChevronUp, Users } from 'lucide-react';
 import AgentLogo from './AgentLogo.jsx';
 import StatusDot from './StatusDot.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
+import useAutoClose from '../hooks/useAutoClose.js';
 
-const AUTO_CLOSE_DELAY = 5000; // ms après un clic en dehors de la barre ouverte
 const MAX_NAME = 40;
 const DOUBLE_CLICK_DELAY = 400; // ms
 
@@ -19,33 +19,7 @@ let lastClick = { id: null, at: 0 };
 export default function AgentsBar({ boards, content, activeId, running, open, onToggle, onFocus }) {
   const { agentById } = useSettings();
   const wrapRef = useRef(null);
-  const closeTimer = useRef(null);
-  const toggleRef = useRef(onToggle);
-  toggleRef.current = onToggle;
-
-  // Ouverte, elle le reste tant qu'on ne clique pas ailleurs. Un clic ailleurs la ferme 5 s plus tard,
-  // sauf si on reclique dedans entre-temps.
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event) => {
-      if (wrapRef.current?.contains(event.target)) {
-        clearTimeout(closeTimer.current);
-        closeTimer.current = null;
-      } else if (!closeTimer.current) {
-        closeTimer.current = setTimeout(() => {
-          closeTimer.current = null;
-          toggleRef.current();
-        }, AUTO_CLOSE_DELAY);
-      }
-    };
-    // En capture : xterm et la map arrêtent certains clics avant qu'ils remontent au document.
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    };
-  }, [open]);
+  useAutoClose(wrapRef, open, onToggle);
 
   // Double-clic = renommer la case, comme sur son titre (vide = nom de l'agent).
   const [editingId, setEditingId] = useState(null);
