@@ -67,7 +67,8 @@ Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, cou
 - **Map** infinie avec pan, zoom, minimap et grille ; plusieurs **tableaux** en onglets (créer, renommer, supprimer). Les agents des autres tableaux continuent en arrière-plan.
 - **Agents** : glisser un agent du dock sur la map (aperçu en pointillés) ouvre un vrai terminal dans le dossier actif de l'explorateur. Claude Code, Codex, Gemini CLI, Terminal, et tes propres agents.
 - **Cases** : déplacement avec effet « soulever puis fixer », sélection au clic, sélection multiple par rectangle au clic droit (et déplacement en groupe), redimensionnement après un clic sur la barre de titre, renommage par double-clic sur le titre (ex. « Claude design »), bouton « relancer », confirmation avant de fermer un agent qui travaille.
-- **Statuts** : pastille grise / orange / jaune / verte (hooks pour Claude Code, activité du terminal pour les autres).
+- **Statuts** : pastille grise / orange / jaune / verte (hooks pour Claude Code, activité du terminal pour les autres). La languette « Agents actifs » en bas de la map ouvre la liste de tous les agents lancés (tous tableaux) ; un clic centre la map sur l'agent.
+- **Confiance** : Claude Code ne demande plus de faire confiance à chaque dossier ouvert par Orchestra (désactivable dans Général).
 - **Fin de tâche** : lueur verte, bulle « Claude design a terminé sa tâche » (avec le nom de la case), son, notification Windows (un clic ramène sur la case), point vert sur l'onglet d'un tableau fermé.
 - **Barre d'outils** : Sélection, Stylo (clic droit pour gommer), Post-it, Texte (rotation, taille), Lien par deux clics (clic droit pour supprimer un lien) ; Ctrl+Z / Ctrl+Y.
 - **Sauvegarde** de tout à chaque changement ; au redémarrage, les agents sont relancés et proposent de reprendre leur conversation (`claude --continue`, `codex resume --last`, `gemini --resume latest`).
@@ -79,7 +80,8 @@ Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, cou
 
 ## Ce qui reste à faire
 
-1. **Finitions** (prochaine étape) : confirmation avant de fermer l'app quand un agent travaille, raccourcis, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
+1. **Utilisation des agents** (prochaine étape) : onglet caché qui montre le quota de Claude et de Codex.
+1. **Finitions** : confirmation avant de fermer l'app quand un agent travaille, raccourcis, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
 2. **Plus tard** : orchestration avec Codex et Gemini CLI.
 
 Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.

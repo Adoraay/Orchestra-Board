@@ -140,7 +140,10 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
 
   const existing = agentStatus.info(id);
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
-  if (!existing) agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
+  if (!existing) {
+    agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
+    send('agent:status', id, agentStatus.info(id)); // la barre des agents actifs le voit tout de suite
+  }
   const result = ptyManager.create(
     { id, command: existing ? null : buildCommand(id, agent, resume), shell: settings.general.shell, cwd, cols, rows },
     (id, data) => {
@@ -170,7 +173,9 @@ ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, row
 ipcMain.on('pty:ack', (_e, id) => agentStatus.acknowledge(id)); // clic sur une case qui a fini
 ipcMain.on('pty:rename', (_e, id, name) => {
   const clean = cleanName(name);
-  if (clean) agentStatus.rename(id, clean); // nom repris par la notification Windows
+  if (!clean || !agentStatus.info(id)) return;
+  agentStatus.rename(id, clean); // nom repris par la notification Windows et la barre des agents actifs
+  send('agent:status', id, agentStatus.info(id));
 });
 ipcMain.on('pty:kill', (_e, id) => {
   ptyManager.kill(id);

@@ -625,6 +625,90 @@ kbd {
   .terminal-node.link-source, .terminal-node.link-source::after { animation: none; }
 }
 
+/* Barre des agents actifs, en bas de la map, entre les boutons de zoom et la minimap */
+.agents-bar-wrap {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: calc(100% - 480px);
+  min-width: 220px;
+  transform: translateX(-50%);
+}
+.agents-bar-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 150ms;
+}
+.agents-bar-tab:hover, .agents-bar-tab.open { color: var(--text); }
+.agents-bar-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 11px;
+  text-align: center;
+}
+.agents-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--surface);
+  box-shadow: 0 -6px 18px var(--shadow);
+  overflow-x: auto;
+  scrollbar-width: none;
+  animation: agents-bar-in 150ms ease-out;
+}
+.agents-bar::-webkit-scrollbar { display: none; }
+@keyframes agents-bar-in {
+  from { opacity: 0; transform: translateY(8px); }
+}
+.agents-bar-empty { padding: 2px 6px; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.agents-bar-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.agents-bar-group + .agents-bar-group { padding-left: 14px; border-left: 1px solid var(--border); }
+.agents-bar-board { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.agents-bar-board.active { color: var(--accent); }
+.agent-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  max-width: 200px;
+  padding: 5px 10px 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 150ms, transform 150ms;
+}
+.agent-chip:hover { border-color: var(--accent); transform: translateY(-1px); }
+.agent-chip.finished { border-color: var(--success); }
+.agent-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .agents-bar { animation: none; }
+}
+
 /* Post-it et texte libre (PLAN.md §3.8) */
 .tool-note .react-flow__pane { cursor: copy; }
 .tool-text .react-flow__pane { cursor: text; }

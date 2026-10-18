@@ -12,6 +12,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import AgentDock from './components/AgentDock.jsx';
+import AgentsBar from './components/AgentsBar.jsx';
 import BoardToolbar from './components/BoardToolbar.jsx';
 import DrawingLayer from './components/DrawingLayer.jsx';
 import DropPreview from './components/DropPreview.jsx';
@@ -75,7 +76,20 @@ function Workspace({ saved }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
-  const { boardsWithNews, focusRequest } = useAgentNotifications(boards);
+  const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
+  const [agentsBarOpen, setAgentsBarOpen] = useState(false);
+
+  const agentsBar = (
+    <AgentsBar
+      boards={boards.boards}
+      content={content}
+      activeId={activeId}
+      running={running}
+      open={agentsBarOpen}
+      onToggle={() => setAgentsBarOpen((o) => !o)}
+      onFocus={focusAgent}
+    />
+  );
 
   return (
     <div className="app">
@@ -84,7 +98,7 @@ function Workspace({ saved }) {
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
-          <Board initial={content[activeId]} onChange={onBoardChange} focusRequest={focusRequest} />
+          <Board initial={content[activeId]} onChange={onBoardChange} focusRequest={focusRequest} onFocusDone={clearFocus} agentsBar={agentsBar} />
         </ReactFlowProvider>
         <ExplorerPanel />
       </div>
@@ -94,18 +108,23 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest }) {
+function Board({ initial, onChange, focusRequest, onFocusDone, agentsBar }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
   const { screenToFlowPosition, fitView } = useReactFlow();
 
-  // Clic sur une notification Windows : on centre la map sur la case (après sa mesure si le tableau vient de s'ouvrir).
+  // Clic sur une notification Windows ou dans la barre des agents : on centre la map sur la case et on la
+  // choisit (après sa mesure si le tableau vient de s'ouvrir). Demande effacée une fois servie.
   useEffect(() => {
     if (!focusRequest) return;
-    const timer = setTimeout(() => fitView({ nodes: [{ id: focusRequest.id }], duration: 400, padding: 0.3, maxZoom: 1 }), 120);
+    const timer = setTimeout(() => {
+      fitView({ nodes: [{ id: focusRequest.id }], duration: 400, padding: 0.3, maxZoom: 1 });
+      setNodes((nds) => nds.map((n) => (Boolean(n.selected) === (n.id === focusRequest.id) ? n : { ...n, selected: n.id === focusRequest.id })));
+      onFocusDone();
+    }, 120);
     return () => clearTimeout(timer);
-  }, [focusRequest, fitView]);
+  }, [focusRequest, fitView, setNodes, onFocusDone]);
   const { activeFolder, homeDir } = useWorkspace();
   const [toast, setToast] = useState(null);
   const { settings, agentById } = useSettings();
@@ -405,6 +424,7 @@ function Board({ initial, onChange, focusRequest }) {
           </div>
         )}
         {boxSelection.box && <div className="selection-box" style={boxSelection.box} />}
+        {agentsBar}
         {panelEdge && (
           <LinkPanel
             key={panelEdge.id}
