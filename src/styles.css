@@ -1037,3 +1037,63 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .branch-bar { animation: none; }
 }
+
+/* Liens entre agents (PLAN.md §3.5) : panneau du lien choisi, état du lien, point qui le parcourt */
+.link-panel {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 300px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 12px 28px var(--shadow);
+  animation: toast-in 150ms ease-out;
+}
+.link-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.link-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.link-panel-title svg { flex-shrink: 0; color: var(--accent); }
+.link-field { display: flex; flex-direction: column; gap: 6px; color: var(--text-muted); }
+.link-field.inline { flex-direction: row; align-items: center; justify-content: space-between; }
+.link-field textarea, .link-field input {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.link-field textarea { resize: vertical; min-height: 70px; max-height: 260px; }
+.link-field input { width: 64px; }
+.link-field textarea:focus, .link-field input:focus { border-color: var(--accent); }
+.link-panel code { color: var(--accent-hover); font-family: var(--font-mono); }
+.link-warning, .link-status { margin: 0; font-size: 12px; }
+.link-warning { color: var(--warning); }
+.link-status { color: var(--text-muted); }
+.link-status.sent { color: var(--success); }
+.link-status.queued { color: var(--warning); }
+.link-status.limit, .link-status.error { color: var(--danger); }
+.link-delete { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+
+.react-flow__edge-path.link-disabled { stroke-dasharray: 2 6; opacity: 0.45; animation: none; }
+.react-flow__edge-path.link-queued { stroke: var(--warning); }
+.react-flow__edge-path.link-limit, .react-flow__edge-path.link-error { stroke: var(--danger); }
+.link-pulse { fill: var(--accent-hover); filter: drop-shadow(0 0 4px var(--accent)); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .link-panel { animation: none; }
+}

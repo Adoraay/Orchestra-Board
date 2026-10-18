@@ -17,6 +17,7 @@ import DrawingLayer from './components/DrawingLayer.jsx';
 import DropPreview from './components/DropPreview.jsx';
 import ExplorerPanel from './components/ExplorerPanel.jsx';
 import FloatingEdge from './components/FloatingEdge.jsx';
+import LinkPanel from './components/LinkPanel.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
@@ -33,6 +34,7 @@ import useBoxSelection from './hooks/useBoxSelection.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useBoards from './hooks/useBoards.js';
+import { DEFAULT_LINK } from './lib/links.js';
 
 const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode };
 const NOTE_SIZE = { width: 180, height: 180 };
@@ -108,9 +110,15 @@ function Board({ initial, onChange, focusRequest }) {
   const [linkSource, setLinkSource] = useState(null); // case cliquée en premier avec l'outil Lien
   const [branchTarget, setBranchTarget] = useState(null); // case survolée en glissant « Branche »
   const [branchPicker, setBranchPicker] = useState(null); // case dont la barre des branches est ouverte
+  const [linkEvents, setLinkEvents] = useState({}); // id du lien -> dernier état de transmission
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker }),
-    [tool, linkSource, branchTarget, branchPicker],
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents }),
+    [tool, linkSource, branchTarget, branchPicker, linkEvents],
+  );
+
+  useEffect(
+    () => window.links.onEvent((id, event) => setLinkEvents((all) => ({ ...all, [id]: { ...event, at: Date.now() } }))),
+    [],
   );
   const pen = usePenDrawing({ enabled: tool === 'pen', onStroke: (s) => setStrokes((all) => [...all, s]) });
 
@@ -165,10 +173,25 @@ function Board({ initial, onChange, focusRequest }) {
         setLinkSource(linkSource ? null : node.id);
         return;
       }
-      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', animated: true }, eds));
+      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', animated: true, data: { ...DEFAULT_LINK } }, eds));
       setLinkSource(null);
     },
     [tool, linkSource, setEdges],
+  );
+
+  // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).
+  const selectedEdges = edges.filter((e) => e.selected);
+  const panelEdge = tool === 'select' && selectedEdges.length === 1 ? selectedEdges[0] : null;
+  const updateLink = useCallback(
+    (id, patch) =>
+      setEdges((eds) =>
+        eds.map((e) => {
+          if (e.id !== id) return e;
+          const data = { ...DEFAULT_LINK, ...e.data, ...patch };
+          return { ...e, data, animated: data.enabled };
+        }),
+      ),
+    [setEdges],
   );
 
   const history = useBoardHistory({ nodes, edges, strokes, setNodes, setEdges, setStrokes });
@@ -375,6 +398,17 @@ function Board({ initial, onChange, focusRequest }) {
           </div>
         )}
         {boxSelection.box && <div className="selection-box" style={boxSelection.box} />}
+        {panelEdge && (
+          <LinkPanel
+            key={panelEdge.id}
+            edge={panelEdge}
+            nodes={nodes}
+            event={linkEvents[panelEdge.id]}
+            onChange={(patch) => updateLink(panelEdge.id, patch)}
+            onDelete={() => setEdges((eds) => eds.filter((e) => e.id !== panelEdge.id))}
+            onClose={() => setEdges((eds) => eds.map((e) => (e.selected ? { ...e, selected: false } : e)))}
+          />
+        )}
         {previewPos && draggedAgentId && (
           <DropPreview agent={agentById(draggedAgentId)} position={previewPos} size={NODE_SIZE} />
         )}

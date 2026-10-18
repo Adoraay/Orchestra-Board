@@ -12,6 +12,9 @@ const MAX_NAME = 40;
 
 const filePath = () => path.join(app.getPath('userData'), 'workspace.json');
 
+const MAX_TURNS = 20;
+let onSaved = () => {};
+
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const size = (v) => (isNum(v) && v > 0 && v <= 10000 ? v : undefined);
 const text = (v) => (typeof v === 'string' ? v.slice(0, MAX_TEXT) : '');
@@ -54,13 +57,25 @@ function sanitizeNode(n) {
   };
 }
 
+// Réglages d'un lien (PLAN.md §3.5) : consigne avec {reponse}, limite de tours, actif ou non.
+function sanitizeLink(data = {}) {
+  return {
+    prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '{reponse}',
+    maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),
+    enabled: data.enabled !== false,
+  };
+}
+
 // Contenu d'un tableau : cases, liens, dessins et vue.
 function sanitizeContent(input) {
   const nodes = (Array.isArray(input?.nodes) ? input.nodes : []).map(sanitizeNode).filter(Boolean);
   const ids = new Set(nodes.map((n) => n.id));
   const edges = (Array.isArray(input?.edges) ? input.edges : [])
     .filter((e) => e && ID.test(e.id) && ids.has(e.source) && ids.has(e.target))
-    .map((e) => ({ id: e.id, source: e.source, target: e.target, type: 'floating', animated: true }));
+    .map((e) => {
+      const data = sanitizeLink(e.data);
+      return { id: e.id, source: e.source, target: e.target, type: 'floating', animated: data.enabled, data };
+    });
   const strokes = (Array.isArray(input?.strokes) ? input.strokes : [])
     .slice(0, MAX_STROKES)
     .filter((s) => s && ID.test(s.id) && Array.isArray(s.points))
@@ -104,12 +119,17 @@ function load() {
 // Écriture dans un fichier temporaire puis renommage : jamais de workspace.json à moitié écrit.
 function save(workspace) {
   const tmp = filePath() + '.tmp';
+  const clean = sanitize(workspace);
   fs.mkdirSync(path.dirname(tmp), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(sanitize(workspace)));
+  fs.writeFileSync(tmp, JSON.stringify(clean));
   fs.renameSync(tmp, filePath());
+  onSaved(clean);
 }
 
-function register() {
+// listener(workspace) : appelé au démarrage puis après chaque sauvegarde (liens pour linkRelay).
+function register(listener) {
+  onSaved = listener;
+  onSaved(load());
   ipcMain.handle('workspace:get', () => load());
   ipcMain.handle('workspace:set', (_e, workspace) => save(workspace));
   // Version synchrone pour la fermeture de la fenêtre : une sauvegarde asynchrone n'aurait pas le temps de finir.

@@ -1,0 +1,82 @@
+import { ArrowRight, Trash2, X } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext.jsx';
+import { DEFAULT_LINK, MAX_TURNS } from '../lib/links.js';
+
+function statusText(event, targetName) {
+  const turns = event.maxTurns ? ` (tour ${event.turns} / ${event.maxTurns})` : '';
+  switch (event.state) {
+    case 'sent': return `Réponse transmise à ${targetName}${turns}`;
+    case 'queued': return `En attente : ${targetName} travaille encore${turns}`;
+    case 'limit': return `Limite de ${event.maxTurns} tours atteinte. Écris toi-même à la source pour relancer la chaîne.`;
+    default: return event.message;
+  }
+}
+
+// Panneau d'un lien choisi (PLAN.md §3.5) : consigne avec {reponse}, limite de tours, actif ou non.
+export default function LinkPanel({ edge, nodes, event, onChange, onDelete, onClose }) {
+  const { agentById } = useSettings();
+  const link = { ...DEFAULT_LINK, ...edge.data };
+  const caseOf = (id) => {
+    const node = nodes.find((n) => n.id === id);
+    const agent = agentById(node?.data.agentId);
+    return { name: node?.data.label || agent.name, agent };
+  };
+  const source = caseOf(edge.source);
+  const target = caseOf(edge.target);
+
+  return (
+    <aside className="link-panel nowheel" aria-label="Réglages du lien">
+      <header className="link-panel-header">
+        <span className="link-panel-title">
+          {source.name}
+          <ArrowRight size={14} />
+          {target.name}
+        </span>
+        <button className="icon-button" onClick={onClose} title="Fermer"><X size={15} /></button>
+      </header>
+
+      <label className="checkbox link-toggle">
+        <input type="checkbox" checked={link.enabled} onChange={(e) => onChange({ enabled: e.target.checked })} />
+        Transmission active
+      </label>
+
+      <label className="link-field">
+        Consigne
+        <textarea
+          className="thin-scrollbar"
+          rows={4}
+          value={link.prompt}
+          placeholder="Relis ce code et corrige les bugs : {reponse}"
+          onChange={(e) => onChange({ prompt: e.target.value })}
+        />
+      </label>
+      <p className="hint">
+        <code>{'{reponse}'}</code> est remplacé par la dernière réponse de {source.name}. Sans lui, la réponse est ajoutée à la fin.
+      </p>
+
+      <label className="link-field inline">
+        Limite de tours
+        <input
+          type="number"
+          min={1}
+          max={MAX_TURNS}
+          value={link.maxTurns}
+          onChange={(e) => {
+            const value = Math.round(Number(e.target.value));
+            if (value >= 1 && value <= MAX_TURNS) onChange({ maxTurns: value });
+          }}
+        />
+      </label>
+
+      {source.agent.hooks !== 'claude' && (
+        <p className="link-warning">Seul Claude Code prévient quand il a fini : {source.name} ne transmettra rien.</p>
+      )}
+      {event && <p className={`link-status ${event.state}`}>{statusText(event, target.name)}</p>}
+
+      <button className="text-button danger link-delete" onClick={onDelete}>
+        <Trash2 size={14} />
+        Supprimer le lien
+      </button>
+    </aside>
+  );
+}

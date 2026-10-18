@@ -26,7 +26,7 @@ Sous Windows, si `npm install` échoue sur node-pty, installe les « Desktop dev
 ```
 electron/                 côté Node : système, terminaux, fichiers
   main.cjs                fenêtre, routes IPC, notifications Windows
-  preload.cjs             seul pont vers l'interface (window.pty, fs, settings, agents, workspace, git, agentEvents)
+  preload.cjs             seul pont vers l'interface (window.pty, fs, settings, agents, workspace, git, links, agentEvents)
   ptyManager.cjs          un vrai PTY (node-pty) par case, dernières sorties gardées pour les tableaux fermés
   agentStatus.cjs         statut de chaque case (inactif / travaille / attend / a fini)
   hookServer.cjs          petit serveur local (127.0.0.1 + jeton) qui reçoit les hooks de Claude Code
@@ -36,6 +36,7 @@ electron/                 côté Node : système, terminaux, fichiers
   agentsHandlers.cjs      logos des agents ajoutés, bouton « Tester » (where / which)
   fsHandlers.cjs          lecture des dossiers pour l'explorateur, choix d'un dossier
   git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add)
+  linkRelay.cjs           liens entre agents : réponse de A envoyée dans le terminal de B, limite de tours
 src/                      interface React
   App.jsx                 chargement, onglets de tableaux, map (React Flow)
   components/             barres, dock, explorateur, cases (terminal, post-it, texte), paramètres, écran de démarrage
@@ -69,12 +70,12 @@ Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, cou
 - **Sauvegarde** de tout à chaque changement ; au redémarrage, les agents sont relancés et proposent de reprendre leur conversation (`claude --continue`, `codex resume --last`, `gemini --resume latest`).
 - **Paramètres** : thème et couleur d'accent en direct, police des terminaux, grille, agents, racine de l'explorateur, shell, notifications.
 - **Branches Git** : glisser le carré « Branche » sur une case ouvre la liste des branches ; en choisir une relance l'agent dans son propre `git worktree` (`<dépôt>-worktrees/<branche>`), avec une encoche sous la case.
+- **Liens qui transmettent** : clic sur un lien = panneau (consigne avec `{reponse}`, limite de tours, actif). Quand Claude (A) termine, sa dernière réponse part dans le terminal de B avec la consigne ; B attend s'il travaille encore.
 - **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
 
 ## Ce qui reste à faire
 
-1. **Liens qui transmettent** (prochaine étape) : quand A termine, sa dernière réponse est envoyée à B avec une consigne, avec une limite de tours.
-2. **Finitions** : confirmation avant de fermer l'app quand un agent travaille, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
-3. **(Optionnel)** serveur MCP pour que les agents s'envoient des messages eux-mêmes.
+1. **Finitions** (prochaine étape) : confirmation avant de fermer l'app quand un agent travaille, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
+2. **(Optionnel)** serveur MCP pour que les agents s'envoient des messages eux-mêmes.
 
 Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.

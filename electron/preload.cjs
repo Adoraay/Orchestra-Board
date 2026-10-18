@@ -31,6 +31,15 @@ contextBridge.exposeInMainWorld('git', {
   ensureWorktree: (cwd, branch) => ipcRenderer.invoke('git:ensureWorktree', cwd, branch),
 });
 
+// État des liens entre agents : envoyé, en attente, limite atteinte, erreur.
+contextBridge.exposeInMainWorld('links', {
+  onEvent: (cb) => {
+    const listener = (_e, linkId, event) => cb(linkId, event);
+    ipcRenderer.on('link:event', listener);
+    return () => ipcRenderer.removeListener('link:event', listener);
+  },
+});
+
 // Événements de toutes les cases : statuts (son, onglets) et clic sur une notification Windows.
 contextBridge.exposeInMainWorld('agentEvents', {
   onStatus: (cb) => {

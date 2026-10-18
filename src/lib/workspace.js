@@ -3,7 +3,7 @@
 export function serializeBoard({ nodes, edges, strokes, viewport }) {
   return {
     nodes: nodes.map(({ id, type, position, width, height, style, data }) => ({ id, type, position, width, height, style, data })),
-    edges: edges.map(({ id, source, target }) => ({ id, source, target })),
+    edges: edges.map(({ id, source, target, data }) => ({ id, source, target, data })),
     strokes,
     viewport,
   };

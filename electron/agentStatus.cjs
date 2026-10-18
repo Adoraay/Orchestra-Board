@@ -98,6 +98,12 @@ function onInput(id, data) {
   if (e.mode === 'activity' && data.includes('\r')) e.armed = true;
 }
 
+// Message envoyé par un lien : comme une Entrée de l'utilisateur, la sortie qui suit = travaille.
+function arm(id) {
+  const e = entries.get(id);
+  if (e?.mode === 'activity') e.armed = true;
+}
+
 function onOutput(id) {
   const e = entries.get(id);
   if (!e || e.mode !== 'activity' || (!e.armed && e.status !== 'working')) return;
@@ -107,4 +113,4 @@ function onOutput(id) {
   e.quietTimer = setTimeout(() => set(id, e, 'done'), QUIET_DELAY);
 }
 
-module.exports = { init, register, unregister, info, rename, acknowledge, onHook, onInput, onOutput };
+module.exports = { init, register, unregister, info, rename, acknowledge, onHook, onInput, onOutput, arm };

@@ -10,6 +10,7 @@ const hookServer = require('./hookServer.cjs');
 const claudeHooks = require('./claudeHooks.cjs');
 const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
+const linkRelay = require('./linkRelay.cjs');
 
 let win;
 
@@ -62,6 +63,7 @@ function send(channel, ...args) {
 function sendStatus(id, info) {
   send(`pty:status:${id}`, info);
   send('agent:status', id, info);
+  linkRelay.onStatus(id, info);
 }
 
 // Fenêtre pas au premier plan : notification Windows. Un clic ramène l'app et centre la map sur la case.
@@ -84,6 +86,18 @@ function notifyFinished(id, info) {
 }
 
 agentStatus.init(sendStatus, notifyFinished);
+linkRelay.init({
+  write: ptyManager.write,
+  status: (id) => agentStatus.info(id)?.status ?? null,
+  arm: agentStatus.arm,
+  emit: (linkId, event) => send('link:event', linkId, event),
+});
+
+// Événements des hooks de Claude Code : statut de la case, et transmission par ses liens quand il a fini.
+function onHook(id, payload) {
+  agentStatus.onHook(id, payload);
+  if (payload.hook_event_name === 'Stop') linkRelay.onStop(id, payload);
+}
 
 // Nom d'une case choisi dans l'interface (double-clic sur son titre).
 const cleanName = (name) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : null);
@@ -118,6 +132,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
       claudeHooks.removeSettings(id);
       send('agent:status', id, null);
       send(`pty:exit:${id}`, code);
+      linkRelay.onStatus(id, null);
     },
   );
   return { ...result, status: agentStatus.info(id) };
@@ -125,6 +140,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
 ipcMain.on('pty:write', (_e, id, data) => {
   if (typeof data !== 'string') return;
   agentStatus.onInput(id, data);
+  if (!data.startsWith('\x1b') && data.includes('\r')) linkRelay.onUserInput(id); // consigne tapée à la main
   ptyManager.write(id, data);
 });
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
@@ -138,12 +154,13 @@ ipcMain.on('pty:kill', (_e, id) => {
   agentStatus.unregister(id);
   claudeHooks.removeSettings(id);
   send('agent:status', id, null);
+  linkRelay.onStatus(id, null);
 });
 
 fsHandlers.register(() => win);
 settingsStore.register();
 agentsHandlers.register(() => win);
-workspaceStore.register();
+workspaceStore.register(linkRelay.setLinks);
 gitHandlers.register();
 
 // Pas de barre de menu File / Edit / View.
@@ -154,7 +171,7 @@ app.setAppUserModelId('com.orchestraboard.orchestra');
 app.whenReady().then(async () => {
   migrateOldUserData();
   claudeHooks.clearAll();
-  await hookServer.start(agentStatus.onHook);
+  await hookServer.start(onHook);
   createWindow();
 });
 

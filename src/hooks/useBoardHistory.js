@@ -11,7 +11,7 @@ function snapshotOf(nodes, edges, strokes) {
     annotations: nodes
       .filter((n) => ANNOTATIONS.has(n.type))
       .map(({ id, type, position, width, height, style, data }) => ({ id, type, position, width, height, style, data })),
-    edges: edges.map(({ id, source, target, type, animated }) => ({ id, source, target, type, animated })),
+    edges: edges.map(({ id, source, target, type, animated, data }) => ({ id, source, target, type, animated, data })),
     strokes,
   };
 }
