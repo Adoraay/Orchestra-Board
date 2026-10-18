@@ -1,14 +1,18 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
-const { hookUrl } = require('./hookServer.cjs');
+const { hookUrl, toolUrl } = require('./hookServer.cjs');
 
-// Fichier de réglages propre à chaque case Claude Code, passé avec `claude --settings <fichier>`.
-// Ses hooks s'ajoutent à ceux de l'utilisateur et préviennent Orchestra via curl (fourni avec Windows).
+// Fichiers propres à chaque case Claude Code :
+// - <id>.json, passé avec `claude --settings` : hooks qui préviennent Orchestra via curl (fourni avec
+//   Windows), qui s'ajoutent à ceux de l'utilisateur, et autorisation des seuls outils d'Orchestra ;
+// - <id>.mcp.json, passé avec `claude --mcp-config` : le serveur MCP « orchestra » (PLAN.md §3.11).
 const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Notification', 'Stop'];
+const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies'].map((tool) => `mcp__orchestra__${tool}`);
 
 const dir = () => path.join(app.getPath('userData'), 'hooks');
 const fileFor = (id) => path.join(dir(), `${id}.json`);
+const mcpFileFor = (id) => path.join(dir(), `${id}.mcp.json`);
 
 function writeSettings(id) {
   const command = `curl -s -m 3 -X POST -H "Content-Type: application/json" --data-binary @- "${hookUrl(id)}"`;
@@ -16,12 +20,26 @@ function writeSettings(id) {
   const hooks = Object.fromEntries(EVENTS.map((event) => [event, [event === 'PostToolUse' ? { matcher: '*', ...hook } : hook]]));
 
   fs.mkdirSync(dir(), { recursive: true });
-  fs.writeFileSync(fileFor(id), JSON.stringify({ hooks }, null, 2));
+  fs.writeFileSync(fileFor(id), JSON.stringify({ hooks, permissions: { allow: ORCHESTRA_TOOLS } }, null, 2));
   return fileFor(id);
+}
+
+// Le serveur MCP est lancé avec l'exécutable d'Electron en mode Node : pas besoin de Node installé.
+function writeMcpConfig(id) {
+  const server = {
+    type: 'stdio',
+    command: process.execPath,
+    args: [path.join(__dirname, 'mcpServer.cjs')],
+    env: { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_URL: toolUrl(id) },
+  };
+  fs.mkdirSync(dir(), { recursive: true });
+  fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { orchestra: server } }, null, 2));
+  return mcpFileFor(id);
 }
 
 function removeSettings(id) {
   fs.rmSync(fileFor(id), { force: true });
+  fs.rmSync(mcpFileFor(id), { force: true });
 }
 
 // Au démarrage : les fichiers d'une session précédente contiennent un port et un jeton périmés.
@@ -29,4 +47,4 @@ function clearAll() {
   fs.rmSync(dir(), { recursive: true, force: true });
 }
 
-module.exports = { writeSettings, removeSettings, clearAll };
+module.exports = { writeSettings, writeMcpConfig, removeSettings, clearAll };

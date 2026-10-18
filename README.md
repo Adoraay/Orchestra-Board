@@ -30,13 +30,15 @@ electron/                 côté Node : système, terminaux, fichiers
   ptyManager.cjs          un vrai PTY (node-pty) par case, dernières sorties gardées pour les tableaux fermés
   agentStatus.cjs         statut de chaque case (inactif / travaille / attend / a fini)
   hookServer.cjs          petit serveur local (127.0.0.1 + jeton) qui reçoit les hooks de Claude Code
-  claudeHooks.cjs         fichier --settings par case Claude, avec les hooks qui préviennent Orchestra
+  claudeHooks.cjs         fichiers --settings (hooks, outils autorisés) et --mcp-config par case Claude
   settingsStore.cjs       settings.json : apparence, agents, général (validé à chaque lecture/écriture)
   workspaceStore.cjs      workspace.json : tableaux, cases, liens, dessins, notes, vue
   agentsHandlers.cjs      logos des agents ajoutés, bouton « Tester » (where / which)
   fsHandlers.cjs          lecture des dossiers pour l'explorateur, choix d'un dossier
   git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add)
-  linkRelay.cjs           liens entre agents : réponse de A envoyée dans le terminal de B, limite de tours
+  linkRelay.cjs           liens en Transmission : réponse de A envoyée dans le terminal de B, file d'attente, limite de tours
+  delegation.cjs          liens en Délégation : outils list_agents, send_to_agent, wait_for_replies
+  mcpServer.cjs           serveur MCP « orchestra » lancé par chaque Claude (stdio), relaie ses appels à l'app
 src/                      interface React
   App.jsx                 chargement, onglets de tableaux, map (React Flow)
   components/             barres, dock, explorateur, cases (terminal, post-it, texte), paramètres, écran de démarrage
@@ -71,11 +73,12 @@ Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, cou
 - **Paramètres** : thème et couleur d'accent en direct, police des terminaux, grille, agents, racine de l'explorateur, shell, notifications.
 - **Branches Git** : glisser le carré « Branche » sur une case ouvre la liste des branches ; en choisir une relance l'agent dans son propre `git worktree` (`<dépôt>-worktrees/<branche>`), avec une encoche sous la case.
 - **Liens qui transmettent** : clic sur un lien = panneau (consigne avec `{reponse}`, limite de tours, actif). Quand Claude (A) termine, sa dernière réponse part dans le terminal de B avec la consigne ; B attend s'il travaille encore.
+- **Orchestration** : un lien en Délégation laisse un Claude parler lui-même aux agents reliés. Il les voit (`list_agents`), leur écrit (`send_to_agent`) et récupère leurs réponses (`wait_for_replies`). Exemple : un Claude principal relié à 3 Claude leur demande un poème chacun et choisit le meilleur. Le type de lien se choisit dans son panneau (défaut dans les paramètres), avec inversion et double sens.
 - **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
 
 ## Ce qui reste à faire
 
-1. **Finitions** (prochaine étape) : confirmation avant de fermer l'app quand un agent travaille, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
-2. **(Optionnel)** serveur MCP pour que les agents s'envoient des messages eux-mêmes.
+1. **Finitions** (prochaine étape) : confirmation avant de fermer l'app quand un agent travaille, raccourcis, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
+2. **Plus tard** : orchestration avec Codex et Gemini CLI.
 
 Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.

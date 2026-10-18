@@ -117,7 +117,13 @@ export default function FloatingEdge({ id, source, target, data, style }) {
       {link.bidirectional && <path d={arrowPath(from, sourceSide)} className={`react-flow__edge-path link-arrow link-${state}`} />}
       {pulsing && (
         <circle key={event.at} r="5" className="link-pulse">
-          <animateMotion dur={`${PULSE_DURATION}ms`} path={path} fill="freeze" />
+          {/* Message vers la source (lien à double sens, réponse d'une délégation) : le point remonte le lien */}
+          <animateMotion
+            dur={`${PULSE_DURATION}ms`}
+            path={path}
+            fill="freeze"
+            {...(event.to === source && { keyPoints: '1;0', keyTimes: '0;1', calcMode: 'linear' })}
+          />
           <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.85;1" dur={`${PULSE_DURATION}ms`} fill="freeze" />
         </circle>
       )}

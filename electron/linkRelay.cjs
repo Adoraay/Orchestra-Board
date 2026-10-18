@@ -93,16 +93,31 @@ function buildText(prompt, reply) {
 }
 
 // Collage entre crochets (le CLI le reçoit comme un collage, pas comme une frappe), puis Entrée à part.
+// item : { key, id, text, chain, turns, maxTurns, stillValid(), onDelivered() } (les deux derniers facultatifs).
 function deliver(target, item) {
-  const link = findLink(item.key);
-  if (!link || !link.enabled || !link.prompt.trim()) return;
+  if (item.stillValid && !item.stillValid()) return;
   chains.set(target, item.chain);
   deps.write(target, PASTE_START + item.text.replace(/\r?\n/g, '\r') + PASTE_END);
+  // onDelivered après Entrée : le hook Stop qui a libéré la case (et déclenché cet envoi) ne doit pas
+  // passer pour la réponse à ce message.
   setTimeout(() => {
     deps.arm(target);
     deps.write(target, '\r');
+    item.onDelivered?.();
   }, ENTER_DELAY);
-  deps.emit(link.id, { state: 'sent', to: target, turns: item.turns, maxTurns: link.maxTurns });
+  deps.emit(item.id, { state: 'sent', to: target, turns: item.turns, maxTurns: item.maxTurns });
+}
+
+// Message pour une case (Transmission, ou Délégation via delegation.cjs) : envoyé dès qu'elle est libre.
+function enqueue(target, item) {
+  queues.set(target, [...(queues.get(target) ?? []), item]);
+  flush(target);
+}
+
+// Chaîne en cours d'une case (créée si besoin) : c'est elle qui porte les compteurs de tours.
+function chainOf(id) {
+  if (!chains.has(id)) chains.set(id, newChain());
+  return chains.get(id);
 }
 
 // B travaille ou attend une permission : on garde le message pour quand il aura fini.
@@ -117,7 +132,7 @@ function flush(target) {
     return;
   }
   if (status === 'working' || status === 'waiting') {
-    for (const item of queue) deps.emit(item.id, { state: 'queued', to: target, turns: item.turns, maxTurns: findLink(item.key)?.maxTurns });
+    for (const item of queue) deps.emit(item.id, { state: 'queued', to: target, turns: item.turns, maxTurns: item.maxTurns });
     return;
   }
   // Un message à la fois : le suivant part quand B aura fini de traiter celui-ci.
@@ -129,8 +144,7 @@ function onStop(id, payload) {
   if (!deps.status(id)) return;
   const outgoing = (links.get(id) ?? []).filter((l) => l.enabled && l.prompt.trim());
   if (!outgoing.length) return;
-  const chain = chains.get(id) ?? newChain();
-  chains.set(id, chain);
+  const chain = chainOf(id);
 
   setTimeout(() => {
     const reply = lastReply(payload);
@@ -149,20 +163,30 @@ function onStop(id, payload) {
         continue;
       }
       chain.counts.set(link.key, used + 1);
-      const queue = queues.get(link.target) ?? [];
-      queue.push({ key: link.key, id: link.id, text: buildText(link.prompt, reply), chain, turns: used + 1 });
-      queues.set(link.target, queue);
-      flush(link.target);
+      enqueue(link.target, {
+        key: link.key,
+        id: link.id,
+        text: buildText(link.prompt, reply),
+        chain,
+        turns: used + 1,
+        maxTurns: link.maxTurns,
+        stillValid: () => {
+          const current = findLink(link.key);
+          return Boolean(current?.enabled && current.prompt.trim());
+        },
+      });
     }
   }, READ_DELAY);
 }
 
 // Entrée tapée par l'utilisateur dans une case : nouvelle chaîne, compteurs à zéro (affichés sur ses liens).
+// Renvoie true si l'ancienne chaîne avait servi (les liens en Délégation remettent aussi leur compteur à zéro).
 function onUserInput(id) {
   const used = chains.get(id)?.counts.size > 0;
   chains.set(id, newChain());
-  if (!used) return;
+  if (!used) return false;
   for (const link of links.get(id) ?? []) deps.emit(link.id, { state: 'ready', turns: 0, maxTurns: link.maxTurns });
+  return true;
 }
 
 // Statut d'une case : B a fini, on envoie la suite. null = case fermée ou processus terminé.
@@ -171,4 +195,4 @@ function onStatus(id, info) {
   if (!info || info.status === 'idle' || info.status === 'done') flush(id);
 }
 
-module.exports = { init, setLinks, onStop, onUserInput, onStatus };
+module.exports = { init, setLinks, onStop, onUserInput, onStatus, enqueue, chainOf, lastReply, READ_DELAY };

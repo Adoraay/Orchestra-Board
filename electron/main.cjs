@@ -11,6 +11,7 @@ const claudeHooks = require('./claudeHooks.cjs');
 const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
+const delegation = require('./delegation.cjs');
 
 let win;
 
@@ -63,7 +64,13 @@ function send(channel, ...args) {
 function sendStatus(id, info) {
   send(`pty:status:${id}`, info);
   send('agent:status', id, info);
+  relayStatus(id, info);
+}
+
+// Liens entre agents : une case libérée reçoit la suite de sa file, une case fermée n'est plus attendue.
+function relayStatus(id, info) {
   linkRelay.onStatus(id, info);
+  delegation.onStatus(id, info);
 }
 
 // Fenêtre pas au premier plan : notification Windows. Un clic ramène l'app et centre la map sur la case.
@@ -93,10 +100,19 @@ linkRelay.init({
   emit: (linkId, event) => send('link:event', linkId, event),
 });
 
-// Événements des hooks de Claude Code : statut de la case, et transmission par ses liens quand il a fini.
+delegation.init({
+  info: agentStatus.info,
+  agent: (agentId) => settingsStore.load().agents.find((a) => a.id === agentId) ?? { name: 'Agent supprimé', hooks: null },
+  emit: (linkId, event) => send('link:event', linkId, event),
+});
+
+// Événements des hooks de Claude Code : statut de la case, et transmission par ses liens quand il a fini
+// (Transmission automatique, ou réponse attendue par un agent qui lui a délégué un message).
 function onHook(id, payload) {
   agentStatus.onHook(id, payload);
-  if (payload.hook_event_name === 'Stop') linkRelay.onStop(id, payload);
+  if (payload.hook_event_name !== 'Stop') return;
+  linkRelay.onStop(id, payload);
+  delegation.onStop(id, payload);
 }
 
 // Nom d'une case choisi dans l'interface (double-clic sur son titre).
@@ -107,7 +123,9 @@ function buildCommand(id, agent, resume) {
   if (!agent.command) return null;
   let command = agent.command;
   if (resume && agent.resumeArgs) command += ` ${agent.resumeArgs}`;
-  if (agent.hooks === 'claude') command += ` --settings "${claudeHooks.writeSettings(id)}"`;
+  if (agent.hooks === 'claude') {
+    command += ` --settings "${claudeHooks.writeSettings(id)}" --mcp-config "${claudeHooks.writeMcpConfig(id)}"`;
+  }
   return command;
 }
 
@@ -132,7 +150,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
       claudeHooks.removeSettings(id);
       send('agent:status', id, null);
       send(`pty:exit:${id}`, code);
-      linkRelay.onStatus(id, null);
+      relayStatus(id, null);
     },
   );
   return { ...result, status: agentStatus.info(id) };
@@ -140,7 +158,10 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
 ipcMain.on('pty:write', (_e, id, data) => {
   if (typeof data !== 'string') return;
   agentStatus.onInput(id, data);
-  if (!data.startsWith('\x1b') && data.includes('\r')) linkRelay.onUserInput(id); // consigne tapée à la main
+  if (!data.startsWith('\x1b') && data.includes('\r')) {
+    // Consigne tapée à la main : nouvelle chaîne, compteurs de tours à zéro.
+    if (linkRelay.onUserInput(id)) delegation.resetCounters(id);
+  }
   ptyManager.write(id, data);
 });
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
@@ -154,13 +175,16 @@ ipcMain.on('pty:kill', (_e, id) => {
   agentStatus.unregister(id);
   claudeHooks.removeSettings(id);
   send('agent:status', id, null);
-  linkRelay.onStatus(id, null);
+  relayStatus(id, null);
 });
 
 fsHandlers.register(() => win);
 settingsStore.register();
 agentsHandlers.register(() => win);
-workspaceStore.register(linkRelay.setLinks);
+workspaceStore.register((workspace) => {
+  linkRelay.setLinks(workspace);
+  delegation.setWorkspace(workspace);
+});
 gitHandlers.register();
 
 // Pas de barre de menu File / Edit / View.
@@ -171,7 +195,7 @@ app.setAppUserModelId('com.orchestraboard.orchestra');
 app.whenReady().then(async () => {
   migrateOldUserData();
   claudeHooks.clearAll();
-  await hookServer.start(onHook);
+  await hookServer.start(onHook, delegation.callTool);
   createWindow();
 });
 
