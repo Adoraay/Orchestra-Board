@@ -52,6 +52,13 @@ function info(id) {
     : null;
 }
 
+// Agents qui travaillent ou attendent une permission (confirmation avant de quitter l'app).
+function busy() {
+  return [...entries]
+    .filter(([, e]) => e.status === 'working' || e.status === 'waiting')
+    .map(([id, e]) => ({ id, name: e.name, status: e.status, cwd: e.cwd }));
+}
+
 function rename(id, name) {
   const e = entries.get(id);
   if (e) e.name = name;
@@ -113,4 +120,4 @@ function onOutput(id) {
   e.quietTimer = setTimeout(() => set(id, e, 'done'), QUIET_DELAY);
 }
 
-module.exports = { init, register, unregister, info, rename, acknowledge, onHook, onInput, onOutput, arm };
+module.exports = { init, register, unregister, info, busy, rename, acknowledge, onHook, onInput, onOutput, arm };

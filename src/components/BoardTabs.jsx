@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 
 const MAX_NAME = 40;
@@ -8,11 +8,24 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
   const [renaming, setRenaming] = useState(null);
   const [confirming, setConfirming] = useState(null);
   const cancelRename = useRef(false); // Échap : le blur qui suit ne doit pas enregistrer
+  const navRef = useRef(null);
+
+  // Beaucoup d'onglets : ils défilent. L'onglet ouvert (ou celui qu'on vient de créer) reste visible.
+  useEffect(() => {
+    navRef.current?.querySelector('.board-tab.active, .board-tab.rename')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeId, renaming]);
 
   const create = () => setRenaming(onCreate()); // nouveau tableau : on propose tout de suite de le nommer
 
   return (
-    <nav className="board-tabs no-scrollbar" aria-label="Tableaux">
+    <nav
+      ref={navRef}
+      className="board-tabs no-scrollbar"
+      aria-label="Tableaux"
+      onWheel={(e) => {
+        if (e.deltaY) e.currentTarget.scrollLeft += e.deltaY; // molette verticale = défilement des onglets
+      }}
+    >
       {boards.map((board) => {
         const active = board.id === activeId;
 

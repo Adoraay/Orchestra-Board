@@ -76,30 +76,23 @@ button { font: inherit; color: inherit; }
 
 .drop-preview-name { font-size: 12px; color: var(--text-muted); }
 
-/* Barre du haut */
+/* Barre du haut, seule barre de la fenêtre (design/barre-unique.png). Les boutons Windows sont dessinés
+   par-dessus à droite (titleBarOverlay, 40 px) : TopBar leur réserve la place. Les zones vides déplacent
+   la fenêtre ; tout ce qui se clique doit être en no-drag, sinon le clic n'arrive jamais. */
 .topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  height: 44px;
-  padding: 0 8px;
+  gap: 12px;
+  height: 40px;
+  padding-left: 14px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-}
-/* Barre de titre, au-dessus de tout */
-.titlebar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  height: 38px;
-  padding: 0 14px;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
   user-select: none;
+  -webkit-app-region: drag;
 }
-.titlebar-logo { display: block; flex-shrink: 0; }
-.titlebar-name { font-size: 14px; font-weight: 600; letter-spacing: 0.01em; }
+.topbar-lockup { display: block; height: 20px; width: auto; flex-shrink: 0; }
+.topbar-separator { width: 1px; height: 20px; flex-shrink: 0; background: var(--border); }
+.no-drag, .topbar button, .topbar input, .board-tab { -webkit-app-region: no-drag; }
 .topbar-folder {
   display: flex;
   align-items: center;
@@ -371,6 +364,7 @@ button { font: inherit; color: inherit; }
   justify-content: center;
   background: color-mix(in srgb, var(--bg) 65%, transparent);
   animation: fade-in 150ms ease-out;
+  -webkit-app-region: no-drag; /* la barre du haut ne déplace plus la fenêtre sous une modale */
 }
 .modal {
   display: flex;
@@ -442,8 +436,80 @@ button { font: inherit; color: inherit; }
 }
 .segmented button.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
 
+/* Petites fenêtres de choix : quitter l'app, reprendre les discussions */
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 460px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: 0 24px 64px var(--shadow-lifted);
+  animation: modal-in 150ms ease-out;
+}
+.dialog-header { display: flex; align-items: center; gap: 10px; }
+.dialog-header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+.dialog-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.dialog-icon.warning { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.dialog-text { margin: 0; line-height: 1.5; color: var(--text); }
+.dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.dialog-row-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.dialog-row-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog-row-text .muted { font-size: 12px; }
+.dialog-row-name { font-weight: 500; }
+.dialog-status { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--accent); }
+.dialog-status.waiting { color: var(--warning); }
+.dialog-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.dialog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 4px 9px 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+}
+.dialog-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.text-button.danger-fill { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
+.text-button.danger-fill:hover { background: color-mix(in srgb, var(--danger) 85%, white); border-color: var(--danger); }
+
 @media (prefers-reduced-motion: reduce) {
-  .modal, .modal-backdrop { animation: none; }
+  .modal, .modal-backdrop, .dialog { animation: none; }
 }
 
 /* Onglets Agents et Général */
@@ -978,7 +1044,8 @@ kbd {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0;
+  flex-shrink: 1; /* beaucoup d'onglets : ils se réduisent d'abord, puis défilent */
+  min-width: 84px;
   max-width: 200px;
   height: 30px;
   padding: 0 6px 0 12px;
@@ -1006,6 +1073,7 @@ kbd {
 .tab-close:hover { color: var(--danger); background: var(--surface); }
 .board-tab.rename {
   width: 160px;
+  flex-shrink: 0;
   padding: 0 10px;
   border-color: var(--accent);
   background: var(--surface);
@@ -1014,7 +1082,7 @@ kbd {
   outline: none;
   cursor: text;
 }
-.board-tab.confirming { gap: 6px; padding-right: 4px; border-color: var(--danger); color: var(--text); cursor: default; }
+.board-tab.confirming { flex-shrink: 0; gap: 6px; padding-right: 4px; border-color: var(--danger); color: var(--text); cursor: default; }
 .tab-confirm {
   padding: 2px 8px;
   border: 1px solid var(--border);

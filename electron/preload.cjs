@@ -60,6 +60,17 @@ contextBridge.exposeInMainWorld('agentEvents', {
   },
 });
 
+// Fenêtre : confirmation avant de quitter (agents qui travaillent) et couleurs des boutons Windows.
+contextBridge.exposeInMainWorld('appWindow', {
+  onConfirmQuit: (cb) => {
+    const listener = (_e, agents) => cb(agents);
+    ipcRenderer.on('app:confirmQuit', listener);
+    return () => ipcRenderer.removeListener('app:confirmQuit', listener);
+  },
+  quit: () => ipcRenderer.send('app:quit'),
+  setTitleBarColors: (color, symbolColor) => ipcRenderer.send('window:titleBarColors', color, symbolColor),
+});
+
 contextBridge.exposeInMainWorld('pty', {
   create: (opts) => ipcRenderer.invoke('pty:create', opts),
   write: (id, data) => ipcRenderer.send('pty:write', id, data),

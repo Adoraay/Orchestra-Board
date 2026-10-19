@@ -20,7 +20,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
-  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker } = useBoard();
+  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice } = useBoard();
   const { accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
   const [status, setStatus] = useState('idle');
@@ -40,7 +40,8 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const runDirRef = useRef(runDir);
   runDirRef.current = runDir;
 
-  // Case restaurée au démarrage d'un agent qui sait reprendre (Claude Code) : on demande avant de lancer.
+  // Case restaurée au démarrage d'un agent qui sait reprendre (Claude Code) : rien n'est lancé avant le choix
+  // fait au démarrage (ResumeDialog), ou celui fait dans la case avec « Voir le tableau ».
   const askResume = Boolean(data.restored && agent.resumeArgs);
   const askResumeAtMount = useRef(askResume);
 
@@ -128,6 +129,11 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume });
     term.focus();
   };
+
+  // Choix « Reprendre » ou « Nouvelle discussion » au démarrage : la case l'applique d'elle-même.
+  useEffect(() => {
+    if (askResume && (resumeChoice === 'resume' || resumeChoice === 'new')) launch(resumeChoice === 'resume');
+  }, [askResume, resumeChoice]);
 
   // Le processus s'est terminé : on relance l'agent dans la même case et le même dossier.
   const restart = () => {
@@ -244,7 +250,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
         {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
         <div className="terminal-body nodrag nowheel" onPointerDown={stopResizing}>
           <div className="terminal-mount" ref={containerRef} />
-          {askResume && (
+          {askResume && resumeChoice === 'manual' && (
             <div className="resume-prompt">
               <p>Reprendre la dernière conversation de {name} dans ce dossier ?</p>
               <div className="resume-actions">

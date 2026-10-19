@@ -16,6 +16,11 @@ const delegation = require('./delegation.cjs');
 const usage = require('./usage.cjs');
 
 let win;
+let quitConfirmed = false;
+
+// Couleurs de la zone des boutons Windows (réduire, agrandir, fermer) = fond et texte de la barre du haut.
+const TITLE_BAR_HEIGHT = 40;
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 // Le projet s'appelait « agent-board » : on reprend une fois ses paramètres, agents et tableaux.
 function migrateOldUserData() {
@@ -37,6 +42,9 @@ function createWindow() {
     icon: path.join(__dirname, '..', 'build', 'icon.ico'), // barre des tâches (généré par npm run build:icon)
     backgroundColor: '#262624', // = fond de l'écran de démarrage (splash.css) : aucun flash au lancement
     show: false, // affichée quand la page est prête, pour ne jamais montrer une fenêtre vide
+    // Une seule barre en haut : celle de l'app, avec les boutons Windows dessinés par-dessus à droite.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#262624', symbolColor: '#ece9e2', height: TITLE_BAR_HEIGHT },
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -45,6 +53,7 @@ function createWindow() {
   });
 
   win.once('ready-to-show', () => win.show());
+  win.on('close', confirmQuit);
 
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -55,6 +64,16 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
+}
+
+// Fermer la fenêtre pendant qu'un agent travaille (ou attend une permission) : l'interface demande d'abord
+// (app:confirmQuit avec la liste des agents), puis répond par app:quit.
+function confirmQuit(event) {
+  if (quitConfirmed || !settingsStore.load().general.confirmClose) return;
+  const agents = agentStatus.busy();
+  if (!agents.length) return;
+  event.preventDefault();
+  send('app:confirmQuit', agents);
 }
 
 function send(channel, ...args) {
@@ -184,6 +203,18 @@ ipcMain.on('pty:kill', (_e, id) => {
   claudeHooks.removeSettings(id);
   send('agent:status', id, null);
   relayStatus(id, null);
+});
+
+// Réponse à app:confirmQuit : « Quitter quand même ».
+ipcMain.on('app:quit', () => {
+  if (!win || win.isDestroyed()) return;
+  quitConfirmed = true;
+  win.close();
+});
+// Thème changé : la zone des boutons Windows reprend les couleurs de la barre du haut.
+ipcMain.on('window:titleBarColors', (_e, color, symbolColor) => {
+  if (!win || win.isDestroyed() || !HEX_COLOR.test(color) || !HEX_COLOR.test(symbolColor)) return;
+  win.setTitleBarOverlay({ color, symbolColor, height: TITLE_BAR_HEIGHT });
 });
 
 fsHandlers.register(() => win);

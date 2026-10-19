@@ -34,6 +34,15 @@ export function SettingsProvider({ children }) {
     if (settings) applyAppearance(settings.appearance);
   }, [settings]);
 
+  // Les boutons Windows (réduire, agrandir, fermer) sont dessinés par Electron : on leur donne les couleurs
+  // de la barre du haut à chaque changement de thème.
+  const theme = settings?.appearance.theme;
+  useEffect(() => {
+    if (!theme) return;
+    const style = getComputedStyle(document.body);
+    window.appWindow.setTitleBarColors(style.getPropertyValue('--surface').trim(), style.getPropertyValue('--text').trim());
+  }, [theme]);
+
   const commit = (change) => {
     setSettings((current) => {
       const next = change(current);

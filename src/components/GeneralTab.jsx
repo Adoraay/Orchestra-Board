@@ -61,7 +61,7 @@ export default function GeneralTab() {
         <span className="field-label">Comportement</span>
         <label className="checkbox">
           <input type="checkbox" checked={general.confirmClose} onChange={(e) => update({ confirmClose: e.target.checked })} />
-          Confirmer avant de fermer une case qui travaille
+          Confirmer avant de fermer une case ou l'app quand un agent travaille
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.notifySound} onChange={(e) => update({ notifySound: e.target.checked })} />

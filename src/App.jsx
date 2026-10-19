@@ -21,12 +21,13 @@ import FloatingEdge from './components/FloatingEdge.jsx';
 import LinkPanel from './components/LinkPanel.jsx';
 import MiniMapNode from './components/MiniMapNode.jsx';
 import NoteNode from './components/NoteNode.jsx';
+import QuitDialog from './components/QuitDialog.jsx';
+import ResumeDialog from './components/ResumeDialog.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
 import UsagePanel from './components/UsagePanel.jsx';
 import TextNode from './components/TextNode.jsx';
 import Toast from './components/Toast.jsx';
-import TitleBar from './components/TitleBar.jsx';
 import TopBar from './components/TopBar.jsx';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
@@ -82,6 +83,29 @@ function Workspace({ saved }) {
   const [agentsBarOpen, setAgentsBarOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageAgent, setUsageAgent] = useState('claude-code');
+  const { agentById } = useSettings();
+
+  // Démarrage : une seule question pour reprendre (ou non) les conversations de tous les agents restaurés.
+  // 'pending' = question affichée, 'resume' / 'new' = appliqué à chaque case restaurée (même dans un tableau
+  // ouvert plus tard), 'manual' = chaque case demande elle-même.
+  const [resumable] = useState(() =>
+    boards.boards.flatMap((b) =>
+      content[b.id].nodes
+        .filter((n) => n.type === 'terminal' && n.data.restored && agentById(n.data.agentId).resumeArgs)
+        .map((n) => ({ id: n.id, boardId: b.id, name: n.data.label || agentById(n.data.agentId).name, agent: agentById(n.data.agentId) })),
+    ),
+  );
+  const [resumeChoice, setResumeChoice] = useState(resumable.length ? 'pending' : 'manual');
+
+  // Fermeture de la fenêtre pendant que des agents travaillent : Node envoie la liste, on demande.
+  const [quitAgents, setQuitAgents] = useState(null);
+  useEffect(() => window.appWindow.onConfirmQuit(setQuitAgents), []);
+  const closeQuit = useCallback(() => setQuitAgents(null), []);
+  const quitList = quitAgents?.map((a) => {
+    const board = boards.boards.find((b) => content[b.id]?.nodes.some((n) => n.id === a.id));
+    const node = board && content[board.id].nodes.find((n) => n.id === a.id);
+    return { ...a, agent: agentById(node?.data.agentId), boardName: boards.boards.length > 1 ? board?.name : null };
+  });
 
   // Panneaux posés sur la map : leur état vit ici, car la map est recréée à chaque changement de tableau.
   const overlays = (
@@ -101,22 +125,36 @@ function Workspace({ saved }) {
 
   return (
     <div className="app">
-      <TitleBar />
       <TopBar boards={boards} boardsWithNews={boardsWithNews} onOpenSettings={() => setSettingsOpen(true)} />
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
-          <Board initial={content[activeId]} onChange={onBoardChange} focusRequest={focusRequest} onFocusDone={clearFocus} overlays={overlays} />
+          <Board
+            initial={content[activeId]}
+            onChange={onBoardChange}
+            focusRequest={focusRequest}
+            onFocusDone={clearFocus}
+            overlays={overlays}
+            resumeChoice={resumeChoice}
+          />
         </ReactFlowProvider>
         <ExplorerPanel />
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} />}
+      {resumeChoice === 'pending' && (
+        <ResumeDialog
+          agents={resumable}
+          boardCount={new Set(resumable.map((a) => a.boardId)).size}
+          onChoose={setResumeChoice}
+        />
+      )}
+      {quitList && <QuitDialog agents={quitList} onCancel={closeQuit} onQuit={() => window.appWindow.quit()} />}
     </div>
   );
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest, onFocusDone, overlays }) {
+function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
@@ -147,8 +185,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays }) {
   const [branchPicker, setBranchPicker] = useState(null); // case dont la barre des branches est ouverte
   const [linkEvents, setLinkEvents] = useState({}); // id du lien -> dernier état de transmission
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents],
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, resumeChoice }),
+    [tool, linkSource, branchTarget, branchPicker, linkEvents, resumeChoice],
   );
 
   useEffect(
