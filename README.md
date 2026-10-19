@@ -35,7 +35,7 @@ electron/                 côté Node : système, terminaux, fichiers
   settingsStore.cjs       settings.json : apparence, agents, général (validé à chaque lecture/écriture)
   workspaceStore.cjs      workspace.json : tableaux, cases, liens, dessins, notes, vue
   agentsHandlers.cjs      logos des agents ajoutés, bouton « Tester » (where / which)
-  fsHandlers.cjs          lecture des dossiers pour l'explorateur, choix d'un dossier
+  fsHandlers.cjs          explorateur : lecture des dossiers, choix d'un dossier, créer / renommer / corbeille (avec garde-fous)
   git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add)
   linkRelay.cjs           liens en Transmission : réponse de A envoyée dans le terminal de B, file d'attente, limite de tours
   usage.cjs               utilisation (quotas) : cache /usage de Claude (+ /usage invisible), rate_limits de Codex
@@ -79,6 +79,7 @@ Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents c
 - **Branches Git** : glisser le carré « Branche » sur une case ouvre la liste des branches ; en choisir une relance l'agent dans son propre `git worktree` (`<dépôt>-worktrees/<branche>`), avec une encoche sous la case.
 - **Liens qui transmettent** : clic sur un lien = panneau (consigne avec `{reponse}`, limite de tours, actif). Quand Claude (A) termine, sa dernière réponse part dans le terminal de B avec la consigne ; B attend s'il travaille encore.
 - **Orchestration** : un lien en Délégation laisse un Claude parler lui-même aux agents reliés. Il les voit (`list_agents`), leur écrit (`send_to_agent`) et récupère leurs réponses (`wait_for_replies`). Exemple : un Claude principal relié à 3 Claude leur demande un poème chacun et choisit le meilleur. Le type de lien se choisit dans son panneau (défaut dans les paramètres), avec inversion et double sens.
+- **Explorateur** : clic droit sur un dossier ou un fichier pour créer un dossier, renommer (F2), supprimer vers la corbeille (Suppr, avec confirmation), copier le chemin, ouvrir dans l'Explorateur Windows ou lancer un agent dans ce dossier. Les dossiers utilisés par les agents de la map sont protégés.
 - **Raccourcis clavier** : changer de tableau (Ctrl+Tab, Ctrl+1…9), paramètres (Ctrl+,), F2 pour renommer une case, Suppr pour supprimer la sélection (avec confirmation), copier / coller dans les terminaux ; liste complète dans Paramètres › Raccourcis.
 - **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
 

@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, Menu, Notification, ipcMain } = require('electron');
 const ptyManager = require('./ptyManager.cjs');
@@ -221,10 +222,20 @@ ipcMain.on('window:titleBarColors', (_e, color, symbolColor) => {
   win.setTitleBarOverlay({ color, symbolColor, height: TITLE_BAR_HEIGHT });
 });
 
-fsHandlers.register(() => win);
+// Dossiers des cases de la map (tous tableaux) : l'explorateur refuse de les renommer ou supprimer.
+let usedFolders = [];
+fsHandlers.register(() => win, {
+  usedFolders: () => usedFolders,
+  root: () => settingsStore.load().general.rootPath ?? os.homedir(),
+});
 settingsStore.register();
 agentsHandlers.register(() => win);
 workspaceStore.register((workspace) => {
+  usedFolders = workspace.boards.flatMap((b) =>
+    b.nodes
+      .filter((n) => n.type === 'terminal')
+      .flatMap((n) => [n.data.cwd, n.data.worktree].filter(Boolean).map((p) => ({ path: p, name: n.data.label || n.data.agentId }))),
+  );
   linkRelay.setLinks(workspace);
   delegation.setWorkspace(workspace);
 });

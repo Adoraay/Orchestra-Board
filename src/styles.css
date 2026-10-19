@@ -167,6 +167,7 @@ button { font: inherit; color: inherit; }
 
 /* Explorateur */
 .explorer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -197,6 +198,77 @@ button { font: inherit; color: inherit; }
 .tree-row.folder.active > svg { color: var(--accent); }
 .tree-row.file, .tree-row.message { color: var(--text-muted); }
 .tree-row.message { font-size: 12px; font-style: italic; }
+.tree-row:focus { outline: none; }
+.tree-row:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.tree-row.file:hover { background: var(--surface-2); }
+.tree-input {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+.panel-actions { display: inline-flex; gap: 2px; }
+.explorer .toast { bottom: 64px; max-width: calc(100% - 24px); }
+
+/* Menu du clic droit (explorateur) */
+.context-menu {
+  position: fixed;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: 0 12px 32px var(--shadow-lifted);
+  animation: fade-in 100ms ease-out;
+}
+.menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item > svg { flex-shrink: 0; color: var(--text-muted); }
+.menu-item:hover:not(:disabled), .menu-item:focus-visible { background: color-mix(in srgb, var(--accent) 15%, transparent); outline: none; }
+.menu-item:hover:not(:disabled) > svg { color: var(--accent); }
+.menu-item:disabled { opacity: 0.4; cursor: default; }
+.menu-item.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+.menu-item.danger:hover:not(:disabled) > svg { color: var(--danger); }
+.menu-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-item kbd { flex-shrink: 0; }
+.menu-separator { height: 1px; margin: 4px 6px; background: var(--border); }
+/* Sous-menu « Lancer un agent ici » : s'ouvre vers la gauche, l'explorateur est au bord droit */
+.context-menu.submenu {
+  position: absolute;
+  top: -5px;
+  right: calc(100% + 4px);
+  display: none;
+  min-width: 190px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.menu-item.has-submenu:hover > .submenu, .menu-item.has-submenu:focus-within > .submenu { display: flex; }
+/* Pont invisible entre l'élément et son sous-menu : la souris peut traverser l'écart sans le fermer */
+.menu-item.has-submenu::after { content: ''; position: absolute; top: 0; right: 100%; width: 8px; height: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  .context-menu { animation: none; }
+}
 .tree-name { overflow: hidden; text-overflow: ellipsis; }
 .tree-chevron {
   display: inline-flex;

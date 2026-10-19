@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { TOOLS } from '../components/BoardToolbar.jsx';
 
-// On ne touche pas aux touches tapées dans un terminal (textarea xterm), un champ ou une note.
+// On ne touche pas aux touches tapées dans un terminal (textarea xterm), un champ, une note ou
+// l'explorateur (qui a ses propres F2 et Suppr).
 function isTyping(target) {
-  return target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]') !== null);
+  return target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"], .explorer') !== null;
 }
 
 // Raccourcis du tableau : V/P/N/T/L pour les outils, F = afficher toutes les cases, Échap = Sélection,

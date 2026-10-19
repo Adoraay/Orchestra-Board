@@ -5,6 +5,11 @@ contextBridge.exposeInMainWorld('fs', {
   listDir: (dirPath) => ipcRenderer.invoke('fs:listDir', dirPath),
   homeDir: () => ipcRenderer.invoke('fs:homeDir'),
   pickFolder: (defaultPath) => ipcRenderer.invoke('dialog:pickFolder', defaultPath),
+  createFolder: (parent, name) => ipcRenderer.invoke('fs:createFolder', parent, name),
+  rename: (target, name) => ipcRenderer.invoke('fs:rename', target, name),
+  summary: (target) => ipcRenderer.invoke('fs:summary', target),
+  trash: (target) => ipcRenderer.invoke('fs:trash', target),
+  reveal: (target) => ipcRenderer.invoke('fs:reveal', target),
 });
 
 contextBridge.exposeInMainWorld('settings', {

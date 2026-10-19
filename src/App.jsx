@@ -87,6 +87,8 @@ function Workspace({ saved }) {
   const [usageAgent, setUsageAgent] = useState('claude-code');
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
+  const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
+  const clearLaunch = useCallback(() => setLaunchRequest(null), []);
   const { agentById } = useSettings();
 
   useAppShortcuts({
@@ -164,9 +166,15 @@ function Workspace({ saved }) {
             overlays={overlays}
             resumeChoice={resumeChoice}
             running={running}
+            launchRequest={launchRequest}
+            onLaunchDone={clearLaunch}
           />
         </ReactFlowProvider>
-        <ExplorerPanel open={explorerOpen} onToggle={() => setExplorerOpen((o) => !o)} />
+        <ExplorerPanel
+          open={explorerOpen}
+          onToggle={() => setExplorerOpen((o) => !o)}
+          onLaunchAgent={(agentId, cwd) => setLaunchRequest({ agentId, cwd, at: Date.now() })}
+        />
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} />}
       {resumeChoice === 'pending' && (
@@ -182,7 +190,7 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running }) {
+function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
@@ -228,6 +236,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       if (document.querySelector('.modal-backdrop')) return;
       const focused = document.activeElement;
       if (focused?.matches('input, textarea, [contenteditable="true"]') && !focused.closest('.xterm')) return;
+      if (focused?.closest('.explorer')) return; // F2 de l'explorateur : renommer le dossier ou fichier
       const selected = nodesRef.current.filter((n) => n.selected && n.type === 'terminal');
       const id = focused?.closest('.react-flow__node-terminal')?.dataset.id ?? (selected.length === 1 ? selected[0].id : null);
       if (!id) return;
@@ -440,6 +449,31 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [nodes],
   );
 
+  // Nouvelle case terminal centrée sur « center » (coordonnées de la map).
+  const addTerminal = useCallback(
+    (agentId, cwd, center) =>
+      setNodes((nds) =>
+        nds.concat({
+          id: crypto.randomUUID(),
+          type: 'terminal',
+          position: { x: center.x - NODE_SIZE.width / 2, y: center.y - NODE_SIZE.height / 2 },
+          dragHandle: '.drag-handle',
+          style: { ...NODE_SIZE },
+          data: { agentId, cwd, label: numberedName(agentById(agentId).name, nds) },
+        }),
+      ),
+    [setNodes, agentById],
+  );
+
+  // « Lancer un agent ici » (clic droit dans l'explorateur) : nouvelle case au centre de la vue.
+  const boardRef = useRef(null);
+  useEffect(() => {
+    if (!launchRequest || !boardRef.current) return;
+    const rect = boardRef.current.getBoundingClientRect();
+    addTerminal(launchRequest.agentId, launchRequest.cwd, screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }));
+    onLaunchDone();
+  }, [launchRequest, addTerminal, screenToFlowPosition, onLaunchDone]);
+
   // Lâcher un agent du dock = créer un terminal centré sous la souris, là où était l'aperçu.
   const onDrop = useCallback(
     (event) => {
@@ -458,19 +492,9 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       const cwd = activeFolder ?? homeDir;
       if (!activeFolder) setToast({ id: Date.now(), text: 'Aucun dossier choisi, lancé dans ~' });
 
-      const center = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      setNodes((nds) =>
-        nds.concat({
-          id: crypto.randomUUID(),
-          type: 'terminal',
-          position: { x: center.x - NODE_SIZE.width / 2, y: center.y - NODE_SIZE.height / 2 },
-          dragHandle: '.drag-handle',
-          style: { ...NODE_SIZE },
-          data: { agentId, cwd, label: numberedName(agentById(agentId).name, nds) },
-        }),
-      );
+      addTerminal(agentId, cwd, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
     },
-    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, setNodes, activeFolder, homeDir, agentById],
+    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, activeFolder, homeDir, agentById],
   );
 
   return (
@@ -483,6 +507,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         onDragEnd={endDrag}
       />
       <main
+        ref={boardRef}
         className={`board tool-${tool}`}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
