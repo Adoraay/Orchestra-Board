@@ -25,11 +25,14 @@ function writeSettings(id) {
 }
 
 // Le serveur MCP est lancé avec l'exécutable d'Electron en mode Node : pas besoin de Node installé.
+// Dans l'app empaquetée, il est hors de l'archive (app.asar.unpacked) : c'est Claude qui le lance.
+const mcpServerPath = () => path.join(__dirname.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked'), 'mcpServer.cjs');
+
 function writeMcpConfig(id) {
   const server = {
     type: 'stdio',
     command: process.execPath,
-    args: [path.join(__dirname, 'mcpServer.cjs')],
+    args: [mcpServerPath()],
     env: { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_URL: toolUrl(id) },
   };
   fs.mkdirSync(dir(), { recursive: true });

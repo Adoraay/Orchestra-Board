@@ -8,27 +8,72 @@
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
+    "dist": "vite build && electron-builder --win",
     "start": "electron .",
     "build:icon": "electron scripts/make-icon.cjs",
     "build:launcher": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /target:winexe /codepage:65001 /out:launcher.exe /win32icon:build\\icon.ico /r:System.Windows.Forms.dll scripts\\launcher.cs",
     "postinstall": "electron-rebuild -f -w node-pty"
   },
   "dependencies": {
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/xterm": "^5.5.0",
-    "@xyflow/react": "^12.3.0",
-    "lucide-react": "^1.59.0",
-    "node-pty": "^1.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "node-pty": "^1.0.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xyflow/react": "^12.3.0",
     "concurrently": "^9.0.0",
     "cross-env": "^7.0.3",
     "electron": "^33.0.0",
+    "electron-builder": "^26.15.3",
+    "lucide-react": "^1.59.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vite": "^5.4.0",
     "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.orchestraboard.orchestra",
+    "productName": "Orchestra",
+    "copyright": "Orchestra",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "build/icon.ico",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "electron/mcpServer.cjs",
+      "node_modules/node-pty/**"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Orchestra",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "Orchestra-Setup-${version}.exe"
+    }
   }
 }

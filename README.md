@@ -19,6 +19,14 @@ Pour lancer l'app sans terminal : double-clic sur `launcher.exe` à la racine du
 npm run build:launcher
 ```
 
+Pour fabriquer l'installateur Windows (`release/Orchestra-Setup-<version>.exe`) :
+
+```bash
+npm run dist
+```
+
+L'installateur propose le dossier d'installation et crée les raccourcis bureau et menu Démarrer. L'exe n'est pas signé : au premier lancement, Windows affiche « Windows a protégé votre ordinateur » (cliquer sur « Informations complémentaires » puis « Exécuter quand même »). Si la protection anti-ransomware de Windows (« Dossiers contrôlés ») est active et que le projet est dans `Documents`, elle bloque l'écriture de l'installateur : autoriser `makensis.exe` ou fabriquer ailleurs.
+
 Sous Windows, si `npm install` échoue sur node-pty, installe les « Desktop development with C++ » de Visual Studio Build Tools et Python 3, puis relance `npm install`.
 
 ## Structure
@@ -88,7 +96,6 @@ Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents c
 
 ## Ce qui reste à faire
 
-1. **Finitions** (prochaine étape) : packaging Windows (`Orchestra.exe` avec son icône).
-2. **Plus tard** : orchestration avec Codex. Gemini CLI n'est plus maintenu (remplacé par Google Antigravity) : il reste dans le dock, sans orchestration.
+1. **Plus tard** : orchestration avec Codex. Gemini CLI n'est plus maintenu (remplacé par Google Antigravity) : il reste dans le dock, sans orchestration.
 
 Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.
