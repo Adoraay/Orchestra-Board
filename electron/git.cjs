@@ -2,10 +2,9 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { ipcMain } = require('electron');
+const { t } = require('./i18n.cjs');
 
 // Branches Git d'une case (PLAN.md §3.10). Seules écritures : fetch et worktree add.
-const NOT_REPO = "Ce dossier n'est pas un dépôt Git";
-const NO_GIT = 'Git est introuvable sur cet ordinateur';
 const MAX_BRANCH = 255;
 
 const isDir = (p) => {
@@ -52,12 +51,12 @@ const listWorktrees = async (cwd) => parseWorktrees(await git(cwd, ['worktree', 
 
 // Racine du dépôt principal, même depuis un worktree : c'est à côté d'elle que vont les worktrees.
 async function repoRoot(cwd) {
-  if (!isDir(cwd)) return { error: NOT_REPO };
+  if (!isDir(cwd)) return { error: t('git.notRepo') };
   try {
     const [main] = await listWorktrees(cwd);
-    return main ? { root: main.path } : { error: NOT_REPO };
+    return main ? { root: main.path } : { error: t('git.notRepo') };
   } catch (error) {
-    return { error: error.code === 'ENOENT' ? NO_GIT : NOT_REPO };
+    return { error: error.code === 'ENOENT' ? t('git.noGit') : t('git.notRepo') };
   }
 }
 
@@ -76,7 +75,7 @@ const localNameOf = (remoteBranch) => remoteBranch.slice(remoteBranch.indexOf('/
 
 // Locales, puis distantes sans équivalent local, et la branche actuelle du dossier.
 async function listBranches(cwd, fetch) {
-  if (!isDir(cwd)) return { error: NOT_REPO };
+  if (!isDir(cwd)) return { error: t('git.notRepo') };
   try {
     if (fetch) await git(cwd, ['fetch', '--all', '--prune', '--quiet'], 20000).catch(() => {});
     const { local, remote } = await refs(cwd);
@@ -84,14 +83,14 @@ async function listBranches(cwd, fetch) {
     const localSet = new Set(local);
     return { current, local, remote: remote.filter((b) => !localSet.has(localNameOf(b))) };
   } catch (error) {
-    return { error: error.code === 'ENOENT' ? NO_GIT : NOT_REPO };
+    return { error: error.code === 'ENOENT' ? t('git.noGit') : t('git.notRepo') };
   }
 }
 
 // Dossier du worktree de la branche, créé si besoin dans <repo>-worktrees/<branche>.
 // Une branche distante sans branche locale devient une branche locale qui la suit.
 async function ensureWorktree(cwd, branch) {
-  if (typeof branch !== 'string' || !branch || branch.length > MAX_BRANCH) return { error: 'Branche introuvable' };
+  if (typeof branch !== 'string' || !branch || branch.length > MAX_BRANCH) return { error: t('git.branchNotFound') };
   const { root, error } = await repoRoot(cwd);
   if (error) return { error };
 
@@ -100,7 +99,7 @@ async function ensureWorktree(cwd, branch) {
     let name = branch;
     let upstream = null;
     if (!local.includes(branch)) {
-      if (!remote.includes(branch)) return { error: 'Branche introuvable' };
+      if (!remote.includes(branch)) return { error: t('git.branchNotFound') };
       name = localNameOf(branch);
       if (!local.includes(name)) upstream = branch;
     }
@@ -111,13 +110,13 @@ async function ensureWorktree(cwd, branch) {
     if (existing) return { path: existing.path, branch: name };
 
     const target = path.join(path.dirname(root), `${path.basename(root)}-worktrees`, ...name.split('/'));
-    if (fs.existsSync(target) && fs.readdirSync(target).length) return { error: `Le dossier ${target} existe déjà` };
+    if (fs.existsSync(target) && fs.readdirSync(target).length) return { error: t('git.folderExists', { path: target }) };
     const args = upstream ? ['worktree', 'add', '--track', '-b', name, target, upstream] : ['worktree', 'add', target, name];
     await git(root, args, 120000);
     return { path: target, branch: name };
   } catch (error) {
-    if (error.code === 'ENOENT') return { error: NO_GIT };
-    return { error: error.stderr?.split(/\r?\n/).filter(Boolean).pop() || 'Impossible de créer le worktree' };
+    if (error.code === 'ENOENT') return { error: t('git.noGit') };
+    return { error: error.stderr?.split(/\r?\n/).filter(Boolean).pop() || t('git.worktreeFailed') };
   }
 }
 

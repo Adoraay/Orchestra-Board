@@ -15,6 +15,7 @@ const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
 const delegation = require('./delegation.cjs');
 const usage = require('./usage.cjs');
+const { t } = require('./i18n.cjs');
 
 let win;
 let quitConfirmed = false;
@@ -104,7 +105,7 @@ function notifyFinished(id, info) {
   if (!settingsStore.load().general.notifyDesktop || !Notification.isSupported()) return;
   if (win && !win.isDestroyed() && win.isFocused()) return;
   const notification = new Notification({
-    title: `${info.name} a terminé sa tâche`,
+    title: t('notify.finished', { name: info.name }),
     body: info.cwd ? path.basename(info.cwd) || info.cwd : '',
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
   });
@@ -128,7 +129,7 @@ linkRelay.init({
 
 delegation.init({
   info: agentStatus.info,
-  agent: (agentId) => settingsStore.load().agents.find((a) => a.id === agentId) ?? { name: 'Agent supprimé', hooks: null },
+  agent: (agentId) => settingsStore.load().agents.find((a) => a.id === agentId) ?? { name: t('agent.missing'), hooks: null },
   emit: (linkId, event) => send('link:event', linkId, event),
 });
 

@@ -38,6 +38,7 @@ electron/                 côté Node : système, terminaux, fichiers
   fsHandlers.cjs          explorateur : lecture des dossiers, choix d'un dossier, créer / renommer / corbeille (avec garde-fous)
   git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add)
   linkRelay.cjs           liens en Transmission : réponse de A envoyée dans le terminal de B, file d'attente, limite de tours
+  i18n.cjs                textes côté Node en anglais et en français (erreurs, notifications, orchestration)
   usage.cjs               utilisation (quotas) : cache /usage de Claude (+ /usage invisible), rate_limits de Codex
   delegation.cjs          liens en Délégation : outils list_agents, send_to_agent, wait_for_replies
   mcpServer.cjs           serveur MCP « orchestra » lancé par chaque Claude (stdio), relaie ses appels à l'app

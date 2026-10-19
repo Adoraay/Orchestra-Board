@@ -4,6 +4,7 @@ const path = require('path');
 const pty = require('node-pty');
 const { app, ipcMain } = require('electron');
 const claudeTrust = require('./claudeTrust.cjs');
+const { t } = require('./i18n.cjs');
 
 // Utilisation des agents (quotas), lue dans les fichiers locaux des CLI :
 // - Claude Code range le résultat de /usage dans ~/.claude.json (cachedUsageUtilization) et le
@@ -28,14 +29,14 @@ function readClaude() {
   if (!u) return { fetchedAt: null, limits: [], breakdown: [] };
 
   const windows = [
-    ['five_hour', 'Session (5 h)'],
-    ['seven_day', 'Semaine (tous modèles)'],
-    ['seven_day_opus', 'Semaine (Opus)'],
-    ['seven_day_sonnet', 'Semaine (Sonnet)'],
+    ['five_hour', 'usage.session'],
+    ['seven_day', 'usage.weekAll'],
+    ['seven_day_opus', 'usage.weekOpus'],
+    ['seven_day_sonnet', 'usage.weekSonnet'],
   ];
   const limits = windows
     .filter(([key]) => typeof u[key]?.utilization === 'number')
-    .map(([key, label]) => limit(label, u[key].utilization, Date.parse(u[key].resets_at) || null));
+    .map(([key, label]) => limit(t(label), u[key].utilization, Date.parse(u[key].resets_at) || null));
   const breakdown = (u.seven_day_breakdown?.rows ?? [])
     .filter((row) => typeof row.percent === 'number' && row.percent > 0)
     .map((row) => ({ label: String(row.display_name ?? row.key), percent: row.percent }));
@@ -78,16 +79,16 @@ function readCodex() {
 }
 
 function windowLabel(minutes) {
-  if (minutes === 300) return 'Session (5 h)';
-  if (minutes === 10080) return 'Semaine';
-  if (minutes >= 1440) return `${Math.round(minutes / 1440)} jours`;
-  return `${Math.round(minutes / 60)} h`;
+  if (minutes === 300) return t('usage.session');
+  if (minutes === 10080) return t('usage.week');
+  if (minutes >= 1440) return t('usage.days', { n: Math.round(minutes / 1440) });
+  return t('usage.hours', { n: Math.round(minutes / 60) });
 }
 
 const READERS = {
   'claude-code': () => ({ ...readClaude(), refreshable: true }),
-  codex: () => ({ ...readCodex(), note: 'Mis à jour à chaque réponse de Codex.' }),
-  gemini: () => ({ unavailable: "Gemini CLI n'enregistre pas son quota sur cet ordinateur." }),
+  codex: () => ({ ...readCodex(), note: t('usage.codexNote') }),
+  gemini: () => ({ unavailable: t('usage.geminiUnavailable') }),
 };
 
 // Ce qu'affiche /usage, lu à l'écran si le cache n'est pas réécrit (codes de couleur et de curseur retirés).
@@ -96,7 +97,7 @@ function parseUsageScreen(text) {
   const session = plain.match(/Current session[^%]{0,300}?(\d{1,3})%\s*used/);
   const week = plain.match(/Current week \(all models\)[^%]{0,300}?(\d{1,3})%\s*used/);
   if (!session || !week) return null;
-  return [limit('Session (5 h)', Number(session[1]), null), limit('Semaine (tous modèles)', Number(week[1]), null)];
+  return [limit(t('usage.session'), Number(session[1]), null), limit(t('usage.weekAll'), Number(week[1]), null)];
 }
 
 // Claude invisible : lancé dans son propre dossier (un « claude --continue » dans un projet ne reprendra
@@ -167,13 +168,13 @@ function probeClaude() {
         if (Date.now() - seenScreenAt > 1500) finish({ ...cached, fetchedAt: Date.now(), limits: screenLimits });
       }
     }, 300);
-    const timeout = setTimeout(() => finish({ ...readClaude(), error: "Claude n'a pas répondu à /usage." }), PROBE_TIMEOUT);
+    const timeout = setTimeout(() => finish({ ...readClaude(), error: t('usage.noAnswer') }), PROBE_TIMEOUT);
   });
   return probe;
 }
 
 function register() {
-  ipcMain.handle('usage:get', (_e, agentId) => READERS[agentId]?.() ?? { unavailable: 'Pas de quota connu pour cet agent.' });
+  ipcMain.handle('usage:get', (_e, agentId) => READERS[agentId]?.() ?? { unavailable: t('usage.unknownAgent') });
   ipcMain.handle('usage:refresh', async (_e, agentId, force) => {
     if (agentId !== 'claude-code') return READERS[agentId]?.() ?? null;
     const current = readClaude();

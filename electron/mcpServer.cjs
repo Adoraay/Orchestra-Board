@@ -1,7 +1,8 @@
 // Serveur MCP « orchestra » (PLAN.md §3.11), lancé par Claude Code avec le Node d'Electron
 // (ELECTRON_RUN_AS_NODE=1). Protocole : JSON-RPC sur stdin/stdout, un message par ligne.
 // Il ne décide rien : chaque appel d'outil est relayé à Orchestra (ORCHESTRA_URL, avec l'id de la case
-// et le jeton), qui vérifie les liens et la limite de tours.
+// et le jeton), qui vérifie les liens et la limite de tours. Textes en anglais : ce processus ne lit pas les
+// paramètres, et ses descriptions sont lues par Claude (les réponses des outils, elles, suivent la langue du chat).
 const http = require('http');
 
 const ORCHESTRA_URL = process.env.ORCHESTRA_URL;
@@ -11,22 +12,22 @@ const TOOLS = [
   {
     name: 'list_agents',
     description:
-      "Liste les agents d'Orchestra que tu peux joindre : ceux reliés à ta case par un lien en Délégation sur la map. " +
-      'Donne pour chacun son nom, le type d\'agent, son dossier, sa branche Git et son statut.',
+      'Lists the Orchestra agents you can reach: those linked to your tile by a Delegation link on the map. ' +
+      'Gives the name, agent type, folder, Git branch and status of each one.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'send_to_agent',
     description:
-      "Envoie un message à un agent joignable (voir list_agents), comme si l'utilisateur le tapait dans son terminal. " +
-      "Ne bloque pas : l'agent travaille en parallèle, tu peux écrire à plusieurs agents à la suite. " +
-      "S'il est occupé, le message lui est remis dès qu'il a fini. Récupère ensuite sa réponse avec wait_for_replies. " +
-      "L'agent ne voit pas ta conversation : le message doit être complet.",
+      'Sends a message to a reachable agent (see list_agents), as if the user typed it in its terminal. ' +
+      'Does not block: the agent works in parallel, you can write to several agents in a row. ' +
+      'If it is busy, the message is delivered as soon as it is done. Then get its reply with wait_for_replies. ' +
+      'The agent does not see your conversation: the message must be self-contained. Write it in the language of your conversation with the user.',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: "Nom de l'agent, tel que donné par list_agents (ex. « Claude Code 2 »)." },
-        message: { type: 'string', description: 'Le message complet à lui envoyer.' },
+        name: { type: 'string', description: 'Name of the agent, as given by list_agents (e.g. "Claude Code 2").' },
+        message: { type: 'string', description: 'The complete message to send to it.' },
       },
       required: ['name', 'message'],
       additionalProperties: false,
@@ -35,14 +36,14 @@ const TOOLS = [
   {
     name: 'wait_for_replies',
     description:
-      'Attend la réponse finale des agents à qui tu as envoyé un message, et la renvoie. ' +
-      'Sans « names », attend tous ceux qui ont un message en cours. ' +
-      'Au bout de timeout_seconds (180 par défaut, 300 au maximum), renvoie ce qui est arrivé et dit qui travaille encore : ' +
-      "tu peux alors rappeler l'outil.",
+      'Waits for the final reply of the agents you sent a message to, and returns it. ' +
+      'Without "names", waits for all agents with a message in progress. ' +
+      'After timeout_seconds (180 by default, 300 at most), returns what arrived and says who is still working: ' +
+      'you can then call the tool again.',
     inputSchema: {
       type: 'object',
       properties: {
-        names: { type: 'array', items: { type: 'string' }, description: 'Noms des agents à attendre.' },
+        names: { type: 'array', items: { type: 'string' }, description: 'Names of the agents to wait for.' },
         timeout_seconds: { type: 'integer', minimum: 10, maximum: 300 },
       },
       additionalProperties: false,
@@ -52,7 +53,7 @@ const TOOLS = [
 
 function callOrchestra(name, args) {
   return new Promise((resolve) => {
-    const failed = () => resolve({ text: "Orchestra ne répond pas (l'app a peut-être été fermée).", isError: true });
+    const failed = () => resolve({ text: 'Orchestra is not responding (the app may have been closed).', isError: true });
     if (!ORCHESTRA_URL) return failed();
     const body = JSON.stringify({ name, arguments: args });
     const req = http.request(ORCHESTRA_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
@@ -98,7 +99,7 @@ async function handle(message) {
       return send({ id, result: { content: [{ type: 'text', text }], isError } });
     }
     default:
-      return send({ id, error: { code: -32601, message: `Méthode inconnue : ${method}` } });
+      return send({ id, error: { code: -32601, message: `Unknown method: ${method}` } });
   }
 }
 

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 const { dialog, ipcMain } = require('electron');
+const { t } = require('./i18n.cjs');
 const { logosDir, CUSTOM_ID, LOGO_FILE } = require('./settingsStore.cjs');
 
 const MAX_LOGO_SIZE = 1024 * 1024; // 1 Mo
@@ -32,18 +33,18 @@ function readLogos() {
 
 // Copie l'image choisie dans userData/logos/<id de l'agent>.<ext>.
 async function pickLogo(win, agentId) {
-  if (!CUSTOM_ID.test(agentId)) return { error: 'Agent invalide' };
+  if (!CUSTOM_ID.test(agentId)) return { error: t('agents.invalid') };
   const result = await dialog.showOpenDialog(win, {
-    title: 'Choisir un logo',
+    title: t('dialog.pickLogo'),
     properties: ['openFile'],
-    filters: [{ name: 'Images', extensions: Object.keys(MIME) }],
+    filters: [{ name: t('dialog.images'), extensions: Object.keys(MIME) }],
   });
   if (result.canceled) return null;
 
   const source = result.filePaths[0];
   const ext = path.extname(source).slice(1).toLowerCase();
-  if (!MIME[ext]) return { error: 'Format non pris en charge' };
-  if (fs.statSync(source).size > MAX_LOGO_SIZE) return { error: 'Image trop lourde (1 Mo max)' };
+  if (!MIME[ext]) return { error: t('agents.logoFormat') };
+  if (fs.statSync(source).size > MAX_LOGO_SIZE) return { error: t('agents.logoTooBig') };
 
   fs.mkdirSync(logosDir(), { recursive: true });
   for (const old of fs.readdirSync(logosDir())) {
@@ -61,19 +62,19 @@ function deleteLogo(file) {
 // Vérifie que le programme de la commande existe : `where` sous Windows, `which` ailleurs.
 function testCommand(command) {
   const match = typeof command === 'string' && command.trim().match(/^"([^"]+)"|^(\S+)/);
-  if (!match) return Promise.resolve({ ok: false, message: 'Commande vide' });
+  if (!match) return Promise.resolve({ ok: false, message: t('agents.emptyCommand') });
   const program = match[1] || match[2];
 
   if (path.isAbsolute(program)) {
     const ok = fs.existsSync(program);
-    return Promise.resolve({ ok, message: ok ? program : 'Fichier introuvable' });
+    return Promise.resolve({ ok, message: ok ? program : t('agents.fileNotFound') });
   }
 
   const finder = process.platform === 'win32' ? 'where' : 'which';
   return new Promise((resolve) => {
     execFile(finder, [program], { timeout: 5000, windowsHide: true }, (error, stdout) => {
       const found = stdout?.split(/\r?\n/).find(Boolean);
-      resolve(error || !found ? { ok: false, message: `« ${program} » introuvable dans le PATH` } : { ok: true, message: found });
+      resolve(error || !found ? { ok: false, message: t('agents.notInPath', { program }) } : { ok: true, message: found });
     });
   });
 }

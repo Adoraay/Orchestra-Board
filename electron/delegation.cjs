@@ -1,17 +1,21 @@
 const { chainOf, enqueue, lastReply, READ_DELAY } = require('./linkRelay.cjs');
+const { tIn, appLanguage, detectLanguage } = require('./i18n.cjs');
 
 // Délégation (PLAN.md §3.11) : outils MCP qu'un Claude appelle lui-même pour parler aux agents reliés
 // à sa case par un lien en Délégation. Appelés par mcpServer.cjs via le serveur local (hookServer.cjs).
 const DEFAULT_WAIT = 180; // s
 const MAX_WAIT = 300; // s
 const MAX_MESSAGE = 20000;
-const STATUS_TEXT = { idle: 'libre', working: 'travaille', waiting: 'attend une permission', done: 'a fini' };
 
 let deps = { info: () => null, agent: () => ({ name: '?', hooks: null }), emit: () => {} };
 let cases = new Map(); // id -> { name, agent, cwd, branch }
 let reachable = new Map(); // appelant -> [{ key, id, target, maxTurns, enabled }]
 const expects = new Map(); // cible -> { from, key, id, turns, maxTurns, delivered, reply }
 const waiters = new Set(); // vérifications des wait_for_replies en cours
+// Langue de la conversation de chaque case qui délègue, déduite des messages qu'elle envoie (PLAN.md §3.15) :
+// les réponses des outils et l'en-tête remis à la cible suivent la langue parlée dans le chat.
+const languages = new Map(); // case -> 'en' | 'fr'
+const langOf = (id) => languages.get(id) ?? appLanguage();
 
 // info(id) : statut de la case (agentStatus), agent(agentId) : { name, hooks } depuis les paramètres,
 // emit(linkId, event) : état d'un lien pour l'interface.
@@ -46,49 +50,50 @@ const nameOf = (id) => cases.get(id)?.name ?? '?';
 const result = (text, isError = false) => ({ text, isError });
 
 function unknownAgent(caller, name) {
+  const lang = langOf(caller);
   const names = linksOf(caller).map((l) => cases.get(l.target).name);
   return result(
-    names.length
-      ? `Aucun agent joignable ne s'appelle « ${name} ». Agents joignables : ${names.join(', ')}.`
-      : "Aucun agent joignable : l'utilisateur doit tracer un lien en Délégation depuis ta case sur la map d'Orchestra.",
+    names.length ? tIn(lang, 'delegate.unknownAgent', { name, names: names.join(', ') }) : tIn(lang, 'delegate.noneReachable'),
     true,
   );
 }
 
 function listAgents(caller) {
+  const lang = langOf(caller);
   const links = linksOf(caller);
-  const me = `Tu es « ${nameOf(caller)} » dans Orchestra.`;
-  if (!links.length) {
-    return result(`${me} Aucun agent joignable : l'utilisateur doit tracer un lien en Délégation depuis ta case sur la map.`);
-  }
+  const me = tIn(lang, 'delegate.youAre', { name: nameOf(caller) });
+  if (!links.length) return result(`${me} ${tIn(lang, 'delegate.noneReachable')}`);
   const lines = links.map((l) => {
     const c = cases.get(l.target);
     const status = deps.info(l.target)?.status;
-    const parts = [`agent : ${c.agent.name}`, `dossier : ${c.cwd ?? '?'}`];
-    if (c.branch) parts.push(`branche : ${c.branch}`);
-    parts.push(`statut : ${status ? STATUS_TEXT[status] : 'pas lancé'}`);
-    if (c.agent.hooks !== 'claude') parts.push('injoignable pour l\'instant (seuls les agents Claude Code sont pris en charge)');
+    const parts = [tIn(lang, 'delegate.agent', { value: c.agent.name }), tIn(lang, 'delegate.folder', { value: c.cwd ?? '?' })];
+    if (c.branch) parts.push(tIn(lang, 'delegate.branch', { value: c.branch }));
+    parts.push(tIn(lang, 'delegate.statusLabel', { value: tIn(lang, status ? `delegate.status.${status}` : 'delegate.notRunningStatus') }));
+    if (c.agent.hooks !== 'claude') parts.push(tIn(lang, 'delegate.unsupported'));
     return `- ${c.name} (${parts.join(' · ')})`;
   });
-  return result(`${me} Agents que tu peux joindre avec send_to_agent :\n${lines.join('\n')}`);
+  return result(`${me} ${tIn(lang, 'delegate.reachable')}\n${lines.join('\n')}`);
 }
 
 function sendToAgent(caller, { name, message } = {}) {
-  if (typeof message !== 'string' || !message.trim()) return result('Le message est vide.', true);
-  if (message.length > MAX_MESSAGE) return result(`Message trop long (${MAX_MESSAGE} caractères maximum).`, true);
+  const detected = detectLanguage(message);
+  if (detected) languages.set(caller, detected);
+  const lang = langOf(caller);
+  if (typeof message !== 'string' || !message.trim()) return result(tIn(lang, 'delegate.emptyMessage'), true);
+  if (message.length > MAX_MESSAGE) return result(tIn(lang, 'delegate.tooLong', { max: MAX_MESSAGE }), true);
   const link = findLink(caller, name);
   if (!link) return unknownAgent(caller, name);
   const target = cases.get(link.target);
-  if (target.agent.hooks !== 'claude') return result(`${target.name} n'est pas un agent Claude Code : la délégation ne le prend pas encore en charge.`, true);
+  if (target.agent.hooks !== 'claude') return result(tIn(lang, 'delegate.notClaude', { name: target.name }), true);
   const info = deps.info(link.target);
-  if (!info) return result(`${target.name} n'est pas lancé (case arrêtée ou tableau pas encore ouvert).`, true);
+  if (!info) return result(tIn(lang, 'delegate.notRunning', { name: target.name }), true);
 
   // Limite de tours de la chaîne en cours (PLAN.md §3.5) : pas de boucle sans fin entre agents.
   const chain = chainOf(caller);
   const used = chain.counts.get(link.key) ?? 0;
   if (used >= link.maxTurns) {
     deps.emit(link.id, { state: 'limit', turns: used, maxTurns: link.maxTurns });
-    return result(`Limite de ${link.maxTurns} message(s) vers ${target.name} atteinte pour cette demande. L'utilisateur peut l'augmenter dans le panneau du lien.`, true);
+    return result(tIn(lang, 'delegate.limit', { max: link.maxTurns, name: target.name }), true);
   }
   chain.counts.set(link.key, used + 1);
 
@@ -97,7 +102,8 @@ function sendToAgent(caller, { name, message } = {}) {
   enqueue(link.target, {
     key: link.key,
     id: link.id,
-    text: `Message de « ${nameOf(caller)} » (via Orchestra) :\n\n${message.trim()}\n\n(Ta réponse finale lui sera transmise automatiquement.)`,
+    // En-tête dans la langue du message lui-même : la cible reçoit un message cohérent.
+    text: `${tIn(lang, 'delegate.header', { name: nameOf(caller) })}\n\n${message.trim()}\n\n${tIn(lang, 'delegate.footer')}`,
     chain,
     turns: used + 1,
     maxTurns: link.maxTurns,
@@ -109,8 +115,7 @@ function sendToAgent(caller, { name, message } = {}) {
 
   const busy = info.status === 'working' || info.status === 'waiting';
   return result(
-    `${busy ? `${target.name} est occupé : le message lui sera remis dès qu'il aura fini.` : `Message remis à ${target.name}.`} ` +
-      'Récupère sa réponse avec wait_for_replies.',
+    `${tIn(lang, busy ? 'delegate.queued' : 'delegate.delivered', { name: target.name })} ${tIn(lang, 'delegate.getReply')}`,
   );
 }
 
@@ -125,7 +130,7 @@ function onStop(id, payload) {
   if (!expect || !expect.delivered || expect.reply !== null) return;
   setTimeout(() => {
     if (expects.get(id) !== expect) return;
-    expect.reply = lastReply(payload) || '(réponse vide)';
+    expect.reply = lastReply(payload) || tIn(langOf(expect.from), 'delegate.emptyReply');
     deps.emit(expect.id, { state: 'sent', to: expect.from, turns: expect.turns, maxTurns: expect.maxTurns });
     checkWaiters();
   }, READ_DELAY);
@@ -152,7 +157,8 @@ async function waitForReplies(caller, { names, timeout_seconds: timeout } = {}, 
       targets.push(target);
     }
   }
-  if (!targets.length) return result("Aucun message en attente de réponse : envoie d'abord un message avec send_to_agent.");
+  const lang = langOf(caller);
+  if (!targets.length) return result(tIn(lang, 'delegate.nothingPending'));
 
   const waiting = (t) => {
     const e = expects.get(t);
@@ -176,27 +182,28 @@ async function waitForReplies(caller, { names, timeout_seconds: timeout } = {}, 
     check();
   });
 
-  const parts = targets.map((t) => {
-    const e = expects.get(t);
-    if (e?.from !== caller) return `### ${nameOf(t)}\n(aucun message envoyé à cet agent)`;
+  const parts = targets.map((target) => {
+    const e = expects.get(target);
+    const title = `### ${nameOf(target)}`;
+    if (e?.from !== caller) return `${title}\n${tIn(lang, 'delegate.notSent')}`;
     if (e.reply !== null) {
-      expects.delete(t);
-      return `### ${nameOf(t)}\n${e.reply}`;
+      expects.delete(target);
+      return `${title}\n${e.reply}`;
     }
-    if (!deps.info(t)) return `### ${nameOf(t)}\n(pas de réponse : la case a été fermée ou arrêtée)`;
-    return `### ${nameOf(t)}\n(travaille encore après ${seconds} s : rappelle wait_for_replies pour attendre sa réponse)`;
+    if (!deps.info(target)) return `${title}\n${tIn(lang, 'delegate.closed')}`;
+    return `${title}\n${tIn(lang, 'delegate.stillWorking', { seconds })}`;
   });
   return result(parts.join('\n\n'));
 }
 
 // Appel d'un outil par la case caller. Renvoie { text, isError }.
 async function callTool(caller, name, args, signal) {
-  if (!deps.info(caller)) return result("Cette case n'est pas lancée dans Orchestra.", true);
+  if (!deps.info(caller)) return result(tIn(langOf(caller), 'delegate.callerNotRunning'), true);
   switch (name) {
     case 'list_agents': return listAgents(caller);
     case 'send_to_agent': return sendToAgent(caller, args);
     case 'wait_for_replies': return waitForReplies(caller, args, signal);
-    default: return result(`Outil inconnu : ${name}`, true);
+    default: return result(tIn(langOf(caller), 'delegate.unknownTool', { name }), true);
   }
 }
 

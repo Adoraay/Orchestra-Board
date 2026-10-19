@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app, ipcMain } = require('electron');
+const { t } = require('./i18n.cjs');
 
 // Tableaux et disposition de chaque map (PLAN.md §3.4), dans userData/workspace.json.
 const ID = /^[\w-]{1,128}$/;
@@ -89,15 +90,16 @@ function sanitizeContent(input) {
   return { nodes, edges, strokes, viewport };
 }
 
-const DEFAULT_NAME = 'Tableau 1';
+// Nom par défaut, dans la langue de l'interface (« Board 1 », « Tableau 1 »).
+const defaultName = (index) => t('board.defaultName', { n: index + 1 });
 
 function sanitizeName(name, index) {
-  return typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : `Tableau ${index + 1}`;
+  return typeof name === 'string' && name.trim() ? name.trim().slice(0, MAX_NAME) : defaultName(index);
 }
 
-// Plusieurs tableaux (pages). Un ancien fichier à un seul tableau (version 1) devient « Tableau 1 ».
+// Plusieurs tableaux (pages). Un ancien fichier à un seul tableau (version 1) devient le premier tableau.
 function sanitize(input) {
-  const rawBoards = Array.isArray(input?.boards) ? input.boards : input?.nodes ? [{ id: 'board-1', name: DEFAULT_NAME, ...input }] : [];
+  const rawBoards = Array.isArray(input?.boards) ? input.boards : input?.nodes ? [{ id: 'board-1', name: defaultName(0), ...input }] : [];
   const seen = new Set();
   const boards = [];
   for (const raw of rawBoards.slice(0, MAX_BOARDS)) {
@@ -105,7 +107,7 @@ function sanitize(input) {
     seen.add(raw.id);
     boards.push({ id: raw.id, name: sanitizeName(raw.name, boards.length), ...sanitizeContent(raw) });
   }
-  if (!boards.length) boards.push({ id: 'board-1', name: DEFAULT_NAME, ...sanitizeContent(null) });
+  if (!boards.length) boards.push({ id: 'board-1', name: defaultName(0), ...sanitizeContent(null) });
 
   const activeBoardId = seen.has(input?.activeBoardId) ? input.activeBoardId : boards[0].id;
   return { version: 2, activeBoardId, boards };

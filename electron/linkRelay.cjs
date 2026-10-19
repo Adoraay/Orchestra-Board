@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { t } = require('./i18n.cjs');
 const path = require('path');
 
 // Liens entre agents (PLAN.md §3.5) : quand A a fini (hook Stop de Claude Code), sa dernière réponse
@@ -130,7 +131,7 @@ function flush(target) {
   const status = deps.status(target);
   if (!status) {
     queues.delete(target);
-    for (const item of queue) deps.emit(item.id, { state: 'error', message: "L'agent cible n'est plus lancé" });
+    for (const item of queue) deps.emit(item.id, { state: 'error', message: t('link.targetGone') });
     return;
   }
   if (status === 'working' || status === 'waiting') {
@@ -152,7 +153,7 @@ function onStop(id, payload) {
     const reply = lastReply(payload);
     for (const link of outgoing) {
       if (!reply) {
-        deps.emit(link.id, { state: 'error', message: 'Réponse introuvable dans le transcript' });
+        deps.emit(link.id, { state: 'error', message: t('link.noReply') });
         continue;
       }
       const used = chain.counts.get(link.key) ?? 0;
@@ -161,7 +162,7 @@ function onStop(id, payload) {
         continue;
       }
       if (!deps.status(link.target)) {
-        deps.emit(link.id, { state: 'error', message: "L'agent cible n'est pas lancé" });
+        deps.emit(link.id, { state: 'error', message: t('link.targetNotRunning') });
         continue;
       }
       chain.counts.set(link.key, used + 1);

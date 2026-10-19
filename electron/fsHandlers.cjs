@@ -2,6 +2,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { dialog, ipcMain, shell } = require('electron');
+const { t } = require('./i18n.cjs');
 
 // Noms masqués par défaut dans l'Explorateur Windows (en plus des fichiers commençant par « . »).
 const HIDDEN_NAMES = new Set(['desktop.ini', 'thumbs.db', 'appdata', 'system volume information']);
@@ -33,14 +34,14 @@ async function isReadableDir(fullPath) {
 
 async function listDir(dirPath) {
   if (typeof dirPath !== 'string' || !path.isAbsolute(dirPath) || !(await isDirectory(dirPath))) {
-    return { error: 'Dossier introuvable' };
+    return { error: t('fs.folderNotFound') };
   }
 
   let dirents;
   try {
     dirents = await fs.readdir(dirPath, { withFileTypes: true });
   } catch {
-    return { error: 'Accès refusé' };
+    return { error: t('fs.accessDenied') };
   }
 
   const entries = [];
@@ -76,13 +77,13 @@ const isInside = (child, parent) => {
 
 // Nom de fichier ou de dossier valide sous Windows.
 function checkName(name) {
-  if (typeof name !== 'string') return { error: 'Nom invalide' };
+  if (typeof name !== 'string') return { error: t('fs.nameInvalid') };
   const clean = name.trim();
-  if (!clean || clean === '.' || clean === '..') return { error: 'Le nom ne peut pas être vide' };
-  if (clean.length > 255) return { error: 'Nom trop long' };
-  if (/[<>:"/\\|?*\x00-\x1f]/.test(clean)) return { error: 'Ces caractères sont interdits : \\ / : * ? " < > |' };
-  if (/[. ]$/.test(clean)) return { error: 'Le nom ne peut pas finir par un point ou une espace' };
-  if (RESERVED.test(clean)) return { error: `« ${clean} » est un nom réservé par Windows` };
+  if (!clean || clean === '.' || clean === '..') return { error: t('fs.nameEmpty') };
+  if (clean.length > 255) return { error: t('fs.nameTooLong') };
+  if (/[<>:"/\\|?*\x00-\x1f]/.test(clean)) return { error: t('fs.nameChars') };
+  if (/[. ]$/.test(clean)) return { error: t('fs.nameEnd') };
+  if (RESERVED.test(clean)) return { error: t('fs.nameReserved', { name: clean }) };
   return { name: clean };
 }
 
@@ -109,12 +110,12 @@ async function isWorktreeFolder(target) {
 
 // Renommer ou supprimer est refusé là où ça casserait l'app ou un agent.
 async function protectedReason(target) {
-  if (key(target) === key(path.parse(target).root)) return "On ne touche pas à la racine d'un disque";
-  if (key(target) === key(os.homedir())) return 'On ne touche pas au dossier personnel';
-  if (isInside(getRoot(), target)) return "C'est la racine de l'explorateur (ou un dossier qui la contient)";
-  if (await isWorktreeFolder(target)) return 'Worktree Git créé par Orchestra : à retirer avec « git worktree remove »';
+  if (key(target) === key(path.parse(target).root)) return t('fs.protectedDrive');
+  if (key(target) === key(os.homedir())) return t('fs.protectedHome');
+  if (isInside(getRoot(), target)) return t('fs.protectedRoot');
+  if (await isWorktreeFolder(target)) return t('fs.protectedWorktree');
   const used = getUsedFolders().find((f) => f.path && isInside(f.path, target));
-  if (used) return `La case « ${used.name} » travaille dans ce dossier`;
+  if (used) return t('fs.protectedUsed', { name: used.name });
   return null;
 }
 
@@ -123,21 +124,21 @@ async function existingPath(target) {
 }
 
 async function createFolder(parent, name) {
-  if (!(await existingPath(parent)) || !(await isDirectory(parent))) return { error: 'Dossier introuvable' };
+  if (!(await existingPath(parent)) || !(await isDirectory(parent))) return { error: t('fs.folderNotFound') };
   const checked = checkName(name);
   if (checked.error) return checked;
   const target = path.join(parent, checked.name);
-  if (await exists(target)) return { error: `« ${checked.name} » existe déjà` };
+  if (await exists(target)) return { error: t('fs.exists', { name: checked.name }) };
   try {
     await fs.mkdir(target);
     return { path: target };
   } catch {
-    return { error: 'Impossible de créer le dossier (accès refusé ?)' };
+    return { error: t('fs.createFailed') };
   }
 }
 
 async function rename(target, name) {
-  if (!(await existingPath(target))) return { error: 'Élément introuvable' };
+  if (!(await existingPath(target))) return { error: t('fs.itemNotFound') };
   const reason = await protectedReason(target);
   if (reason) return { error: reason };
   const checked = checkName(name);
@@ -145,18 +146,18 @@ async function rename(target, name) {
   const next = path.join(path.dirname(target), checked.name);
   if (next === target) return { path: target };
   // Sous Windows, changer seulement la casse (« Projet » -> « projet ») vise le même élément.
-  if (key(next) !== key(target) && (await exists(next))) return { error: `« ${checked.name} » existe déjà` };
+  if (key(next) !== key(target) && (await exists(next))) return { error: t('fs.exists', { name: checked.name }) };
   try {
     await fs.rename(target, next);
     return { path: next };
   } catch {
-    return { error: 'Impossible de renommer (élément ouvert dans un autre programme ?)' };
+    return { error: t('fs.renameFailed') };
   }
 }
 
 // Ce que contient un dossier, pour la confirmation de suppression.
 async function summary(target) {
-  if (!(await existingPath(target))) return { error: 'Élément introuvable' };
+  if (!(await existingPath(target))) return { error: t('fs.itemNotFound') };
   const reason = await protectedReason(target);
   if (reason) return { error: reason };
   if (!(await isDirectory(target))) {
@@ -185,19 +186,19 @@ async function summary(target) {
 }
 
 async function trash(target) {
-  if (!(await existingPath(target))) return { error: 'Élément introuvable' };
+  if (!(await existingPath(target))) return { error: t('fs.itemNotFound') };
   const reason = await protectedReason(target);
   if (reason) return { error: reason };
   try {
     await shell.trashItem(target);
     return { ok: true };
   } catch {
-    return { error: 'Impossible de mettre à la corbeille (élément ouvert dans un autre programme ?)' };
+    return { error: t('fs.trashFailed') };
   }
 }
 
 async function reveal(target) {
-  if (!(await existingPath(target))) return { error: 'Élément introuvable' };
+  if (!(await existingPath(target))) return { error: t('fs.itemNotFound') };
   if (await isDirectory(target)) {
     const error = await shell.openPath(target);
     return error ? { error } : { ok: true };
@@ -219,7 +220,7 @@ function register(getWindow, deps = {}) {
   ipcMain.handle('fs:homeDir', () => os.homedir());
   ipcMain.handle('dialog:pickFolder', async (_e, defaultPath) => {
     const result = await dialog.showOpenDialog(getWindow(), {
-      title: 'Choisir le dossier racine',
+      title: t('dialog.pickRoot'),
       defaultPath: typeof defaultPath === 'string' ? defaultPath : undefined,
       properties: ['openDirectory'],
     });
