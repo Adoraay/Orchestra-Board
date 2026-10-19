@@ -30,10 +30,10 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const nameOf = (id) => (id === edge.source ? source.name : target.name);
   const relay = link.mode === 'relay';
 
-  // Qui doit être Claude Code : en Transmission, chaque source (son hook Stop donne la réponse) ;
-  // en Délégation, les deux bouts (l'un appelle les outils, l'autre répond).
-  const needsClaude = relay ? [source, ...(link.bidirectional ? [target] : [])] : [source, target];
-  const notClaude = needsClaude.filter((c) => c.agent.hooks !== 'claude').map((c) => c.name);
+  // Qui doit être Claude Code ou Codex (agents à hooks) : en Transmission, chaque source (son hook Stop donne
+  // la réponse) ; en Délégation, les deux bouts (l'un appelle les outils, l'autre répond).
+  const needsHooks = relay ? [source, ...(link.bidirectional ? [target] : [])] : [source, target];
+  const notClaude = needsHooks.filter((c) => !c.agent.hooks).map((c) => c.name);
 
   return (
     <aside className="link-panel nowheel" aria-label={t('link.panelLabel')}>

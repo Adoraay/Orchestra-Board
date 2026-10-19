@@ -85,7 +85,8 @@ function onHook(id, payload) {
     case 'UserPromptSubmit':
     case 'PostToolUse': // reprise du travail, par exemple après une permission accordée
       return set(id, e, 'working');
-    case 'Notification':
+    case 'Notification': // Claude Code
+    case 'PermissionRequest': // Codex
       // Pendant le travail = demande de permission. Après la fin, c'est le rappel « en attente », ignoré.
       if (e.status === 'working') set(id, e, 'waiting');
       return;

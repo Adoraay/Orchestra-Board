@@ -69,7 +69,7 @@ function listAgents(caller) {
     const parts = [tIn(lang, 'delegate.agent', { value: c.agent.name }), tIn(lang, 'delegate.folder', { value: c.cwd ?? '?' })];
     if (c.branch) parts.push(tIn(lang, 'delegate.branch', { value: c.branch }));
     parts.push(tIn(lang, 'delegate.statusLabel', { value: tIn(lang, status ? `delegate.status.${status}` : 'delegate.notRunningStatus') }));
-    if (c.agent.hooks !== 'claude') parts.push(tIn(lang, 'delegate.unsupported'));
+    if (!c.agent.hooks) parts.push(tIn(lang, 'delegate.unsupported'));
     return `- ${c.name} (${parts.join(' · ')})`;
   });
   return result(`${me} ${tIn(lang, 'delegate.reachable')}\n${lines.join('\n')}`);
@@ -84,7 +84,7 @@ function sendToAgent(caller, { name, message } = {}) {
   const link = findLink(caller, name);
   if (!link) return unknownAgent(caller, name);
   const target = cases.get(link.target);
-  if (target.agent.hooks !== 'claude') return result(tIn(lang, 'delegate.notClaude', { name: target.name }), true);
+  if (!target.agent.hooks) return result(tIn(lang, 'delegate.noHooks', { name: target.name }), true);
   const info = deps.info(link.target);
   if (!info) return result(tIn(lang, 'delegate.notRunning', { name: target.name }), true);
 

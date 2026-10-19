@@ -37,7 +37,8 @@ function safeCwd(cwd) {
 
 // command et shell viennent des paramètres, lus côté Node (jamais envoyés par l'interface).
 // Renvoie { buffer } : vide pour un nouveau terminal, les dernières sorties s'il tournait déjà.
-function create({ id, command, shell, cwd, cols = 100, rows = 30 }, onData, onExit) {
+// env : variables ajoutées à celles de l'app (adresse d'Orchestra pour les hooks de Codex).
+function create({ id, command, shell, cwd, env, cols = 100, rows = 30 }, onData, onExit) {
   // Déjà lancé (case d'un tableau qu'on rouvre, ou React StrictMode qui monte deux fois).
   if (terminals.has(id)) return { buffer: terminals.get(id).buffer };
 
@@ -46,7 +47,7 @@ function create({ id, command, shell, cwd, cols = 100, rows = 30 }, onData, onEx
     cols,
     rows,
     cwd: safeCwd(cwd),
-    env: process.env,
+    env: env ? { ...process.env, ...env } : process.env,
   });
 
   const entry = { term, buffer: '' };

@@ -11,14 +11,12 @@
     "dist": "vite build && electron-builder --win",
     "start": "electron .",
     "build:icon": "electron scripts/make-icon.cjs",
-    "build:launcher": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /target:winexe /codepage:65001 /out:launcher.exe /win32icon:build\\icon.ico /r:System.Windows.Forms.dll scripts\\launcher.cs",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "build:launcher": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /target:winexe /codepage:65001 /out:launcher.exe /win32icon:build\\icon.ico /r:System.Windows.Forms.dll scripts\\launcher.cs"
   },
   "dependencies": {
     "node-pty": "^1.0.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.0",
     "@vitejs/plugin-react": "^4.3.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",

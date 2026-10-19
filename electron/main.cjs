@@ -10,6 +10,7 @@ const workspaceStore = require('./workspaceStore.cjs');
 const hookServer = require('./hookServer.cjs');
 const claudeHooks = require('./claudeHooks.cjs');
 const claudeTrust = require('./claudeTrust.cjs');
+const codexProfile = require('./codexProfile.cjs');
 const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
@@ -145,10 +146,12 @@ function onHook(id, payload) {
 // Nom d'une case choisi dans l'interface (double-clic sur son titre).
 const cleanName = (name) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : null);
 
-// Commande à taper dans le shell : celle de l'agent, + reprise de conversation, + hooks pour Claude Code.
+// Commande à taper dans le shell : celle de l'agent, + profil Orchestra pour Codex, + reprise de conversation,
+// + hooks et serveur MCP pour Claude Code.
 function buildCommand(id, agent, resume) {
   if (!agent.command) return null;
   let command = agent.command;
+  if (agent.hooks === 'codex') command += ` -p ${codexProfile.PROFILE}`;
   if (resume && agent.resumeArgs) command += ` ${agent.resumeArgs}`;
   if (agent.hooks === 'claude') {
     command += ` --settings "${claudeHooks.writeSettings(id)}" --mcp-config "${claudeHooks.writeMcpConfig(id)}"`;
@@ -167,11 +170,19 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
   const existing = agentStatus.info(id);
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) {
-    agentStatus.register(id, agent.hooks === 'claude' ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
+    agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
     send('agent:status', id, agentStatus.info(id)); // la barre des agents actifs le voit tout de suite
   }
   const result = ptyManager.create(
-    { id, command: existing ? null : buildCommand(id, agent, resume), shell: settings.general.shell, cwd, cols, rows },
+    {
+      id,
+      command: existing ? null : buildCommand(id, agent, resume),
+      shell: settings.general.shell,
+      cwd,
+      env: agent.hooks === 'codex' ? codexProfile.env(id) : null,
+      cols,
+      rows,
+    },
     (id, data) => {
       agentStatus.onOutput(id);
       send(`pty:data:${id}`, data);
@@ -252,6 +263,7 @@ app.whenReady().then(async () => {
   migrateOldUserData();
   claudeHooks.clearAll();
   await hookServer.start(onHook, delegation.callTool);
+  codexProfile.ensure();
   createWindow();
 });
 

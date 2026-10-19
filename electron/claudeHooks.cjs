@@ -50,4 +50,4 @@ function clearAll() {
   fs.rmSync(dir(), { recursive: true, force: true });
 }
 
-module.exports = { writeSettings, writeMcpConfig, removeSettings, clearAll };
+module.exports = { writeSettings, writeMcpConfig, removeSettings, clearAll, mcpServerPath };

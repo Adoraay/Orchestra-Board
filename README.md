@@ -9,7 +9,7 @@ Une grande map où tu glisses des agents IA (Claude Code, Codex, Gemini CLI…) 
 Prérequis : Node.js 20+, et les CLI que tu veux utiliser déjà installés et connectés (`claude`, `codex`, `gemini` doivent marcher dans ton terminal).
 
 ```bash
-npm install      # installe tout et recompile node-pty pour Electron
+npm install      # installe tout (node-pty arrive avec ses binaires précompilés pour Windows)
 npm run dev      # lance Vite + Electron avec rechargement à chaud
 ```
 
@@ -27,7 +27,7 @@ npm run dist
 
 L'installateur propose le dossier d'installation et crée les raccourcis bureau et menu Démarrer. L'exe n'est pas signé : au premier lancement, Windows affiche « Windows a protégé votre ordinateur » (cliquer sur « Informations complémentaires » puis « Exécuter quand même »). Si la protection anti-ransomware de Windows (« Dossiers contrôlés ») est active et que le projet est dans `Documents`, elle bloque l'écriture de l'installateur : autoriser `makensis.exe` ou fabriquer ailleurs.
 
-Sous Windows, si `npm install` échoue sur node-pty, installe les « Desktop development with C++ » de Visual Studio Build Tools et Python 3, puis relance `npm install`.
+node-pty 1.1 fournit des binaires précompilés qui marchent avec Electron : pas besoin de Visual Studio ni de Python. npm peut signaler qu'il n'a pas lancé le script d'installation de node-pty (`install-scripts`) : c'est normal, ce script ne ferait que recompiler.
 
 ## Structure
 
