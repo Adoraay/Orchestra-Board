@@ -80,6 +80,9 @@ export default {
   'link.mode.delegate': 'Delegation',
   'link.mode.delegate.description':
     'Nothing automatic: the source sees the target in its tools and decides itself when to write to it. The reply comes straight back to it.',
+  'link.mode.terminal': 'Terminal link',
+  'link.mode.terminal.description':
+    'The agent runs its commands in this terminal, where you see them. It asks your permission before each command (you can allow it for good), reads the output and can stop a command with Ctrl+C.',
   'link.panelLabel': 'Link settings',
   'link.type': 'Link type',
   'link.swapTitle': 'The source becomes the target',
@@ -93,6 +96,7 @@ export default {
   'link.maxTurns': 'Turn limit',
   'link.warnRelay': 'Only Claude Code and Codex signal when they are done: {names} will not relay anything.',
   'link.warnDelegate': 'Delegation only works between Claude Code and Codex agents for now ({names}).',
+  'link.warnTerminal': 'Only Claude Code and Codex can use a terminal: {name} will not see it.',
   'link.delete': 'Delete link',
   'link.status.turns': ' (turn {turns} / {max})',
   'link.status.ready': 'Ready, counter reset{turns}',
@@ -102,6 +106,7 @@ export default {
   'link.label.unconfigured': 'Configure the link',
   'link.label.disabled': 'Link paused',
   'link.label.delegate': 'Delegation',
+  'link.label.terminal': 'Terminal',
   'link.label.sending': 'Sending to {name}…',
   'link.label.queued': 'Waiting for {name}…',
   'link.label.limit': 'Turn limit reached',

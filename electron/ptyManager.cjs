@@ -74,6 +74,9 @@ function write(id, data) {
   terminals.get(id)?.term.write(data);
 }
 
+// Dernières sorties d'un terminal lancé, ou null (outil read_terminal d'un lien Terminal).
+const buffer = (id) => terminals.get(id)?.buffer ?? null;
+
 function resize(id, cols, rows) {
   const term = terminals.get(id)?.term;
   if (term && cols > 0 && rows > 0) term.resize(cols, rows);
@@ -88,4 +91,4 @@ function killAll() {
   for (const id of [...terminals.keys()]) kill(id);
 }
 
-module.exports = { create, write, resize, kill, killAll };
+module.exports = { create, write, buffer, resize, kill, killAll };

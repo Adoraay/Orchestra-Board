@@ -37,7 +37,8 @@ electron/                 côté Node : système, terminaux, fichiers
   preload.cjs             seul pont vers l'interface (window.pty, fs, settings, agents, workspace, git, links, agentEvents)
   ptyManager.cjs          un vrai PTY (node-pty) par case, dernières sorties gardées pour les tableaux fermés
   agentStatus.cjs         statut de chaque case (inactif / travaille / attend / a fini)
-  hookServer.cjs          petit serveur local (127.0.0.1 + jeton) qui reçoit les hooks de Claude Code
+  hookServer.cjs          petit serveur local (127.0.0.1 + jeton) qui reçoit les hooks de Claude Code et de Codex
+  codexProfile.cjs        Codex : profil ~/.codex/orchestra.config.toml (serveur MCP) et hooks de statut dans ~/.codex/hooks.json
   claudeHooks.cjs         fichiers --settings (hooks, outils autorisés) et --mcp-config par case Claude
   claudeTrust.cjs         dossier marqué « de confiance » dans ~/.claude.json avant de lancer Claude
   settingsStore.cjs       settings.json : apparence, agents, général (validé à chaque lecture/écriture)
@@ -49,6 +50,7 @@ electron/                 côté Node : système, terminaux, fichiers
   i18n.cjs                textes côté Node en anglais et en français (erreurs, notifications, orchestration)
   usage.cjs               utilisation (quotas) : cache /usage de Claude (+ /usage invisible), rate_limits de Codex
   delegation.cjs          liens en Délégation : outils list_agents, send_to_agent, wait_for_replies
+  terminalLink.cjs        liens Terminal : outils list_terminals, run_in_terminal, read_terminal, interrupt_terminal
   mcpServer.cjs           serveur MCP « orchestra » lancé par chaque Claude (stdio), relaie ses appels à l'app
 src/                      interface React
   App.jsx                 chargement, onglets de tableaux, map (React Flow)
@@ -78,7 +80,7 @@ Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents c
 - **Map** infinie avec pan, zoom, minimap et grille ; plusieurs **tableaux** en onglets (créer, renommer, supprimer). Les agents des autres tableaux continuent en arrière-plan.
 - **Agents** : glisser un agent du dock sur la map (aperçu en pointillés) ouvre un vrai terminal dans le dossier actif de l'explorateur. Claude Code, Codex, Gemini CLI, Terminal, et tes propres agents.
 - **Cases** : déplacement avec effet « soulever puis fixer », sélection au clic, sélection multiple par rectangle au clic droit (et déplacement en groupe), redimensionnement après un clic sur la barre de titre, renommage par double-clic sur le titre (ex. « Claude design »), bouton « relancer », confirmation avant de fermer un agent (ou l'app) pendant qu'il travaille.
-- **Statuts** : pastille grise / orange / jaune / verte (hooks pour Claude Code, activité du terminal pour les autres). La languette « Agents actifs » en bas de la map ouvre la liste de tous les agents lancés (tous tableaux) ; un clic centre la map sur l'agent.
+- **Statuts** : pastille grise / orange / jaune / verte (hooks pour Claude Code et Codex, activité du terminal pour les autres). La languette « Agents actifs » en bas de la map ouvre la liste de tous les agents lancés (tous tableaux) ; un clic centre la map sur l'agent.
 - **Utilisation** : languette « Utilisation » sur le bord droit de la map : quota de session et de la semaine de Claude (mis à jour par un `/usage` invisible), limites de Codex.
 - **Confiance** : Claude Code ne demande plus de faire confiance à chaque dossier ouvert par Orchestra (désactivable dans Général).
 - **Fin de tâche** : lueur verte, bulle « Claude design a terminé sa tâche » (avec le nom de la case), son, notification Windows (un clic ramène sur la case), point vert sur l'onglet d'un tableau fermé.
@@ -89,13 +91,14 @@ Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents c
 - **Paramètres** : thèmes Standard, Clair, ChatGPT, Gemini, VS Code, GitHub, Dracula et Nord (vignettes avec aperçu) et couleur d'accent en direct, police des terminaux, grille, agents, racine de l'explorateur, shell, notifications.
 - **Branches Git** : glisser le carré « Branche » sur une case ouvre la liste des branches ; en choisir une relance l'agent dans son propre `git worktree` (`<dépôt>-worktrees/<branche>`), avec une encoche sous la case.
 - **Liens qui transmettent** : clic sur un lien = panneau (consigne avec `{reponse}`, limite de tours, actif). Quand Claude (A) termine, sa dernière réponse part dans le terminal de B avec la consigne ; B attend s'il travaille encore.
-- **Orchestration** : un lien en Délégation laisse un Claude parler lui-même aux agents reliés. Il les voit (`list_agents`), leur écrit (`send_to_agent`) et récupère leurs réponses (`wait_for_replies`). Exemple : un Claude principal relié à 3 Claude leur demande un poème chacun et choisit le meilleur. Le type de lien se choisit dans son panneau (défaut dans les paramètres), avec inversion et double sens.
+- **Orchestration** : un lien en Délégation laisse un Claude ou un Codex parler lui-même aux agents reliés (Claude Code ou Codex). Il les voit (`list_agents`), leur écrit (`send_to_agent`) et récupère leurs réponses (`wait_for_replies`). Exemple : un Claude principal relié à 3 Claude leur demande un poème chacun et choisit le meilleur. Le type de lien se choisit dans son panneau (défaut dans les paramètres), avec inversion et double sens.
+- **Lien Terminal** : relier un Claude ou un Codex à une case Terminal lui permet d'y lancer ses commandes sous tes yeux (après ta permission), d'en lire la sortie et de les arrêter (Ctrl+C).
 - **Explorateur** : clic droit sur un dossier ou un fichier pour créer un dossier, renommer (F2), supprimer vers la corbeille (Suppr, avec confirmation), copier le chemin, ouvrir dans l'Explorateur Windows ou lancer un agent dans ce dossier. Les dossiers utilisés par les agents de la map sont protégés.
 - **Raccourcis clavier** : changer de tableau (Ctrl+Tab, Ctrl+1…9), paramètres (Ctrl+,), F2 pour renommer une case, Suppr pour supprimer la sélection (avec confirmation), copier / coller dans les terminaux ; liste complète dans Paramètres › Raccourcis.
 - **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
 
 ## Ce qui reste à faire
 
-1. **Plus tard** : orchestration avec Codex. Gemini CLI n'est plus maintenu (remplacé par Google Antigravity) : il reste dans le dock, sans orchestration.
+1. Gemini CLI n'est plus maintenu (remplacé par Google Antigravity) : il reste dans le dock, sans orchestration.
 
 Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.

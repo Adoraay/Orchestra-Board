@@ -5,10 +5,13 @@ const { hookUrl, toolUrl } = require('./hookServer.cjs');
 
 // Fichiers propres à chaque case Claude Code :
 // - <id>.json, passé avec `claude --settings` : hooks qui préviennent Orchestra via curl (fourni avec
-//   Windows), qui s'ajoutent à ceux de l'utilisateur, et autorisation des seuls outils d'Orchestra ;
+//   Windows), qui s'ajoutent à ceux de l'utilisateur, et autorisation des outils d'Orchestra, sauf
+//   run_in_terminal : Claude demande la permission avant de lancer une commande (PLAN.md §3.17) ;
 // - <id>.mcp.json, passé avec `claude --mcp-config` : le serveur MCP « orchestra » (PLAN.md §3.11).
 const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Notification', 'Stop'];
-const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies'].map((tool) => `mcp__orchestra__${tool}`);
+const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies', 'list_terminals', 'read_terminal', 'interrupt_terminal'].map(
+  (tool) => `mcp__orchestra__${tool}`,
+);
 
 const dir = () => path.join(app.getPath('userData'), 'hooks');
 const fileFor = (id) => path.join(dir(), `${id}.json`);

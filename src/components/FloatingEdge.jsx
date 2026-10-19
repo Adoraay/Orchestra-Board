@@ -54,8 +54,9 @@ function arrowPath(tip, side) {
 }
 
 // État affiché : réglages du lien d'abord (pause, Transmission sans consigne), puis dernier événement.
-// Au repos, une Délégation est « delegate », une Transmission configurée est « ready ».
+// Au repos, une Délégation est « delegate », un lien Terminal « terminal », une Transmission configurée « ready ».
 function linkState(link, event) {
+  if (link.mode === 'terminal') return event?.state === 'sent' && Date.now() - event.at < SENDING_FOR ? 'sending' : 'terminal';
   if (!link.enabled) return 'disabled';
   if (link.mode === 'relay' && !link.prompt.trim()) return 'unconfigured';
   const rest = link.mode === 'delegate' ? 'delegate' : 'ready';
@@ -135,7 +136,7 @@ export default function FloatingEdge({ id, source, target, data, style }) {
           prompt={link.prompt}
           targetName={targetName}
           turns={turns}
-          maxTurns={link.maxTurns}
+          maxTurns={link.mode === 'terminal' ? null : link.maxTurns}
           message={event?.message}
           onOpen={open}
         />

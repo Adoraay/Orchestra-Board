@@ -1,5 +1,5 @@
 import { EdgeLabelRenderer } from '@xyflow/react';
-import { Network, Pause } from 'lucide-react';
+import { Network, Pause, SquareTerminal } from 'lucide-react';
 import useT from '../hooks/useT.js';
 
 // Étiquette au milieu d'un lien (affichée seulement s'il y a la place) : état du lien et tours.
@@ -11,6 +11,7 @@ export default function LinkLabel({ x, y, state, prompt, targetName, turns, maxT
     case 'unconfigured':
     case 'disabled':
     case 'delegate':
+    case 'terminal':
     case 'limit':
       text = t(`link.label.${state}`);
       break;
@@ -21,7 +22,7 @@ export default function LinkLabel({ x, y, state, prompt, targetName, turns, maxT
     case 'error': text = message; break;
     default: text = t('link.label.prompt', { prompt: prompt.trim() });
   }
-  const showTurns = state !== 'unconfigured' && state !== 'disabled' && state !== 'error';
+  const showTurns = maxTurns != null && state !== 'unconfigured' && state !== 'disabled' && state !== 'error';
 
   return (
     <EdgeLabelRenderer>
@@ -33,7 +34,8 @@ export default function LinkLabel({ x, y, state, prompt, targetName, turns, maxT
       >
         {state === 'disabled' && <Pause size={13} />}
         {state === 'delegate' && <Network size={13} />}
-        {state !== 'disabled' && state !== 'delegate' && <span className="link-label-dot" />}
+        {state === 'terminal' && <SquareTerminal size={13} />}
+        {!['disabled', 'delegate', 'terminal'].includes(state) && <span className="link-label-dot" />}
         <span className="link-label-text">{text}</span>
         {showTurns && <span className="link-label-turns">{turns}/{maxTurns}</span>}
       </button>

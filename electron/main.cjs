@@ -15,6 +15,7 @@ const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
 const delegation = require('./delegation.cjs');
+const terminalLink = require('./terminalLink.cjs');
 const usage = require('./usage.cjs');
 const { t } = require('./i18n.cjs');
 
@@ -134,6 +135,21 @@ delegation.init({
   emit: (linkId, event) => send('link:event', linkId, event),
 });
 
+terminalLink.init({
+  write: ptyManager.write,
+  buffer: ptyManager.buffer,
+  info: agentStatus.info,
+  arm: agentStatus.arm,
+  emit: (linkId, event) => send('link:event', linkId, event),
+});
+
+// Outils du serveur MCP d'une case : lien Terminal ou Délégation.
+function callTool(caller, name, args, signal) {
+  if (!terminalLink.isTool(name)) return delegation.callTool(caller, name, args, signal);
+  if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
+  return terminalLink.callTool(caller, name, args, signal);
+}
+
 // Événements des hooks de Claude Code : statut de la case, et transmission par ses liens quand il a fini
 // (Transmission automatique, ou réponse attendue par un agent qui lui a délégué un message).
 function onHook(id, payload) {
@@ -185,6 +201,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
     },
     (id, data) => {
       agentStatus.onOutput(id);
+      terminalLink.onOutput(id, data);
       send(`pty:data:${id}`, data);
     },
     (id, code) => {
@@ -250,6 +267,7 @@ workspaceStore.register((workspace) => {
   );
   linkRelay.setLinks(workspace);
   delegation.setWorkspace(workspace);
+  terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
 });
 gitHandlers.register();
 usage.register();
@@ -259,10 +277,22 @@ Menu.setApplicationMenu(null);
 // Identité propre dans la barre des tâches (sinon Windows regroupe la fenêtre sous « Electron »).
 app.setAppUserModelId('com.orchestraboard.orchestra');
 
+// Une seule instance : un deuxième lancement ramène la fenêtre existante (même cachée) au lieu d'ouvrir
+// une app de plus qui réécrirait les mêmes fichiers.
+const isFirstInstance = app.requestSingleInstanceLock();
+if (!isFirstInstance) app.quit();
+app.on('second-instance', () => {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+});
+
 app.whenReady().then(async () => {
+  if (!isFirstInstance) return;
   migrateOldUserData();
   claudeHooks.clearAll();
-  await hookServer.start(onHook, delegation.callTool);
+  await hookServer.start(onHook, callTool);
   codexProfile.ensure();
   createWindow();
 });

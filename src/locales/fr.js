@@ -79,6 +79,9 @@ export default {
   'link.mode.delegate': 'Délégation',
   'link.mode.delegate.description':
     "Rien d'automatique : la source voit la cible dans ses outils et décide elle-même quand lui écrire. La réponse lui revient directement.",
+  'link.mode.terminal': 'Lien Terminal',
+  'link.mode.terminal.description':
+    "L'agent lance ses commandes dans ce terminal, sous tes yeux. Il te demande la permission avant chaque commande (tu peux l'accorder pour de bon), lit la sortie et peut arrêter une commande avec Ctrl+C.",
   'link.panelLabel': 'Réglages du lien',
   'link.type': 'Type de lien',
   'link.swapTitle': 'La source devient la cible',
@@ -92,6 +95,7 @@ export default {
   'link.maxTurns': 'Limite de tours',
   'link.warnRelay': 'Seuls Claude Code et Codex préviennent quand ils ont fini : {names} ne transmettra rien.',
   'link.warnDelegate': "La délégation ne marche qu'entre agents Claude Code et Codex pour l'instant ({names}).",
+  'link.warnTerminal': "Seuls Claude Code et Codex peuvent utiliser un terminal : {name} ne le verra pas.",
   'link.delete': 'Supprimer le lien',
   'link.status.turns': ' (tour {turns} / {max})',
   'link.status.ready': 'Prêt, compteur remis à zéro{turns}',
@@ -101,6 +105,7 @@ export default {
   'link.label.unconfigured': 'Configurer le lien',
   'link.label.disabled': 'Lien en pause',
   'link.label.delegate': 'Délégation',
+  'link.label.terminal': 'Terminal',
   'link.label.sending': 'Transmission à {name}…',
   'link.label.queued': 'En attente de {name}…',
   'link.label.limit': 'Limite de tours atteinte',

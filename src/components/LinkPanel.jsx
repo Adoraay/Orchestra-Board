@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ArrowRight, Repeat, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Repeat, SquareTerminal, Trash2, X } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK, LINK_MODES, MAX_TURNS } from '../lib/links.js';
 import useT from '../hooks/useT.js';
@@ -34,6 +34,32 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   // la réponse) ; en Délégation, les deux bouts (l'un appelle les outils, l'autre répond).
   const needsHooks = relay ? [source, ...(link.bidirectional ? [target] : [])] : [source, target];
   const notClaude = needsHooks.filter((c) => !c.agent.hooks).map((c) => c.name);
+
+  // Lien Terminal (PLAN.md §3.17) : rien à régler, une explication et la suppression.
+  if (link.mode === 'terminal') {
+    return (
+      <aside className="link-panel nowheel" aria-label={t('link.panelLabel')}>
+        <header className="link-panel-header">
+          <span className="link-panel-title">
+            {source.name}
+            <ArrowRight size={14} />
+            {target.name}
+          </span>
+          <button className="icon-button" onClick={onClose} title={t('common.close')}><X size={15} /></button>
+        </header>
+        <p className="link-terminal-title">
+          <SquareTerminal size={14} />
+          {t('link.mode.terminal')}
+        </p>
+        <p className="hint">{t('link.mode.terminal.description')}</p>
+        {!source.agent.hooks && <p className="link-warning">{t('link.warnTerminal', { name: source.name })}</p>}
+        <button className="text-button danger link-delete" onClick={onDelete}>
+          <Trash2 size={14} />
+          {t('link.delete')}
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside className="link-panel nowheel" aria-label={t('link.panelLabel')}>

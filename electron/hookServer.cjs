@@ -13,8 +13,10 @@ let port = null;
 function start(onHook, onTool) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
-    const match = url.pathname.match(/^\/(hook|tool)\/([\w-]{1,128})$/);
-    if (req.method !== 'POST' || !match || url.searchParams.get('t') !== token) {
+    // Jeton dans ?t=… ; pour les hooks de Codex, dans le chemin suivi de l'événement (pas de & ni de ? dans
+    // leur commande, voir codexProfile.cjs) : /hook/<id>/<jeton>/<événement>.
+    const match = url.pathname.match(/^\/(hook|tool)\/([\w-]{1,128})(?:\/(\w{1,64})\/\w{1,32})?$/);
+    if (req.method !== 'POST' || !match || (match[3] ?? url.searchParams.get('t')) !== token) {
       res.writeHead(404).end();
       return;
     }
@@ -60,5 +62,7 @@ function start(onHook, onTool) {
 
 const hookUrl = (id) => `http://127.0.0.1:${port}/hook/${id}?t=${token}`;
 const toolUrl = (id) => `http://127.0.0.1:${port}/tool/${id}?t=${token}`;
+// Base à compléter par /<événement> (hooks de Codex).
+const hookBase = (id) => `http://127.0.0.1:${port}/hook/${id}/${token}`;
 
-module.exports = { start, hookUrl, toolUrl };
+module.exports = { start, hookUrl, toolUrl, hookBase };

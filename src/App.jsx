@@ -302,10 +302,16 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         setLinkSource(linkSource ? null : node.id);
         return;
       }
-      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', data: { ...DEFAULT_LINK, mode: settings.general.linkMode } }, eds));
+      // Un agent relié à une case Terminal : lien Terminal, toujours de l'agent vers le terminal (PLAN.md §3.17).
+      const isShell = (n) => n?.data.agentId === 'shell';
+      const sourceNode = nodes.find((n) => n.id === linkSource);
+      const terminal = isShell(sourceNode) !== isShell(node);
+      const [source, target] = terminal && isShell(sourceNode) ? [node.id, linkSource] : [linkSource, node.id];
+      const mode = terminal ? 'terminal' : settings.general.linkMode;
+      setEdges((eds) => addEdge({ source, target, type: 'floating', data: { ...DEFAULT_LINK, mode } }, eds));
       setLinkSource(null);
     },
-    [tool, linkSource, setEdges, settings.general.linkMode],
+    [tool, linkSource, nodes, setEdges, settings.general.linkMode],
   );
 
   // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).

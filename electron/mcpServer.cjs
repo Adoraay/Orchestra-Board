@@ -1,4 +1,4 @@
-// Serveur MCP « orchestra » (PLAN.md §3.11), lancé par Claude Code avec le Node d'Electron
+// Serveur MCP « orchestra » (PLAN.md §3.11, §3.17), lancé par Claude Code ou Codex avec le Node d'Electron
 // (ELECTRON_RUN_AS_NODE=1). Protocole : JSON-RPC sur stdin/stdout, un message par ligne.
 // Il ne décide rien : chaque appel d'outil est relayé à Orchestra (ORCHESTRA_URL, avec l'id de la case
 // et le jeton), qui vérifie les liens et la limite de tours. Textes en anglais : ce processus ne lit pas les
@@ -46,6 +46,56 @@ const TOOLS = [
         names: { type: 'array', items: { type: 'string' }, description: 'Names of the agents to wait for.' },
         timeout_seconds: { type: 'integer', minimum: 10, maximum: 300 },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_terminals',
+    description:
+      'Lists the Orchestra terminals linked to your tile by a Terminal link on the map: name, folder, and whether a command ' +
+      'you started is still being watched. Use these visible terminals (run_in_terminal) for commands the user should see, ' +
+      'such as dev servers, builds or tests.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'run_in_terminal',
+    description:
+      'Types a command in a linked terminal (see list_terminals) and presses Enter, in its current shell and folder. ' +
+      'Waits until the shell prompt comes back, or at most wait_seconds (30 by default, 300 at most), then returns ' +
+      'the output that appeared. A long-running command (dev server, watcher) is reported as still running once its output ' +
+      'goes quiet: read it later with read_terminal and stop it with interrupt_terminal. A terminal whose command is still ' +
+      'running refuses new commands.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the terminal, as given by list_terminals (e.g. "Terminal 1").' },
+        command: { type: 'string', description: "The command to type, in the syntax of that terminal's shell." },
+        wait_seconds: { type: 'integer', minimum: 1, maximum: 300 },
+      },
+      required: ['name', 'command'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_terminal',
+    description: 'Returns the last lines shown in a linked terminal (ANSI codes removed).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the terminal.' },
+        lines: { type: 'integer', minimum: 1, maximum: 500, description: 'Number of lines (50 by default).' },
+      },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'interrupt_terminal',
+    description: 'Sends Ctrl+C to a linked terminal, to stop the command running in it.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'Name of the terminal.' } },
+      required: ['name'],
       additionalProperties: false,
     },
   },
