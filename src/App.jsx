@@ -19,6 +19,7 @@ import DropPreview from './components/DropPreview.jsx';
 import ExplorerPanel from './components/ExplorerPanel.jsx';
 import FloatingEdge from './components/FloatingEdge.jsx';
 import LinkPanel from './components/LinkPanel.jsx';
+import MiniMapNode from './components/MiniMapNode.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
@@ -411,7 +412,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays }) {
           >
             {GRID_VARIANTS[grid] && <Background variant={GRID_VARIANTS[grid]} gap={24} />}
             <Controls position="bottom-left" />
-            <MiniMap position="bottom-right" pannable zoomable />
+            <MiniMap position="bottom-right" pannable zoomable nodeComponent={MiniMapNode} />
             <DrawingLayer
               strokes={strokes}
               draft={pen.draft}

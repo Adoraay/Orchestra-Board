@@ -626,6 +626,21 @@ kbd {
   .terminal-node.link-source, .terminal-node.link-source::after { animation: none; }
 }
 
+/* Minimap : petite au repos, elle grandit au survol (ancrée en bas à droite, elle s'ouvre vers le haut et la gauche) */
+.react-flow__minimap { border-radius: var(--radius-sm); overflow: hidden; box-shadow: 0 2px 8px var(--shadow); }
+.react-flow__minimap svg {
+  display: block;
+  width: 96px;
+  height: 72px;
+  transition: width 200ms cubic-bezier(0.2, 0.8, 0.2, 1), height 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.react-flow__minimap:hover svg { width: 200px; height: 150px; } /* = taille par défaut de React Flow : glisser et zoom exacts */
+.minimap-initials { fill: var(--on-accent); font-weight: 700; pointer-events: none; }
+.react-flow__minimap image { pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__minimap svg { transition: none; }
+}
+
 /* Barre des agents actifs, en bas de la map, entre les boutons de zoom et la minimap */
 .agents-bar-wrap {
   position: absolute;
