@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -14,6 +14,7 @@ import {
 import AgentDock from './components/AgentDock.jsx';
 import AgentsBar from './components/AgentsBar.jsx';
 import BoardToolbar from './components/BoardToolbar.jsx';
+import DeleteDialog from './components/DeleteDialog.jsx';
 import DrawingLayer from './components/DrawingLayer.jsx';
 import DropPreview from './components/DropPreview.jsx';
 import ExplorerPanel from './components/ExplorerPanel.jsx';
@@ -37,6 +38,7 @@ import useBoardShortcuts from './hooks/useBoardShortcuts.js';
 import useBoxSelection from './hooks/useBoxSelection.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
+import useAppShortcuts from './hooks/useAppShortcuts.js';
 import useBoards from './hooks/useBoards.js';
 import { DEFAULT_LINK } from './lib/links.js';
 
@@ -83,7 +85,27 @@ function Workspace({ saved }) {
   const [agentsBarOpen, setAgentsBarOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageAgent, setUsageAgent] = useState('claude-code');
+  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
   const { agentById } = useSettings();
+
+  useAppShortcuts({
+    toggleSettings: () => setSettingsOpen((o) => !o),
+    cycleBoard: (step) => {
+      const list = boards.boards;
+      const index = list.findIndex((b) => b.id === activeId);
+      boards.setActiveId(list[(index + step + list.length) % list.length].id);
+    },
+    goToBoard: (n) => {
+      const list = boards.boards;
+      const board = n === 9 ? list[list.length - 1] : list[n - 1];
+      if (board) boards.setActiveId(board.id);
+    },
+    createBoard: () => setRenameRequest(boards.createBoard()),
+    toggleExplorer: () => setExplorerOpen((o) => !o),
+    toggleAgentsBar: () => setAgentsBarOpen((o) => !o),
+    toggleUsage: () => setUsageOpen((o) => !o),
+  });
 
   // Démarrage : une seule question pour reprendre (ou non) les conversations de tous les agents restaurés.
   // 'pending' = question affichée, 'resume' / 'new' = appliqué à chaque case restaurée (même dans un tableau
@@ -125,7 +147,12 @@ function Workspace({ saved }) {
 
   return (
     <div className="app">
-      <TopBar boards={boards} boardsWithNews={boardsWithNews} onOpenSettings={() => setSettingsOpen(true)} />
+      <TopBar
+        boards={boards}
+        boardsWithNews={boardsWithNews}
+        renameRequest={renameRequest}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
@@ -136,9 +163,10 @@ function Workspace({ saved }) {
             onFocusDone={clearFocus}
             overlays={overlays}
             resumeChoice={resumeChoice}
+            running={running}
           />
         </ReactFlowProvider>
-        <ExplorerPanel />
+        <ExplorerPanel open={explorerOpen} onToggle={() => setExplorerOpen((o) => !o)} />
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} />}
       {resumeChoice === 'pending' && (
@@ -154,11 +182,11 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice }) {
+function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, deleteElements } = useReactFlow();
 
   // Clic sur une notification Windows ou dans la barre des agents : on centre la map sur la case et on la
   // choisit (après sa mesure si le tableau vient de s'ouvrir). Demande effacée une fois servie.
@@ -184,10 +212,32 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [branchTarget, setBranchTarget] = useState(null); // case survolée en glissant « Branche »
   const [branchPicker, setBranchPicker] = useState(null); // case dont la barre des branches est ouverte
   const [linkEvents, setLinkEvents] = useState({}); // id du lien -> dernier état de transmission
+  const [renameRequest, setRenameRequest] = useState(null); // F2 : { id, at } de la case à renommer
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, resumeChoice }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, resumeChoice],
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, resumeChoice, renameRequest }),
+    [tool, linkSource, branchTarget, branchPicker, linkEvents, resumeChoice, renameRequest],
   );
+
+  // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
+  // le terminal ne reçoive pas la touche.
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== 'F2' || event.ctrlKey || event.altKey || event.shiftKey) return;
+      if (document.querySelector('.modal-backdrop')) return;
+      const focused = document.activeElement;
+      if (focused?.matches('input, textarea, [contenteditable="true"]') && !focused.closest('.xterm')) return;
+      const selected = nodesRef.current.filter((n) => n.selected && n.type === 'terminal');
+      const id = focused?.closest('.react-flow__node-terminal')?.dataset.id ?? (selected.length === 1 ? selected[0].id : null);
+      if (!id) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setRenameRequest({ id, at: Date.now() });
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
 
   useEffect(
     () => window.links.onEvent((id, event) => setLinkEvents((all) => ({ ...all, [id]: { ...event, at: Date.now() } }))),
@@ -273,9 +323,35 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     onChange({ nodes, edges, strokes, viewport });
   }, [nodes, edges, strokes, viewport, onChange]);
 
-  // Suppr retire le trait ou les liens choisis. Les cases se ferment avec leur bouton ×.
+  // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
+  const [deleteRequest, setDeleteRequest] = useState(null);
+  const requestDelete = () => {
+    const chosen = nodes.filter((n) => n.selected);
+    const terminals = chosen
+      .filter((n) => n.type === 'terminal')
+      .map((n) => ({ id: n.id, name: n.data.label || agentById(n.data.agentId).name, agent: agentById(n.data.agentId), status: running[n.id]?.status }));
+    const selection = {
+      terminals,
+      links: selectedEdges.length,
+      notes: chosen.filter((n) => n.type === 'note').length,
+      texts: chosen.filter((n) => n.type === 'text').length,
+      strokes: selectedStroke ? 1 : 0,
+    };
+    if (terminals.length || selection.links || selection.notes || selection.texts || selection.strokes) setDeleteRequest(selection);
+  };
+  const confirmDelete = () => {
+    for (const t of deleteRequest.terminals) window.pty.kill(t.id);
+    // deleteElements retire aussi les liens attachés aux cases supprimées.
+    deleteElements({ nodes: nodes.filter((n) => n.selected), edges: selectedEdges });
+    setStrokes((all) => all.filter((s) => s.id !== selectedStroke));
+    setSelectedStroke(null);
+    setDeleteRequest(null);
+  };
+  const cancelDelete = useCallback(() => setDeleteRequest(null), []);
+
   useBoardShortcuts({
     onTool: setTool,
+    onFitView: () => fitView({ duration: 400, padding: 0.15, maxZoom: 1 }),
     onUndo: history.undo,
     onRedo: history.redo,
     onEscape: () => {
@@ -283,12 +359,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       setTool('select');
       setSelectedStroke(null);
     },
-    onDelete: () => {
-      setStrokes((all) => all.filter((s) => s.id !== selectedStroke));
-      setSelectedStroke(null);
-      setEdges((eds) => eds.filter((e) => !e.selected));
-      setNodes((nds) => nds.filter((n) => !(n.selected && n.type !== 'terminal')));
-    },
+    onDelete: requestDelete,
   });
 
   // Outils Post-it et Texte : un clic sur la map pose l'élément, puis on repasse en Sélection.
@@ -489,6 +560,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           <DropPreview agent={agentById(draggedAgentId)} position={previewPos} size={NODE_SIZE} />
         )}
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
+        {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
       </main>
     </>
   );

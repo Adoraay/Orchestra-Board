@@ -4,7 +4,7 @@ import { Plus, X } from 'lucide-react';
 const MAX_NAME = 40;
 
 // Onglets des tableaux (pages) dans la barre du haut : clic = ouvrir, double-clic = renommer.
-export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRename, onDelete, agentCount, boardsWithNews }) {
+export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRename, onDelete, agentCount, boardsWithNews, renameRequest }) {
   const [renaming, setRenaming] = useState(null);
   const [confirming, setConfirming] = useState(null);
   const cancelRename = useRef(false); // Échap : le blur qui suit ne doit pas enregistrer
@@ -16,6 +16,11 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
   }, [activeId, renaming]);
 
   const create = () => setRenaming(onCreate()); // nouveau tableau : on propose tout de suite de le nommer
+
+  // Tableau créé avec Ctrl+Maj+T : même chose.
+  useEffect(() => {
+    if (renameRequest) setRenaming(renameRequest);
+  }, [renameRequest]);
 
   return (
     <nav
@@ -95,7 +100,7 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
           </div>
         );
       })}
-      <button className="icon-button tab-add" title="Nouveau tableau" onClick={create}>
+      <button className="icon-button tab-add" title="Nouveau tableau (Ctrl+Maj+T)" onClick={create}>
         <Plus size={16} />
       </button>
     </nav>

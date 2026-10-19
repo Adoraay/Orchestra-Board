@@ -20,7 +20,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
-  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice } = useBoard();
+  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest } = useBoard();
   const { accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
   const [status, setStatus] = useState('idle');
@@ -56,6 +56,21 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     term.loadAddon(fit);
     term.open(containerRef.current);
     fit.fit();
+
+    // Copier / coller comme dans le Terminal Windows : Ctrl+C copie s'il y a une sélection (sinon il
+    // interrompt), Ctrl+Maj+C copie, Ctrl+V et Ctrl+Maj+V laissent le navigateur coller (collage entre
+    // crochets géré par xterm).
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown' || !event.ctrlKey || event.altKey || event.metaKey) return true;
+      const key = event.key.toLowerCase();
+      if (key === 'c' && (event.shiftKey || term.hasSelection())) {
+        if (term.hasSelection()) navigator.clipboard.writeText(term.getSelection()).catch(() => {});
+        if (!event.shiftKey) term.clearSelection();
+        event.preventDefault();
+        return false;
+      }
+      return key !== 'v';
+    });
 
     // Clavier -> PTY, PTY -> écran. Si le terminal tournait déjà (tableau qu'on rouvre), on réaffiche
     // d'abord ses dernières sorties : ce qui arrive avant est déjà dedans, on le met de côté.
@@ -224,9 +239,25 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       >
         {/* Glisser = déplacer la case, vrai clic = mode redimensionnement, double-clic sur le nom = renommer.
             nopan : le double-clic ne zoome pas la map. */}
-        <header className="terminal-header drag-handle nopan" {...headerProps}>
+        <header
+          className="terminal-header drag-handle nopan"
+          {...headerProps}
+          onPointerDown={(event) => {
+            headerProps.onPointerDown(event);
+            // Clic sur la barre de titre : le terminal perd le curseur, Suppr et F2 visent alors la case.
+            if (event.currentTarget.parentElement.querySelector('.terminal-body')?.contains(document.activeElement)) {
+              document.activeElement.blur();
+            }
+          }}
+        >
           <AgentLogo agent={agent} size={18} />
-          <TerminalTitle name={name} cwd={data.cwd} onRename={rename} onEditStart={stopResizing} />
+          <TerminalTitle
+            name={name}
+            cwd={data.cwd}
+            onRename={rename}
+            onEditStart={stopResizing}
+            editRequest={renameRequest?.id === id ? renameRequest.at : null}
+          />
           {exited ? <span className="badge">terminé</span> : <StatusDot status={status} />}
           <span className="header-actions">
             {exited && (

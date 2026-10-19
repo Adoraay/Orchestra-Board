@@ -3,11 +3,13 @@ import { X } from 'lucide-react';
 import AgentsTab from './AgentsTab.jsx';
 import AppearanceTab from './AppearanceTab.jsx';
 import GeneralTab from './GeneralTab.jsx';
+import ShortcutsTab from './ShortcutsTab.jsx';
 
 const TABS = [
   { id: 'appearance', label: 'Apparence' },
   { id: 'agents', label: 'Agents' },
   { id: 'general', label: 'Général' },
+  { id: 'shortcuts', label: 'Raccourcis' },
 ];
 
 // Fenêtre de paramètres centrée (PLAN.md §3.3) : fermeture par ×, Échap ou clic à côté.
@@ -50,6 +52,7 @@ export default function SettingsModal({ onClose }) {
           {tab === 'appearance' && <AppearanceTab />}
           {tab === 'agents' && <AgentsTab />}
           {tab === 'general' && <GeneralTab />}
+          {tab === 'shortcuts' && <ShortcutsTab />}
         </div>
       </div>
     </div>

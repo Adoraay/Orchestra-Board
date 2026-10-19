@@ -79,11 +79,12 @@ Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, cou
 - **Branches Git** : glisser le carré « Branche » sur une case ouvre la liste des branches ; en choisir une relance l'agent dans son propre `git worktree` (`<dépôt>-worktrees/<branche>`), avec une encoche sous la case.
 - **Liens qui transmettent** : clic sur un lien = panneau (consigne avec `{reponse}`, limite de tours, actif). Quand Claude (A) termine, sa dernière réponse part dans le terminal de B avec la consigne ; B attend s'il travaille encore.
 - **Orchestration** : un lien en Délégation laisse un Claude parler lui-même aux agents reliés. Il les voit (`list_agents`), leur écrit (`send_to_agent`) et récupère leurs réponses (`wait_for_replies`). Exemple : un Claude principal relié à 3 Claude leur demande un poème chacun et choisit le meilleur. Le type de lien se choisit dans son panneau (défaut dans les paramètres), avec inversion et double sens.
+- **Raccourcis clavier** : changer de tableau (Ctrl+Tab, Ctrl+1…9), paramètres (Ctrl+,), F2 pour renommer une case, Suppr pour supprimer la sélection (avec confirmation), copier / coller dans les terminaux ; liste complète dans Paramètres › Raccourcis.
 - **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
 
 ## Ce qui reste à faire
 
-1. **Finitions** (prochaine étape) : raccourcis, thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
+1. **Finitions** (prochaine étape) : thème Clair, packaging Windows (`Orchestra.exe` avec son icône).
 2. **Plus tard** : orchestration avec Codex. Gemini CLI n'est plus maintenu (remplacé par Google Antigravity) : il reste dans le dock, sans orchestration.
 
 Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.

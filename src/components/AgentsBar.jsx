@@ -51,7 +51,7 @@ export default function AgentsBar({ boards, content, activeId, running, open, on
 
   return (
     <div className="agents-bar-wrap" ref={wrapRef}>
-      <button className={`agents-bar-tab ${open ? 'open' : ''}`} onClick={onToggle} title={open ? 'Masquer les agents actifs' : 'Afficher les agents actifs'}>
+      <button className={`agents-bar-tab ${open ? 'open' : ''}`} onClick={onToggle} title={`${open ? 'Masquer' : 'Afficher'} les agents actifs (Ctrl+Maj+A)`}>
         <Users size={14} />
         Agents actifs
         <span className="agents-bar-count">{count}</span>

@@ -137,7 +137,7 @@ export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
           </div>
         </div>
       </div>
-      <button className={`usage-tab ${open ? 'open' : ''}`} onClick={onToggle} title={open ? "Masquer l'utilisation" : "Afficher l'utilisation des agents"}>
+      <button className={`usage-tab ${open ? 'open' : ''}`} onClick={onToggle} title={open ? "Masquer l'utilisation (Ctrl+Maj+U)" : "Afficher l'utilisation des agents (Ctrl+Maj+U)"}>
         <Gauge size={15} />
         <span className="usage-tab-label">Utilisation</span>
       </button>

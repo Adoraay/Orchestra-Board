@@ -6,11 +6,11 @@ function isTyping(target) {
   return target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]') !== null);
 }
 
-// Raccourcis du tableau : V/P/N/T/L pour les outils, Échap = Sélection, Suppr = supprimer la sélection,
-// Ctrl+Z = annuler, Ctrl+Y ou Ctrl+Maj+Z = rétablir.
-export default function useBoardShortcuts({ onTool, onEscape, onDelete, onUndo, onRedo }) {
-  const handlers = useRef({ onTool, onEscape, onDelete, onUndo, onRedo });
-  handlers.current = { onTool, onEscape, onDelete, onUndo, onRedo };
+// Raccourcis du tableau : V/P/N/T/L pour les outils, F = afficher toutes les cases, Échap = Sélection,
+// Suppr = supprimer la sélection, Ctrl+Z = annuler, Ctrl+Y ou Ctrl+Maj+Z = rétablir.
+export default function useBoardShortcuts({ onTool, onEscape, onDelete, onUndo, onRedo, onFitView }) {
+  const handlers = useRef({ onTool, onEscape, onDelete, onUndo, onRedo, onFitView });
+  handlers.current = { onTool, onEscape, onDelete, onUndo, onRedo, onFitView };
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -29,6 +29,7 @@ export default function useBoardShortcuts({ onTool, onEscape, onDelete, onUndo, 
 
       if (event.key === 'Escape') return handlers.current.onEscape();
       if (event.key === 'Delete' || event.key === 'Backspace') return handlers.current.onDelete();
+      if (key === 'f' && !event.shiftKey) return handlers.current.onFitView();
 
       const tool = TOOLS.find((t) => t.key.toLowerCase() === key);
       if (tool) handlers.current.onTool(tool.id);

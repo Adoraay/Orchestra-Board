@@ -1,13 +1,19 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { baseName } from '../lib/paths.js';
 
 const MAX_NAME = 40;
 
 // Titre d'une case : nom (celui de l'agent, ou celui choisi par double-clic) · dossier.
-// Un nom vidé revient au nom de l'agent.
-export default function TerminalTitle({ name, cwd, onRename, onEditStart }) {
+// Un nom vidé revient au nom de l'agent. editRequest change à chaque F2 sur la case : on passe en édition.
+export default function TerminalTitle({ name, cwd, onRename, onEditStart, editRequest }) {
   const [editing, setEditing] = useState(false);
   const cancel = useRef(false); // Échap : le blur qui suit ne doit pas enregistrer
+
+  useEffect(() => {
+    if (!editRequest) return;
+    onEditStart?.();
+    setEditing(true);
+  }, [editRequest]);
 
   if (editing) {
     return (
@@ -35,7 +41,7 @@ export default function TerminalTitle({ name, cwd, onRename, onEditStart }) {
   return (
     <span
       className="terminal-title"
-      title="Double-clic pour renommer"
+      title="Double-clic ou F2 pour renommer"
       onDoubleClick={() => {
         onEditStart?.();
         setEditing(true);

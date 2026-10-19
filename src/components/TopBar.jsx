@@ -26,7 +26,7 @@ function useWindowControlsWidth() {
 
 // Seule barre en haut de la fenêtre (elle sert aussi à la déplacer) : logo et nom, onglets des tableaux,
 // dossier actif (donné au prochain agent), paramètres, puis les boutons Windows.
-export default function TopBar({ boards, boardsWithNews, onOpenSettings }) {
+export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSettings }) {
   const { activeFolder, homeDir } = useWorkspace();
   const controlsWidth = useWindowControlsWidth();
 
@@ -44,6 +44,7 @@ export default function TopBar({ boards, boardsWithNews, onOpenSettings }) {
         onDelete={boards.deleteBoard}
         agentCount={boards.agentCount}
         boardsWithNews={boardsWithNews}
+        renameRequest={renameRequest}
       />
 
       <div className="topbar-folder no-drag" title={activeFolder || undefined}>
@@ -54,7 +55,7 @@ export default function TopBar({ boards, boardsWithNews, onOpenSettings }) {
         </span>
       </div>
 
-      <button className="icon-button no-drag" title="Paramètres" onClick={onOpenSettings}>
+      <button className="icon-button no-drag" title="Paramètres (Ctrl+,)" onClick={onOpenSettings}>
         <Settings size={17} />
       </button>
       <span className="topbar-separator" />
