@@ -1,5 +1,5 @@
 // Les agents viennent de settings.json (voir electron/settingsStore.cjs).
-// Logos des agents de base : src/assets/agents/<id>.svg (ou .png). Logos ajoutés : userData/logos/.
+// Logos des agents de base et du catalogue : src/assets/agents/<id>.svg (ou .png). Logos ajoutés : userData/logos/.
 const builtinLogos = Object.fromEntries(
   Object.entries(
     import.meta.glob('./assets/agents/*.{svg,png}', { eager: true, import: 'default' }),
@@ -15,7 +15,7 @@ function initialsOf(name) {
 
 // Ajoute ce qu'il faut pour l'affichage : initiales et URL du logo.
 export function decorateAgent(agent, customLogos) {
-  const logo = agent.builtin ? builtinLogos[agent.id] : customLogos[agent.logo];
+  const logo = agent.builtin || agent.catalog ? builtinLogos[agent.id] : customLogos[agent.logo];
   return { ...agent, initials: agent.id === 'shell' ? '>_' : initialsOf(agent.name), logo };
 }
 

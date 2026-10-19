@@ -22,7 +22,9 @@ export default function useAppShortcuts(actions) {
       if (document.querySelector('.dialog')) return;
 
       if (key === 'tab') return run(() => a.cycleBoard(event.shiftKey ? -1 : 1));
-      if (!event.shiftKey && /^[1-9]$/.test(event.key)) return run(() => a.goToBoard(Number(event.key)));
+      // Touche physique : en AZERTY, la touche 1 sans Maj donne « & », pas « 1 ».
+      const digit = event.code.match(/^(?:Digit|Numpad)([1-9])$/)?.[1];
+      if (!event.shiftKey && digit) return run(() => a.goToBoard(Number(digit)));
       if (!event.shiftKey) return;
       if (key === 't') return run(a.createBoard);
       if (key === 'e') return run(a.toggleExplorer);

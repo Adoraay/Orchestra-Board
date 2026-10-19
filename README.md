@@ -61,7 +61,7 @@ Données de l'app : `%APPDATA%\Orchestra\` (`settings.json`, `workspace.json`, `
 
 ## Ajouter un agent
 
-Dans l'app : ⚙ → Agents → « Ajouter un agent » (nom, commande, logo, couleur). Le bouton « Tester » vérifie que la commande existe.
+Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents connus avec leur logo (Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Hermes Agent, Goose, Amp, Kimi CLI) : « + » les ajoute au dock. Pour un autre outil : « Ajouter un agent » (nom, commande, logo, couleur), le bouton « Tester » vérifie que la commande existe.
 
 ## Ce qui marche déjà
 

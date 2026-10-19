@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('agents', {
   pickLogo: (agentId) => ipcRenderer.invoke('agents:pickLogo', agentId),
   deleteLogo: (file) => ipcRenderer.invoke('agents:deleteLogo', file),
   testCommand: (command) => ipcRenderer.invoke('agents:testCommand', command),
+  catalog: () => ipcRenderer.invoke('agents:catalog'),
 });
 
 contextBridge.exposeInMainWorld('workspace', {

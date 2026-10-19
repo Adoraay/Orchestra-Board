@@ -13,6 +13,20 @@ const BUILTIN_AGENTS = [
   { id: 'shell', name: 'Terminal', command: null, color: '#8b93a7' }, // juste un terminal vide
 ];
 
+// Catalogue : agents connus, absents du dock tant qu'on ne les ajoute pas (Paramètres › Agents). Logos dans
+// src/assets/agents/<id>. resumeArgs seulement quand l'option de reprise est sûre.
+const CATALOG_AGENTS = [
+  { id: 'aider', name: 'Aider', command: 'aider', color: '#14b014', resumeArgs: '--restore-chat-history', description: 'Binôme de code open source, avec le modèle de ton choix' },
+  { id: 'qwen', name: 'Qwen Code', command: 'qwen', color: '#615ced', description: "Agent d'Alibaba pour les modèles Qwen" },
+  { id: 'opencode', name: 'OpenCode', command: 'opencode', color: '#8b93a7', resumeArgs: '--continue', description: 'Agent open source, plus de 75 fournisseurs de modèles' },
+  { id: 'copilot', name: 'GitHub Copilot CLI', command: 'copilot', color: '#8b93a7', resumeArgs: '--continue', description: "L'agent de GitHub Copilot dans le terminal" },
+  { id: 'cursor', name: 'Cursor CLI', command: 'cursor-agent', color: '#8b93a7', description: "L'agent de Cursor dans le terminal" },
+  { id: 'hermes', name: 'Hermes Agent', command: 'hermes', color: '#8b93a7', description: 'Agent de Nous Research, avec mémoire et compétences' },
+  { id: 'goose', name: 'Goose', command: 'goose session', color: '#8b93a7', description: 'Agent open source de Block, extensible par MCP' },
+  { id: 'amp', name: 'Amp', command: 'amp', color: '#f34e3f', description: 'Agent de code de Sourcegraph' },
+  { id: 'kimi', name: 'Kimi CLI', command: 'kimi', color: '#1783ff', description: 'Agent de Moonshot AI pour les modèles Kimi' },
+];
+
 const DEFAULTS = {
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots' },
   general: { rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true },
@@ -40,8 +54,11 @@ function sanitizeAgents(input) {
   for (const raw of list) {
     if (!raw || typeof raw !== 'object' || seen.has(raw.id)) continue;
     const builtin = BUILTIN_AGENTS.find((b) => b.id === raw.id);
+    const catalog = CATALOG_AGENTS.find((c) => c.id === raw.id);
     if (builtin) {
       agents.push({ ...builtin, builtin: true, hidden: raw.hidden === true, logo: null });
+    } else if (catalog) {
+      agents.push({ ...catalog, builtin: false, catalog: true, hidden: raw.hidden === true, logo: null });
     } else if (CUSTOM_ID.test(raw.id) && isText(raw.name, 40) && isText(raw.command, 200)) {
       agents.push({
         id: raw.id,
@@ -120,6 +137,7 @@ function save(settings) {
 function register() {
   ipcMain.handle('settings:get', () => load());
   ipcMain.handle('settings:set', (_e, settings) => save(settings));
+  ipcMain.handle('agents:catalog', () => CATALOG_AGENTS);
 }
 
 module.exports = { register, load, logosDir, CUSTOM_ID, LOGO_FILE };

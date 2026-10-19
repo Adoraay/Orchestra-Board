@@ -544,6 +544,17 @@ button { font: inherit; color: inherit; }
 .agent-row-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .agent-row-text code { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirm { display: flex; gap: 6px; }
+.agent-row.catalog { padding-left: 10px; }
+.agent-row-description { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.install-badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.install-badge.ok { border-color: color-mix(in srgb, var(--success) 60%, transparent); color: var(--success); }
 
 .text-button.danger:hover { border-color: var(--danger); color: var(--danger); }
 .text-button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
