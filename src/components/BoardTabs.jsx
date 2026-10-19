@@ -32,8 +32,12 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
         if (confirming === board.id) {
           const count = agentCount(board.id);
           return (
-            <div key={board.id} className="board-tab confirming">
-              <span>Supprimer{count ? ` et fermer ${count} agent${count > 1 ? 's' : ''}` : ''} ?</span>
+            <div
+              key={board.id}
+              className="board-tab confirming"
+              title={`Supprimer « ${board.name} »${count ? ` et fermer ${count} agent${count > 1 ? 's' : ''}` : ''}`}
+            >
+              <span>Supprimer ?</span>
               <button className="tab-confirm danger" onClick={() => { onDelete(board.id); setConfirming(null); }}>Oui</button>
               <button className="tab-confirm" onClick={() => setConfirming(null)}>Non</button>
             </div>

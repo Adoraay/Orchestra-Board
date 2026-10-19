@@ -52,7 +52,11 @@ function createWindow() {
     },
   });
 
-  win.once('ready-to-show', () => win.show());
+  // Avec titleBarOverlay, ready-to-show n'arrive pas toujours (fenêtre jamais affichée) : on montre aussi la
+  // fenêtre quand la page est chargée. Pas de flash : son fond est déjà celui de l'écran de démarrage.
+  const showOnce = () => !win.isDestroyed() && !win.isVisible() && win.show();
+  win.once('ready-to-show', showOnce);
+  win.webContents.once('did-finish-load', showOnce);
   win.on('close', confirmQuit);
 
   if (process.env.VITE_DEV_SERVER_URL) {

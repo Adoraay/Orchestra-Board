@@ -1082,7 +1082,7 @@ kbd {
   outline: none;
   cursor: text;
 }
-.board-tab.confirming { flex-shrink: 0; gap: 6px; padding-right: 4px; border-color: var(--danger); color: var(--text); cursor: default; }
+.board-tab.confirming { flex-shrink: 0; max-width: none; white-space: nowrap; gap: 6px; padding-right: 4px; border-color: var(--danger); color: var(--text); cursor: default; }
 .tab-confirm {
   padding: 2px 8px;
   border: 1px solid var(--border);
