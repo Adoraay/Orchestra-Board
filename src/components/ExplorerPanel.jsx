@@ -4,6 +4,7 @@ import { ExplorerContext } from '../context/ExplorerContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { isWithin, movePath, parentOf } from '../lib/paths.js';
+import useT from '../hooks/useT.js';
 import ExplorerMenu from './ExplorerMenu.jsx';
 import FolderTree from './FolderTree.jsx';
 import Toast from './Toast.jsx';
@@ -15,6 +16,7 @@ import TrashDialog from './TrashDialog.jsx';
 export default function ExplorerPanel({ open, onToggle, onLaunchAgent }) {
   const { rootPath, changeRoot, activeFolder, setActiveFolder } = useWorkspace();
   const { visibleAgents } = useSettings();
+  const t = useT();
   const [versions, setVersions] = useState({}); // dossier -> compteur : on le relit quand il change
   const [renaming, setRenaming] = useState(null);
   const [creatingIn, setCreatingIn] = useState(null);
@@ -91,7 +93,7 @@ export default function ExplorerPanel({ open, onToggle, onLaunchAgent }) {
   if (!open) {
     return (
       <aside className="explorer collapsed">
-        <button className="icon-button" title="Afficher les documents (Ctrl+Maj+E)" onClick={onToggle}>
+        <button className="icon-button" title={t('explorer.show')} onClick={onToggle}>
           <PanelRightOpen size={17} />
         </button>
       </aside>
@@ -101,17 +103,17 @@ export default function ExplorerPanel({ open, onToggle, onLaunchAgent }) {
   return (
     <aside className="explorer">
       <div className="panel-header">
-        <h2>Documents</h2>
+        <h2>{t('explorer.title')}</h2>
         <span className="panel-actions">
           <button
             className="icon-button"
-            title="Nouveau dossier (dans le dossier actif)"
+            title={t('explorer.newFolder')}
             disabled={!rootPath}
             onClick={() => setCreatingIn(activeFolder ?? rootPath)}
           >
             <FolderPlus size={16} />
           </button>
-          <button className="icon-button" title="Masquer les documents (Ctrl+Maj+E)" onClick={onToggle}>
+          <button className="icon-button" title={t('explorer.hide')} onClick={onToggle}>
             <PanelRightClose size={17} />
           </button>
         </span>
@@ -119,13 +121,13 @@ export default function ExplorerPanel({ open, onToggle, onLaunchAgent }) {
 
       <ExplorerContext.Provider value={value}>
         <div className="explorer-tree no-scrollbar">
-          {rootPath ? <FolderTree rootPath={rootPath} /> : <p className="hint">Chargement…</p>}
+          {rootPath ? <FolderTree rootPath={rootPath} /> : <p className="hint">{t('common.loading')}</p>}
         </div>
       </ExplorerContext.Provider>
 
       <button className="text-button" onClick={changeRoot}>
         <FolderInput size={15} />
-        Changer la racine
+        {t('explorer.changeRoot')}
       </button>
 
       {menu && (

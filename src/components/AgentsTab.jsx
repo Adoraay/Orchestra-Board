@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import { decorateAgent } from '../agents.js';
 import AgentLogo from './AgentLogo.jsx';
 import AgentForm from './AgentForm.jsx';
+import useT from '../hooks/useT.js';
 
 const ORDER_TYPE = 'application/orchestra-agent-order';
 
@@ -11,6 +12,7 @@ const ORDER_TYPE = 'application/orchestra-agent-order';
 // settings.agents = la version enregistrée ; agents = la même liste avec initiales et logos pour l'affichage.
 export default function AgentsTab() {
   const { settings, agents, setAgents } = useSettings();
+  const t = useT();
   const [adding, setAdding] = useState(false);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
@@ -75,9 +77,9 @@ export default function AgentsTab() {
       <div className="field">
         <button className="text-button align-start" onClick={() => setAdding(true)}>
           <Plus size={15} />
-          Ajouter un agent
+          {t('agents.add')}
         </button>
-        <p className="hint">Glisse les lignes pour changer l'ordre du dock. Les agents de base peuvent seulement être masqués.</p>
+        <p className="hint">{t('agents.orderHint')}</p>
       </div>
 
       <ul className="agent-list">
@@ -107,25 +109,25 @@ export default function AgentsTab() {
             <AgentLogo agent={agent} size={22} />
             <span className="agent-row-text">
               <span>{agent.name}</span>
-              <code className="muted">{agent.command ?? 'terminal vide'}</code>
+              <code className="muted">{agent.command ?? t('agents.emptyCommand')}</code>
             </span>
 
             {confirmDelete === agent.id ? (
               <span className="confirm">
-                <button className="text-button danger" onClick={() => remove(agent)}>Supprimer</button>
-                <button className="text-button" onClick={() => setConfirmDelete(null)}>Annuler</button>
+                <button className="text-button danger" onClick={() => remove(agent)}>{t('common.delete')}</button>
+                <button className="text-button" onClick={() => setConfirmDelete(null)}>{t('common.cancel')}</button>
               </span>
             ) : (
               <>
                 <button
                   className="icon-button"
-                  title={agent.hidden ? 'Afficher dans le dock' : 'Masquer du dock'}
+                  title={t(agent.hidden ? 'agents.show' : 'agents.hide')}
                   onClick={() => toggleHidden(agent.id)}
                 >
                   {agent.hidden ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
                 {!agent.builtin && (
-                  <button className="icon-button" title="Supprimer" onClick={() => setConfirmDelete(agent.id)}>
+                  <button className="icon-button" title={t('common.delete')} onClick={() => setConfirmDelete(agent.id)}>
                     <Trash2 size={16} />
                   </button>
                 )}
@@ -137,8 +139,8 @@ export default function AgentsTab() {
 
       {available.length > 0 && (
         <section className="field">
-          <span className="field-label">Autres agents</span>
-          <p className="hint">Agents en ligne de commande connus. « + » les ajoute au dock (le CLI doit être installé).</p>
+          <span className="field-label">{t('agents.others')}</span>
+          <p className="hint">{t('agents.othersHint')}</p>
           <ul className="agent-list">
             {available.map((entry) => {
               const agent = decorateAgent({ ...entry, catalog: true }, {});
@@ -150,16 +152,16 @@ export default function AgentsTab() {
                       {agent.name}
                       {installed[agent.id] !== undefined && (
                         <span className={`install-badge ${installed[agent.id] ? 'ok' : ''}`}>
-                          {installed[agent.id] ? 'installé' : 'non installé'}
+                          {t(installed[agent.id] ? 'agents.installed' : 'agents.notInstalled')}
                         </span>
                       )}
                     </span>
-                    <span className="muted agent-row-description">{agent.description}</span>
+                    <span className="muted agent-row-description">{t(`catalog.${agent.id}`)}</span>
                     <code className="muted">{agent.command}</code>
                   </span>
                   <button
                     className="icon-button"
-                    title="Ajouter au dock"
+                    title={t('agents.addToDock')}
                     onClick={() => setAgents([...settings.agents, { ...entry, builtin: false, catalog: true, hidden: false, logo: null }])}
                   >
                     <Plus size={17} />

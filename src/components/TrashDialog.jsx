@@ -1,23 +1,25 @@
 import { useEffect } from 'react';
 import { File, Folder, Trash2 } from 'lucide-react';
+import useT from '../hooks/useT.js';
 
-const count = (n, one, many) => `${n.toLocaleString('fr-FR')} ${n > 1 ? many : one}`;
+const UNITS = ['KB', 'MB', 'GB'];
 
-function formatSize(bytes) {
-  if (bytes < 1024) return `${bytes} octets`;
-  const units = ['Ko', 'Mo', 'Go'];
+function formatSize(bytes, t) {
+  if (bytes < 1024) return t('size.bytes', { n: bytes });
   let value = bytes / 1024;
   let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
+  while (value >= 1024 && unit < UNITS.length - 1) {
     value /= 1024;
     unit++;
   }
-  return `${value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ${units[unit]}`;
+  return t(`size.${UNITS[unit]}`, { n: value.toLocaleString(t.locale, { maximumFractionDigits: 1 }) });
 }
 
 // Confirmation avant de mettre un dossier ou un fichier à la corbeille, avec ce qu'il contient.
 // summary : { isDir, files, folders, truncated } ou { isDir: false, size }.
 export default function TrashDialog({ entry, summary, onCancel, onConfirm }) {
+  const t = useT();
+
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onCancel();
@@ -26,12 +28,13 @@ export default function TrashDialog({ entry, summary, onCancel, onConfirm }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onCancel]);
 
+  const count = (key, n) => t(key, { n: n.toLocaleString(t.locale), count: n });
   let content;
-  if (!summary.isDir) content = `Le fichier (${formatSize(summary.size)})`;
-  else if (!summary.files && !summary.folders) content = 'Le dossier (vide)';
+  if (!summary.isDir) content = t('trash.file', { size: formatSize(summary.size, t) });
+  else if (!summary.files && !summary.folders) content = t('trash.emptyFolder');
   else {
-    const parts = [summary.files && count(summary.files, 'fichier', 'fichiers'), summary.folders && count(summary.folders, 'dossier', 'dossiers')];
-    content = `Le dossier et tout son contenu (${summary.truncated ? 'plus de ' : ''}${parts.filter(Boolean).join(', ')})`;
+    const parts = [summary.files && count('trash.files', summary.files), summary.folders && count('trash.folders', summary.folders)];
+    content = t('trash.folder', { list: parts.filter(Boolean).join(', '), truncated: summary.truncated });
   }
   const Icon = entry.isDir ? Folder : File;
 
@@ -40,7 +43,7 @@ export default function TrashDialog({ entry, summary, onCancel, onConfirm }) {
       <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="trash-title" aria-describedby="trash-text">
         <header className="dialog-header">
           <span className="dialog-icon warning"><Trash2 size={18} /></span>
-          <h1 id="trash-title">Mettre à la corbeille ?</h1>
+          <h1 id="trash-title">{t('trash.title')}</h1>
         </header>
 
         <div className="dialog-row">
@@ -51,16 +54,14 @@ export default function TrashDialog({ entry, summary, onCancel, onConfirm }) {
           </span>
         </div>
 
-        <p id="trash-text" className="dialog-text">
-          {content} ira dans la corbeille de Windows. Tu pourras le restaurer depuis la corbeille.
-        </p>
+        <p id="trash-text" className="dialog-text">{t('trash.text', { content })}</p>
 
         <div className="dialog-actions">
           <button className="text-button" onClick={onCancel}>
-            Annuler
+            {t('common.cancel')}
           </button>
           <button className="text-button danger-fill" onClick={onConfirm} autoFocus>
-            Mettre à la corbeille
+            {t('trash.confirm')}
           </button>
         </div>
       </div>

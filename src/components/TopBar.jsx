@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Folder, Settings } from 'lucide-react';
 import lockup from '../assets/orchestra-lockup.svg';
+import lockupLight from '../assets/orchestra-lockup-light.svg';
+import { useSettings } from '../context/SettingsContext.jsx';
+import useT from '../hooks/useT.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
 import BoardTabs from './BoardTabs.jsx';
@@ -29,10 +32,12 @@ function useWindowControlsWidth() {
 export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSettings }) {
   const { activeFolder, homeDir } = useWorkspace();
   const controlsWidth = useWindowControlsWidth();
+  const { settings } = useSettings();
+  const t = useT();
 
   return (
     <header className="topbar" style={{ paddingRight: controlsWidth }}>
-      <img className="topbar-lockup" src={lockup} alt="Orchestra" draggable={false} />
+      <img className="topbar-lockup" src={settings.appearance.theme === 'light' ? lockupLight : lockup} alt="Orchestra" draggable={false} />
       <span className="topbar-separator" />
 
       <BoardTabs
@@ -49,13 +54,13 @@ export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSe
 
       <div className="topbar-folder no-drag" title={activeFolder || undefined}>
         <Folder size={15} />
-        <span className="muted">Dossier actif :</span>
+        <span className="muted">{t('topbar.activeFolder')}</span>
         <span className={activeFolder ? 'topbar-path' : 'muted'}>
-          {activeFolder ? displayPath(activeFolder, homeDir) : 'aucun'}
+          {activeFolder ? displayPath(activeFolder, homeDir) : t('topbar.none')}
         </span>
       </div>
 
-      <button className="icon-button no-drag" title="Paramètres (Ctrl+,)" onClick={onOpenSettings}>
+      <button className="icon-button no-drag" title={t('topbar.settings')} onClick={onOpenSettings}>
         <Settings size={17} />
       </button>
       <span className="topbar-separator" />

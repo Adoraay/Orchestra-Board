@@ -13,14 +13,23 @@ function initialsOf(name) {
   return letters.toUpperCase();
 }
 
+// Logos dessinés en couleur claire (#ECE9E2 ou blanc) : inversés en thème Clair (classe light-ink).
+const LIGHT_INK_LOGOS = new Set(['codex', 'opencode', 'copilot', 'cursor', 'goose', 'hermes', 'kimi']);
+
 // Ajoute ce qu'il faut pour l'affichage : initiales et URL du logo.
 export function decorateAgent(agent, customLogos) {
-  const logo = agent.builtin || agent.catalog ? builtinLogos[agent.id] : customLogos[agent.logo];
-  return { ...agent, initials: agent.id === 'shell' ? '>_' : initialsOf(agent.name), logo };
+  const bundled = agent.builtin || agent.catalog;
+  const logo = bundled ? builtinLogos[agent.id] : customLogos[agent.logo];
+  return {
+    ...agent,
+    initials: agent.id === 'shell' ? '>_' : initialsOf(agent.name),
+    logo,
+    lightInk: bundled && LIGHT_INK_LOGOS.has(agent.id),
+  };
 }
 
-// Case dont l'agent a été supprimé des paramètres.
-export const MISSING_AGENT = { id: 'missing', name: 'Agent supprimé', initials: '?', command: null };
+// Case dont l'agent a été supprimé des paramètres (son nom traduit est ajouté par SettingsContext).
+export const MISSING_AGENT = { id: 'missing', initials: '?', command: null };
 
 // Type MIME maison pour le drag & drop depuis le dock.
 export const DRAG_TYPE = 'application/orchestra-agent';

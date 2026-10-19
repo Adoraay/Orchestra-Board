@@ -13,7 +13,7 @@ export function terminalTheme() {
   const accent = cssVar('--accent');
   return {
     background: cssVar('--terminal-bg'),
-    foreground: cssVar('--text'),
+    foreground: cssVar('--terminal-fg'),
     cursor: accent,
     cursorAccent: cssVar('--terminal-bg'),
     selectionBackground: withAlpha(accent, 0.3),

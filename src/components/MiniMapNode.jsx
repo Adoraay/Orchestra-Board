@@ -28,7 +28,7 @@ export default function MiniMapNode({ id, x, y, width, height, borderRadius, cla
     <g>
       {rect}
       {agent.logo ? (
-        <image href={agent.logo} x={cx - size / 2} y={cy - size / 2} width={size} height={size} preserveAspectRatio="xMidYMid meet" />
+        <image className={agent.lightInk ? 'light-ink' : undefined} href={agent.logo} x={cx - size / 2} y={cy - size / 2} width={size} height={size} preserveAspectRatio="xMidYMid meet" />
       ) : (
         <>
           <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={size * 0.2} style={{ fill: agent.color ?? 'var(--text-muted)' }} />

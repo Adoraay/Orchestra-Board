@@ -89,7 +89,9 @@ function lastReply(payload) {
 
 function buildText(prompt, reply) {
   const template = typeof prompt === 'string' ? prompt : '';
-  return template.includes('{reponse}') ? template.replaceAll('{reponse}', reply) : `${template}\n\n${reply}`.trim();
+  // {reponse} (français) ou {response} (anglais) : la consigne s'écrit dans la langue de l'interface.
+  const token = ['{reponse}', '{response}'].find((t) => template.includes(t));
+  return token ? template.replaceAll(token, reply) : `${template}\n\n${reply}`.trim();
 }
 
 // Collage entre crochets (le CLI le reçoit comme un collage, pas comme une frappe), puis Entrée à part.

@@ -1,5 +1,9 @@
-/* Thème Standard (PLAN.md §4.1). Seul endroit où les couleurs sont définies. */
-:root {
+/* Thèmes (PLAN.md §4.1). Seul endroit où les couleurs sont définies. Un thème = data-theme sur <html> ;
+   les vignettes des paramètres posent le même attribut pour montrer ses couleurs. */
+
+/* Standard (par défaut) */
+:root, [data-theme='standard'] {
+  color-scheme: dark;
   --bg: #1f1e1d;
   --surface: #262624;
   --surface-2: #30302e;
@@ -9,6 +13,7 @@
   --accent: #c96442;
   --accent-hover: #d97757;
   --terminal-bg: #1a1918;
+  --terminal-fg: #ece9e2; /* texte des terminaux, clair dans les deux thèmes */
   --success: #6a9955;
   --warning: #d4a72c;
   --danger: #d9534f;
@@ -20,11 +25,184 @@
   --note-bg: #efe2a2;
   --note-text: #3b3526;
   --branch-bar-bg: #141413;
+  --hover-mix: white; /* l'accent choisi s'éclaircit au survol */
 
   --font-ui: Inter, system-ui, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
   --radius-sm: 8px;
   --radius-md: 10px;
+}
+
+/* Thème Clair (PLAN.md §4.1) : gris chauds doux plutôt que du blanc, texte pas tout à fait noir, même orange.
+   L'intérieur des terminaux reste sombre, comme en Standard. */
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #dedbd3;
+  --surface: #e8e5de;
+  --surface-2: #f0ede7;
+  --border: #c9c4b9;
+  --text: #34332f;
+  --text-muted: #6f6c64;
+  --accent: #c96442;
+  --accent-hover: #b65a3b;
+  --terminal-bg: #1f1e1d;
+  --terminal-fg: #ece9e2;
+  --success: #5a8a48;
+  --warning: #b8892a;
+  --danger: #c94f4b;
+
+  --shadow: rgba(50, 40, 25, 0.1);
+  --shadow-lifted: rgba(50, 40, 25, 0.18);
+  --on-accent: #ffffff;
+  --glow: #d97757;
+  --note-bg: #efe2a2;
+  --note-text: #3b3526;
+  --branch-bar-bg: #e8e5de;
+  --hover-mix: black;
+}
+
+/* ChatGPT : gris bleutés de l'app classique, contours et sélection en blanc, vert ChatGPT */
+[data-theme='chatgpt'] {
+  color-scheme: dark;
+  --bg: #343541;
+  --surface: #202123;
+  --surface-2: #40414f;
+  --border: #565869;
+  --text: #ececf1;
+  --text-muted: #8e8ea0;
+  --accent: #ececf1;
+  --accent-hover: #ffffff;
+  --on-accent: #202123;
+  --terminal-bg: #202123;
+  --terminal-fg: #ececf1;
+  --success: #19c37d;
+  --warning: #e9b949;
+  --danger: #ef4146;
+  --branch-bar-bg: #2a2b32;
+  --glow: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-lifted: rgba(0, 0, 0, 0.6);
+  --hover-mix: white;
+}
+
+/* Gemini : quasi-noir de Google, accent bleu */
+[data-theme='gemini'] {
+  color-scheme: dark;
+  --bg: #131314;
+  --surface: #1e1f20;
+  --surface-2: #282a2c;
+  --border: #444746;
+  --text: #e3e3e3;
+  --text-muted: #9aa0a6;
+  --accent: #8ab4f8;
+  --accent-hover: #a8c7fa;
+  --on-accent: #062e6f;
+  --terminal-bg: #0e0e0f;
+  --terminal-fg: #e3e3e3;
+  --success: #6dd58c;
+  --warning: #fdd663;
+  --danger: #f28b82;
+  --branch-bar-bg: #0e0e0f;
+  --glow: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-lifted: rgba(0, 0, 0, 0.6);
+  --hover-mix: white;
+}
+
+/* VS Code (Dark+) : gris neutres, bleu de VS Code */
+[data-theme='vscode'] {
+  color-scheme: dark;
+  --bg: #1e1e1e;
+  --surface: #252526;
+  --surface-2: #2d2d30;
+  --border: #3c3c3c;
+  --text: #cccccc;
+  --text-muted: #9d9d9d;
+  --accent: #007acc;
+  --accent-hover: #1c97ea;
+  --on-accent: #ffffff;
+  --terminal-bg: #1e1e1e;
+  --terminal-fg: #cccccc;
+  --success: #89d185;
+  --warning: #cca700;
+  --danger: #f14c4c;
+  --branch-bar-bg: #181818;
+  --glow: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-lifted: rgba(0, 0, 0, 0.6);
+  --hover-mix: white;
+}
+
+/* GitHub (Dark) : bleu nuit, bleu GitHub */
+[data-theme='github'] {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #2f81f7;
+  --accent-hover: #58a6ff;
+  --on-accent: #ffffff;
+  --terminal-bg: #010409;
+  --terminal-fg: #e6edf3;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --branch-bar-bg: #010409;
+  --glow: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-lifted: rgba(0, 0, 0, 0.6);
+  --hover-mix: white;
+}
+
+/* Dracula : violet et couleurs vives sur gris violacé */
+[data-theme='dracula'] {
+  color-scheme: dark;
+  --bg: #282a36;
+  --surface: #21222c;
+  --surface-2: #343746;
+  --border: #44475a;
+  --text: #f8f8f2;
+  --text-muted: #a0a6c4;
+  --accent: #bd93f9;
+  --accent-hover: #caa9fa;
+  --on-accent: #282a36;
+  --terminal-bg: #1e1f29;
+  --terminal-fg: #f8f8f2;
+  --success: #50fa7b;
+  --warning: #f1fa8c;
+  --danger: #ff5555;
+  --branch-bar-bg: #191a21;
+  --glow: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-lifted: rgba(0, 0, 0, 0.6);
+  --hover-mix: white;
+}
+
+/* Nord : gris polaires, bleu glacier */
+[data-theme='nord'] {
+  color-scheme: dark;
+  --bg: #2e3440;
+  --surface: #3b4252;
+  --surface-2: #434c5e;
+  --border: #4c566a;
+  --text: #eceff4;
+  --text-muted: #a3abb9;
+  --accent: #88c0d0;
+  --accent-hover: #8fbcbb;
+  --on-accent: #2e3440;
+  --terminal-bg: #242933;
+  --terminal-fg: #eceff4;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+  --danger: #bf616a;
+  --branch-bar-bg: #242933;
+  --glow: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-lifted: rgba(0, 0, 0, 0.6);
+  --hover-mix: white;
 }
 
 /* React Flow lit ses couleurs dans ces variables. */

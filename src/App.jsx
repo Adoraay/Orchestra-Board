@@ -40,17 +40,13 @@ import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useAppShortcuts from './hooks/useAppShortcuts.js';
 import useBoards from './hooks/useBoards.js';
+import useT from './hooks/useT.js';
 import { DEFAULT_LINK } from './lib/links.js';
 
 const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode };
 const NOTE_SIZE = { width: 180, height: 180 };
 const edgeTypes = { floating: FloatingEdge };
-const BOARD_HINTS = {
-  pen: 'LMB pour dessiner · RMB pour supprimer',
-  note: 'Clique sur la map pour poser un post-it',
-  text: 'Clique sur la map pour écrire un texte',
-  link: 'Clique sur une case, puis sur une autre pour les relier · RMB sur un lien pour le supprimer',
-};
+const BOARD_HINTS = ['pen', 'note', 'text', 'link']; // outils avec un bandeau d'aide (board.hint.<outil>)
 const NODE_SIZE = { width: 640, height: 400 };
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
 
@@ -210,6 +206,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const { activeFolder, homeDir } = useWorkspace();
   const [toast, setToast] = useState(null);
   const { settings, agentById } = useSettings();
+  const t = useT();
   const grid = settings.appearance.grid;
 
   // Barre d'outils (PLAN.md §3.8)
@@ -490,11 +487,11 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
 
       // L'agent démarre dans le dossier actif, sinon dans le dossier personnel.
       const cwd = activeFolder ?? homeDir;
-      if (!activeFolder) setToast({ id: Date.now(), text: 'Aucun dossier choisi, lancé dans ~' });
+      if (!activeFolder) setToast({ id: Date.now(), text: t('board.noFolder') });
 
       addTerminal(agentId, cwd, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
     },
-    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, activeFolder, homeDir, agentById],
+    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, activeFolder, homeDir, agentById, t],
   );
 
   return (
@@ -542,7 +539,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             multiSelectionKeyCode={null}
             selectionKeyCode={null}
             proOptions={{ hideAttribution: true }}
-            colorMode="dark"
+            colorMode={settings.appearance.theme === 'light' ? 'light' : 'dark'}
           >
             {GRID_VARIANTS[grid] && <Background variant={GRID_VARIANTS[grid]} gap={24} />}
             <Controls position="bottom-left" />
@@ -559,10 +556,10 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           </ReactFlow>
         </BoardContext.Provider>
         <BoardToolbar tool={tool} onChange={setTool} />
-        {BOARD_HINTS[tool] && (
+        {BOARD_HINTS.includes(tool) && (
           <div className="board-hint" role="status">
-            {tool === 'link' && linkSource ? 'Clique sur la case à relier' : BOARD_HINTS[tool]}
-            {tool === 'link' && <kbd>Échap</kbd>}
+            {tool === 'link' && linkSource ? t('board.hint.linkTarget') : t(`board.hint.${tool}`)}
+            {tool === 'link' && <kbd>{t('key.Esc')}</kbd>}
           </div>
         )}
         {boxSelection.box && <div className="selection-box" style={boxSelection.box} />}

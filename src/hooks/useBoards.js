@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EMPTY_BOARD, deserializeBoard, serializeBoard } from '../lib/workspace.js';
+import useT from './useT.js';
 
 const SAVE_DELAY = 500; // ms après le dernier changement (PLAN.md §3.4)
 
-function nextName(boards) {
+function nextName(boards, t) {
   const names = new Set(boards.map((b) => b.name));
   let n = boards.length + 1;
-  while (names.has(`Tableau ${n}`)) n++;
-  return `Tableau ${n}`;
+  while (names.has(t('board.defaultName', { n }))) n++;
+  return t('board.defaultName', { n });
 }
 
 // Tableaux (pages) et sauvegarde de workspace.json.
 // Le contenu de chaque tableau est gardé dans une ref : le tableau ouvert la met à jour à chaque
 // changement sans faire re-rendre l'app, et on la relit quand on rouvre un tableau.
 export default function useBoards(saved) {
+  const t = useT();
   const content = useRef(null);
   if (!content.current) content.current = Object.fromEntries(saved.boards.map((b) => [b.id, deserializeBoard(b)]));
 
@@ -53,7 +55,7 @@ export default function useBoards(saved) {
   const createBoard = () => {
     const id = 'board-' + crypto.randomUUID();
     content.current[id] = EMPTY_BOARD;
-    setBoards((list) => [...list, { id, name: nextName(list) }]);
+    setBoards((list) => [...list, { id, name: nextName(list, t) }]);
     setActiveId(id);
     return id;
   };

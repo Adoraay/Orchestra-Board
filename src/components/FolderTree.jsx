@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, File, Folder, FolderOpen } from 'lucide-react';
 import { useExplorer } from '../context/ExplorerContext.jsx';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
+import useT from '../hooks/useT.js';
 import { baseName } from '../lib/paths.js';
 
 const INDENT = 14; // px par niveau
@@ -49,6 +50,7 @@ function NameInput({ initial, isFile = false, onSubmit, onCancel }) {
 function TreeItem({ entry, depth, defaultOpen = false }) {
   const { activeFolder, setActiveFolder } = useWorkspace();
   const explorer = useExplorer();
+  const t = useT();
   const [open, setOpen] = useState(defaultOpen);
   const [children, setChildren] = useState(null);
   const [error, setError] = useState(null);
@@ -127,7 +129,7 @@ function TreeItem({ entry, depth, defaultOpen = false }) {
       >
         <button
           className={`tree-chevron ${open ? 'open' : ''}`}
-          title={open ? 'Replier' : 'Déplier'}
+          title={t(open ? 'tree.collapse' : 'tree.expand')}
           tabIndex={-1}
           onClick={(event) => {
             event.stopPropagation();
@@ -147,15 +149,15 @@ function TreeItem({ entry, depth, defaultOpen = false }) {
               <span className="tree-chevron" />
               <Folder size={14} />
               <NameInput
-                initial="Nouveau dossier"
+                initial={t('tree.newFolderName')}
                 onSubmit={(value) => explorer.createFolder(entry.path, value)}
                 onCancel={() => explorer.setCreatingIn(null)}
               />
             </li>
           )}
           {error && <li className="tree-row message" style={childStyle}>{error}</li>}
-          {!error && !children && <li className="tree-row message" style={childStyle}>Chargement…</li>}
-          {children?.length === 0 && !creating && <li className="tree-row message" style={childStyle}>Vide</li>}
+          {!error && !children && <li className="tree-row message" style={childStyle}>{t('common.loading')}</li>}
+          {children?.length === 0 && !creating && <li className="tree-row message" style={childStyle}>{t('tree.empty')}</li>}
           {children?.map((child) => (
             <TreeItem key={child.path} entry={child} depth={depth + 1} />
           ))}

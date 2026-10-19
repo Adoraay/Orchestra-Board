@@ -3,25 +3,29 @@ import { Gauge, RefreshCw } from 'lucide-react';
 import AgentLogo from './AgentLogo.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useAutoClose from '../hooks/useAutoClose.js';
+import useT from '../hooks/useT.js';
 
 const USAGE_AGENTS = ['claude-code', 'codex', 'gemini'];
 
-function ago(ms) {
+function ago(ms, t) {
   const minutes = Math.round((Date.now() - ms) / 60000);
-  if (minutes < 1) return "à l'instant";
-  if (minutes < 60) return `il y a ${minutes} min`;
+  if (minutes < 1) return t('time.justNow');
+  if (minutes < 60) return t('time.minutesAgo', { n: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 48) return `il y a ${hours} h`;
-  return `il y a ${Math.round(hours / 24)} jours`;
+  if (hours < 48) return t('time.hoursAgo', { n: hours });
+  return t('time.daysAgo', { n: Math.round(hours / 24) });
 }
 
-function resetText(ms) {
+function resetText(ms, t) {
   const minutes = Math.max(0, Math.round((ms - Date.now()) / 60000));
-  const time = new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  if (minutes < 60) return `Remise à zéro dans ${minutes} min (${time})`;
-  if (minutes < 24 * 60) return `Remise à zéro dans ${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} (${time})`;
-  const day = new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  return `Remise à zéro ${day} à ${time}`;
+  const time = new Date(ms).toLocaleTimeString(t.locale, { hour: '2-digit', minute: '2-digit' });
+  if (minutes < 60) return t('usage.resetIn', { duration: t('time.minutes', { m: minutes }), time });
+  if (minutes < 24 * 60) {
+    const duration = t('time.hoursMinutes', { h: Math.floor(minutes / 60), mm: String(minutes % 60).padStart(2, '0') });
+    return t('usage.resetIn', { duration, time });
+  }
+  const day = new Date(ms).toLocaleDateString(t.locale, { weekday: 'long', day: 'numeric', month: 'long' });
+  return t('usage.resetOn', { day, time });
 }
 
 const level = (percent) => (percent >= 90 ? 'danger' : percent >= 70 ? 'warning' : 'ok');
@@ -30,6 +34,7 @@ const level = (percent) => (percent >= 90 ? 'danger' : percent >= 70 ? 'warning'
 // Claude trop ancien (> 2 min) : Node lance un /usage invisible, les derniers chiffres restent affichés en attendant.
 export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
   const { settings, agentById } = useSettings();
+  const t = useT();
   const wrapRef = useRef(null);
   const [data, setData] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,11 +72,11 @@ export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
         <div className="usage-clip">
           <div className="usage-panel">
             <div className="usage-header">
-              <span className="usage-title">Utilisation</span>
+              <span className="usage-title">{t('usage.title')}</span>
               {data?.refreshable && (
                 <button
                   className={`icon-button ${refreshing ? 'spinning' : ''}`}
-                  title="Mettre à jour (lance /usage en fond)"
+                  title={t('usage.refresh')}
                   disabled={refreshing}
                   onClick={() => load(true)}
                 >
@@ -94,11 +99,11 @@ export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
             </div>
 
             <div className="usage-body">
-              {!data && <span className="hint">Lecture…</span>}
+              {!data && <span className="hint">{t('usage.reading')}</span>}
               {data?.unavailable && <span className="hint">{data.unavailable}</span>}
               {data && !data.unavailable && data.limits.length === 0 && (
                 <span className="hint">
-                  {refreshing ? 'Lancement de /usage…' : `Aucune donnée pour l'instant : lance une session ${agentById(agentId).name}.`}
+                  {refreshing ? t('usage.launching') : t('usage.noData', { name: agentById(agentId).name })}
                 </span>
               )}
               {data?.limits?.map((l) => (
@@ -110,12 +115,12 @@ export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
                   <div className="usage-meter">
                     <div className={`usage-meter-fill ${level(l.percent)}`} style={{ width: `${l.percent}%` }} />
                   </div>
-                  {l.resetsAt && <span className="hint">{resetText(l.resetsAt)}</span>}
+                  {l.resetsAt && <span className="hint">{resetText(l.resetsAt, t)}</span>}
                 </div>
               ))}
               {data?.breakdown?.length > 0 && (
                 <div className="usage-breakdown">
-                  <span className="field-label">Répartition de la semaine</span>
+                  <span className="field-label">{t('usage.breakdown')}</span>
                   {data.breakdown.map((row) => (
                     <div key={row.label} className="usage-limit-row">
                       <span className="muted">{row.label}</span>
@@ -129,17 +134,17 @@ export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
             {data && !data.unavailable && (
               <div className="usage-footer hint">
                 {data.error && <span className="usage-error">{data.error}</span>}
-                {data.plan && <span>Offre : {data.plan}</span>}
-                {data.fetchedAt && <span>Mis à jour {ago(data.fetchedAt)}{refreshing ? ' · mise à jour…' : ''}</span>}
+                {data.plan && <span>{t('usage.plan', { plan: data.plan })}</span>}
+                {data.fetchedAt && <span>{t('usage.updated', { ago: ago(data.fetchedAt, t) })}{refreshing ? t('usage.updating') : ''}</span>}
                 {data.note && <span>{data.note}</span>}
               </div>
             )}
           </div>
         </div>
       </div>
-      <button className={`usage-tab ${open ? 'open' : ''}`} onClick={onToggle} title={open ? "Masquer l'utilisation (Ctrl+Maj+U)" : "Afficher l'utilisation des agents (Ctrl+Maj+U)"}>
+      <button className={`usage-tab ${open ? 'open' : ''}`} onClick={onToggle} title={t('usage.toggle', { open })}>
         <Gauge size={15} />
-        <span className="usage-tab-label">Utilisation</span>
+        <span className="usage-tab-label">{t('usage.title')}</span>
       </button>
     </div>
   );

@@ -3,13 +3,16 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import { LINK_MODES } from '../lib/links.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
+import { LANGUAGES } from '../lib/i18n.js';
+import useT from '../hooks/useT.js';
 
+// Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
 const SHELLS = [
-  { id: 'default', label: 'Par défaut (PowerShell)' },
-  { id: 'powershell', label: 'Windows PowerShell' },
-  { id: 'pwsh', label: 'PowerShell 7 (pwsh)' },
-  { id: 'cmd', label: 'Invite de commandes (cmd)' },
-  { id: 'bash', label: 'Git Bash' },
+  { id: 'default' },
+  { id: 'powershell', name: 'Windows PowerShell' },
+  { id: 'pwsh', name: 'PowerShell 7 (pwsh)' },
+  { id: 'cmd' },
+  { id: 'bash', name: 'Git Bash' },
 ];
 
 export default function GeneralTab() {
@@ -17,65 +20,73 @@ export default function GeneralTab() {
   const { rootPath, homeDir, changeRoot, resetRoot } = useWorkspace();
   const general = settings.general;
   const update = (patch) => updateSettings('general', patch);
+  const t = useT();
 
   return (
     <div className="settings-form">
+      <label className="field">
+        <span className="field-label">{t('general.language')}</span>
+        <select value={general.language} onChange={(e) => update({ language: e.target.value })}>
+          {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+        </select>
+      </label>
+
       <div className="field">
-        <span className="field-label">Dossier racine de l'explorateur</span>
+        <span className="field-label">{t('general.root')}</span>
         <code className="path-display" title={rootPath ?? ''}>{displayPath(rootPath, homeDir) || '…'}</code>
         <div className="field-row">
           <button className="text-button" onClick={changeRoot}>
             <FolderInput size={15} />
-            Changer
+            {t('general.change')}
           </button>
           <button className="text-button" disabled={!general.rootPath} onClick={resetRoot}>
             <Home size={15} />
-            Dossier personnel
+            {t('general.home')}
           </button>
         </div>
       </div>
 
       <label className="field">
-        <span className="field-label">Shell des terminaux</span>
+        <span className="field-label">{t('general.shell')}</span>
         <select value={general.shell} onChange={(e) => update({ shell: e.target.value })}>
-          {SHELLS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          {SHELLS.map((s) => <option key={s.id} value={s.id}>{s.name ?? t(`shell.${s.id}`)}</option>)}
         </select>
-        <span className="hint">S'applique aux prochaines cases (ou après « Relancer »).</span>
+        <span className="hint">{t('general.shellHint')}</span>
       </label>
 
       <div className="field">
-        <span className="field-label">Type des nouveaux liens</span>
+        <span className="field-label">{t('general.linkMode')}</span>
         {LINK_MODES.map((mode) => (
-          <label key={mode.id} className="mode-option">
-            <input type="radio" name="link-mode" checked={general.linkMode === mode.id} onChange={() => update({ linkMode: mode.id })} />
+          <label key={mode} className="mode-option">
+            <input type="radio" name="link-mode" checked={general.linkMode === mode} onChange={() => update({ linkMode: mode })} />
             <span>
-              <span className="mode-option-label">{mode.label}</span>
-              <span className="hint">{mode.description}</span>
+              <span className="mode-option-label">{t(`link.mode.${mode}`)}</span>
+              <span className="hint">{t(`link.mode.${mode}.description`)}</span>
             </span>
           </label>
         ))}
-        <span className="hint">Chaque lien peut ensuite changer de type dans son panneau.</span>
+        <span className="hint">{t('general.linkModeHint')}</span>
       </div>
 
       <div className="field">
-        <span className="field-label">Comportement</span>
+        <span className="field-label">{t('general.behavior')}</span>
         <label className="checkbox">
           <input type="checkbox" checked={general.confirmClose} onChange={(e) => update({ confirmClose: e.target.checked })} />
-          Confirmer avant de fermer une case ou l'app quand un agent travaille
+          {t('general.confirmClose')}
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.notifySound} onChange={(e) => update({ notifySound: e.target.checked })} />
-          Son quand un agent termine sa tâche
+          {t('general.notifySound')}
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.notifyDesktop} onChange={(e) => update({ notifyDesktop: e.target.checked })} />
-          Notification Windows quand l'app n'est pas au premier plan
+          {t('general.notifyDesktop')}
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.trustFolders} onChange={(e) => update({ trustFolders: e.target.checked })} />
-          Faire confiance aux dossiers ouverts par Orchestra
+          {t('general.trustFolders')}
         </label>
-        <span className="hint">Claude Code ne demande plus « Do you trust the files in this folder? » (réglage enregistré dans ~/.claude.json).</span>
+        <span className="hint">{t('general.trustHint')}</span>
       </div>
     </div>
   );

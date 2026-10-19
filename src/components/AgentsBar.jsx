@@ -5,6 +5,7 @@ import AgentLogo from './AgentLogo.jsx';
 import StatusDot from './StatusDot.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useAutoClose from '../hooks/useAutoClose.js';
+import useT from '../hooks/useT.js';
 
 const MAX_NAME = 40;
 const DOUBLE_CLICK_DELAY = 400; // ms
@@ -18,6 +19,7 @@ let lastClick = { id: null, at: 0 };
 // Rendue dans la map du tableau ouvert (ReactFlowProvider), pour pouvoir renommer ses cases.
 export default function AgentsBar({ boards, content, activeId, running, open, onToggle, onFocus }) {
   const { agentById } = useSettings();
+  const t = useT();
   const wrapRef = useRef(null);
   useAutoClose(wrapRef, open, onToggle);
 
@@ -51,9 +53,9 @@ export default function AgentsBar({ boards, content, activeId, running, open, on
 
   return (
     <div className="agents-bar-wrap" ref={wrapRef}>
-      <button className={`agents-bar-tab ${open ? 'open' : ''}`} onClick={onToggle} title={`${open ? 'Masquer' : 'Afficher'} les agents actifs (Ctrl+Maj+A)`}>
+      <button className={`agents-bar-tab ${open ? 'open' : ''}`} onClick={onToggle} title={t('agentsBar.toggle', { open })}>
         <Users size={14} />
-        Agents actifs
+        {t('agentsBar.title')}
         <span className="agents-bar-count">{count}</span>
         {!open && working > 0 && <StatusDot status="working" />}
         <ChevronUp className="agents-bar-chevron" size={14} />
@@ -63,7 +65,7 @@ export default function AgentsBar({ boards, content, activeId, running, open, on
         <div className="agents-bar-clip">
           {/* Une seule ligne qui défile : la molette la fait glisser de côté. */}
           <div className="agents-bar" onWheel={(e) => (e.currentTarget.scrollLeft += e.deltaY)}>
-            {groups.length === 0 && <span className="agents-bar-empty">Aucun agent lancé</span>}
+            {groups.length === 0 && <span className="agents-bar-empty">{t('agentsBar.empty')}</span>}
             {groups.map(({ board, agents }) => (
               <div key={board.id} className="agents-bar-group">
                 <span className={`agents-bar-board ${board.id === activeId ? 'active' : ''}`}>{board.name}</span>
@@ -100,7 +102,7 @@ export default function AgentsBar({ boards, content, activeId, running, open, on
                     <button
                       key={node.id}
                       className={`agent-chip ${info.unseen ? 'finished' : ''}`}
-                      title={`${name} · ${board.name} · double-clic pour renommer`}
+                      title={t('agentsBar.chipTitle', { name, board: board.name })}
                       onClick={() => focus(node.id)}
                     >
                       <AgentLogo agent={agent} size={16} />

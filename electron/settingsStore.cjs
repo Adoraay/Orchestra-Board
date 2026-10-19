@@ -14,27 +14,28 @@ const BUILTIN_AGENTS = [
 ];
 
 // Catalogue : agents connus, absents du dock tant qu'on ne les ajoute pas (Paramètres › Agents). Logos dans
-// src/assets/agents/<id>. resumeArgs seulement quand l'option de reprise est sûre.
+// src/assets/agents/<id>, descriptions dans src/locales (catalog.<id>). resumeArgs seulement quand l'option de reprise est sûre.
 const CATALOG_AGENTS = [
-  { id: 'aider', name: 'Aider', command: 'aider', color: '#14b014', resumeArgs: '--restore-chat-history', description: 'Binôme de code open source, avec le modèle de ton choix' },
-  { id: 'qwen', name: 'Qwen Code', command: 'qwen', color: '#615ced', description: "Agent d'Alibaba pour les modèles Qwen" },
-  { id: 'opencode', name: 'OpenCode', command: 'opencode', color: '#8b93a7', resumeArgs: '--continue', description: 'Agent open source, plus de 75 fournisseurs de modèles' },
-  { id: 'copilot', name: 'GitHub Copilot CLI', command: 'copilot', color: '#8b93a7', resumeArgs: '--continue', description: "L'agent de GitHub Copilot dans le terminal" },
-  { id: 'cursor', name: 'Cursor CLI', command: 'cursor-agent', color: '#8b93a7', description: "L'agent de Cursor dans le terminal" },
-  { id: 'hermes', name: 'Hermes Agent', command: 'hermes', color: '#8b93a7', description: 'Agent de Nous Research, avec mémoire et compétences' },
-  { id: 'goose', name: 'Goose', command: 'goose session', color: '#8b93a7', description: 'Agent open source de Block, extensible par MCP' },
-  { id: 'amp', name: 'Amp', command: 'amp', color: '#f34e3f', description: 'Agent de code de Sourcegraph' },
-  { id: 'kimi', name: 'Kimi CLI', command: 'kimi', color: '#1783ff', description: 'Agent de Moonshot AI pour les modèles Kimi' },
+  { id: 'aider', name: 'Aider', command: 'aider', color: '#14b014', resumeArgs: '--restore-chat-history' },
+  { id: 'qwen', name: 'Qwen Code', command: 'qwen', color: '#615ced' },
+  { id: 'opencode', name: 'OpenCode', command: 'opencode', color: '#8b93a7', resumeArgs: '--continue' },
+  { id: 'copilot', name: 'GitHub Copilot CLI', command: 'copilot', color: '#8b93a7', resumeArgs: '--continue' },
+  { id: 'cursor', name: 'Cursor CLI', command: 'cursor-agent', color: '#8b93a7' },
+  { id: 'hermes', name: 'Hermes Agent', command: 'hermes', color: '#8b93a7' },
+  { id: 'goose', name: 'Goose', command: 'goose session', color: '#8b93a7' },
+  { id: 'amp', name: 'Amp', command: 'amp', color: '#f34e3f' },
+  { id: 'kimi', name: 'Kimi CLI', command: 'kimi', color: '#1783ff' },
 ];
 
 const DEFAULTS = {
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots' },
-  general: { rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true },
+  general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true },
 };
 
-const THEMES = ['standard'];
+const THEMES = ['standard', 'light', 'chatgpt', 'gemini', 'vscode', 'github', 'dracula', 'nord'];
 const GRIDS = ['dots', 'lines', 'none'];
 const SHELLS = ['default', 'powershell', 'pwsh', 'cmd', 'bash'];
+const LANGUAGES = ['en', 'fr']; // langue de l'interface (PLAN.md §3.15), anglais par défaut
 const LINK_MODES = ['relay', 'delegate']; // type des nouveaux liens (PLAN.md §3.11)
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const CUSTOM_ID = /^custom-[a-z0-9]{4,32}$/;
@@ -105,6 +106,7 @@ function sanitize(input) {
     },
     agents: sanitizeAgents(input?.agents),
     general: {
+      language: pick(g.language, LANGUAGES, DEFAULTS.general.language),
       rootPath: sanitizeRoot(g.rootPath),
       shell: pick(g.shell, SHELLS, DEFAULTS.general.shell),
       confirmClose: g.confirmClose !== false,

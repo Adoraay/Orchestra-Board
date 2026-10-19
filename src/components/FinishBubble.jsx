@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import AgentLogo from './AgentLogo.jsx';
+import useT from '../hooks/useT.js';
 
 const VISIBLE_FOR = 5000; // ms
 
 // Bulle « [agent] a terminé sa tâche » au-dessus de la case (PLAN.md §3.6).
 // Elle s'efface seule au bout de 5 s ; la lueur verte, elle, reste jusqu'à ce que la case soit vue.
 export default function FinishBubble({ agent, name, finished }) {
+  const t = useT();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -19,7 +21,7 @@ export default function FinishBubble({ agent, name, finished }) {
   return (
     <div className="finish-bubble" role="status">
       <AgentLogo agent={agent} size={16} />
-      {name} a terminé sa tâche
+      {t('notify.finished', { name })}
     </div>
   );
 }

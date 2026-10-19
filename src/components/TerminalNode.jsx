@@ -12,6 +12,7 @@ import { useBoard } from '../context/BoardContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useFloatingDrag from '../hooks/useFloatingDrag.js';
 import useResizeMode from '../hooks/useResizeMode.js';
+import useT from '../hooks/useT.js';
 import { terminalFont, terminalTheme } from '../lib/terminalTheme.js';
 
 // Un nœud de la map = une fenêtre avec un vrai terminal dedans.
@@ -20,8 +21,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
+  const t = useT();
   const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest } = useBoard();
-  const { accent, terminalFontSize } = settings.appearance;
+  const { theme, accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
   const [status, setStatus] = useState('idle');
   const [finished, setFinished] = useState(false); // a fini et pas encore vu : lueur verte (PLAN.md §3.6)
@@ -135,7 +137,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
         window.pty.resize(id, term.cols, term.rows);
       } catch {}
     }
-  }, [id, accent, terminalFontSize]);
+  }, [id, theme, accent, terminalFontSize]);
 
   const launch = (resume) => {
     const term = termRef.current;
@@ -223,7 +225,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       {data.branch && !pickingBranch && (
         <button
           className="branch-notch nodrag nopan"
-          title="Changer de branche"
+          title={t('terminal.changeBranch')}
           onClick={() => tool === 'select' && setBranchPicker(id)}
         >
           <GitBranch size={12} />
@@ -258,22 +260,22 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
             onEditStart={stopResizing}
             editRequest={renameRequest?.id === id ? renameRequest.at : null}
           />
-          {exited ? <span className="badge">terminé</span> : <StatusDot status={status} />}
+          {exited ? <span className="badge">{t('terminal.exited')}</span> : <StatusDot status={status} />}
           <span className="header-actions">
             {exited && (
-              <button className="header-button nodrag" onClick={restart} title="Relancer">
+              <button className="header-button nodrag" onClick={restart} title={t('common.restart')}>
                 <RotateCcw size={13} />
-                Relancer
+                {t('common.restart')}
               </button>
             )}
             {confirmingClose ? (
               <span className="close-confirm nodrag">
-                {name} travaille encore. Fermer ?
-                <button className="tab-confirm danger" onClick={close}>Fermer</button>
-                <button className="tab-confirm" onClick={() => setConfirmingClose(false)}>Annuler</button>
+                {t('terminal.closeConfirm', { name })}
+                <button className="tab-confirm danger" onClick={close}>{t('common.close')}</button>
+                <button className="tab-confirm" onClick={() => setConfirmingClose(false)}>{t('common.cancel')}</button>
               </span>
             ) : (
-              <button className="close nodrag" onClick={requestClose} title="Fermer"><X size={15} /></button>
+              <button className="close nodrag" onClick={requestClose} title={t('common.close')}><X size={15} /></button>
             )}
           </span>
         </header>
@@ -283,15 +285,15 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
           <div className="terminal-mount" ref={containerRef} />
           {askResume && resumeChoice === 'manual' && (
             <div className="resume-prompt">
-              <p>Reprendre la dernière conversation de {name} dans ce dossier ?</p>
+              <p>{t('terminal.resumeQuestion', { name })}</p>
               <div className="resume-actions">
                 <button className="text-button primary" onClick={() => launch(true)}>
                   <History size={15} />
-                  Reprendre la conversation
+                  {t('terminal.resume')}
                 </button>
                 <button className="text-button" onClick={() => launch(false)}>
                   <MessageSquarePlus size={15} />
-                  Nouvelle conversation
+                  {t('terminal.newConversation')}
                 </button>
               </div>
             </div>

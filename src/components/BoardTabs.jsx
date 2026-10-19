@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import useT from '../hooks/useT.js';
 
 const MAX_NAME = 40;
 
 // Onglets des tableaux (pages) dans la barre du haut : clic = ouvrir, double-clic = renommer.
 export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRename, onDelete, agentCount, boardsWithNews, renameRequest }) {
+  const t = useT();
   const [renaming, setRenaming] = useState(null);
   const [confirming, setConfirming] = useState(null);
   const cancelRename = useRef(false); // Échap : le blur qui suit ne doit pas enregistrer
@@ -26,7 +28,7 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
     <nav
       ref={navRef}
       className="board-tabs no-scrollbar"
-      aria-label="Tableaux"
+      aria-label={t('tabs.label')}
       onWheel={(e) => {
         if (e.deltaY) e.currentTarget.scrollLeft += e.deltaY; // molette verticale = défilement des onglets
       }}
@@ -40,11 +42,11 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
             <div
               key={board.id}
               className="board-tab confirming"
-              title={`Supprimer « ${board.name} »${count ? ` et fermer ${count} agent${count > 1 ? 's' : ''}` : ''}`}
+              title={t('tabs.deleteTitle', { name: board.name, count })}
             >
-              <span>Supprimer ?</span>
-              <button className="tab-confirm danger" onClick={() => { onDelete(board.id); setConfirming(null); }}>Oui</button>
-              <button className="tab-confirm" onClick={() => setConfirming(null)}>Non</button>
+              <span>{t('tabs.deleteConfirm')}</span>
+              <button className="tab-confirm danger" onClick={() => { onDelete(board.id); setConfirming(null); }}>{t('common.yes')}</button>
+              <button className="tab-confirm" onClick={() => setConfirming(null)}>{t('common.no')}</button>
             </div>
           );
         }
@@ -78,16 +80,16 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
             className={`board-tab ${active ? 'active' : ''}`}
             role="tab"
             aria-selected={active}
-            title="Double-clic pour renommer"
+            title={t('tabs.renameHint')}
             onClick={() => onSelect(board.id)}
             onDoubleClick={() => setRenaming(board.id)}
           >
-            {boardsWithNews.has(board.id) && <span className="tab-news" title="Un agent a terminé sa tâche" />}
+            {boardsWithNews.has(board.id) && <span className="tab-news" title={t('tabs.news')} />}
             <span className="board-tab-name">{board.name}</span>
             {boards.length > 1 && (
               <button
                 className="tab-close"
-                title="Supprimer le tableau"
+                title={t('tabs.delete')}
                 onClick={(e) => {
                   e.stopPropagation();
                   setConfirming(board.id);
@@ -100,7 +102,7 @@ export default function BoardTabs({ boards, activeId, onSelect, onCreate, onRena
           </div>
         );
       })}
-      <button className="icon-button tab-add" title="Nouveau tableau (Ctrl+Maj+T)" onClick={create}>
+      <button className="icon-button tab-add" title={t('tabs.new')} onClick={create}>
         <Plus size={16} />
       </button>
     </nav>

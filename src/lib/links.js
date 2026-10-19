@@ -3,15 +3,5 @@
 export const DEFAULT_LINK = { mode: 'relay', bidirectional: false, prompt: '', maxTurns: 3, enabled: true };
 export const MAX_TURNS = 20;
 
-export const LINK_MODES = [
-  {
-    id: 'relay',
-    label: 'Transmission',
-    description: "Quand la source a fini, sa dernière réponse est envoyée automatiquement à la cible, avec ta consigne.",
-  },
-  {
-    id: 'delegate',
-    label: 'Délégation',
-    description: "Rien d'automatique : la source voit la cible dans ses outils et décide elle-même quand lui écrire. La réponse lui revient directement.",
-  },
-];
+// Types de lien : nom et explication dans src/locales (link.mode.<id> et link.mode.<id>.description).
+export const LINK_MODES = ['relay', 'delegate'];

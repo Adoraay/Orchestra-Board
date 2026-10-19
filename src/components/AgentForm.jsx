@@ -3,6 +3,7 @@ import { CheckCircle2, ImagePlus, XCircle } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { decorateAgent } from '../agents.js';
 import AgentLogo from './AgentLogo.jsx';
+import useT from '../hooks/useT.js';
 
 const DEFAULT_COLOR = '#8b93a7'; // couleur de secours d'un agent (exception autorisée)
 
@@ -11,6 +12,7 @@ const newAgentId = () => 'custom-' + crypto.randomUUID().replace(/-/g, '').slice
 // Formulaire « Ajouter un agent » : nom, commande (avec test), logo, couleur de secours.
 export default function AgentForm({ onSave, onCancel }) {
   const { addCustomLogo } = useSettings();
+  const t = useT();
   const [id] = useState(newAgentId);
   const [name, setName] = useState('');
   const [command, setCommand] = useState('');
@@ -47,15 +49,15 @@ export default function AgentForm({ onSave, onCancel }) {
 
   return (
     <form className="settings-form" onSubmit={(e) => { e.preventDefault(); if (valid) save(); }}>
-      <h2 className="form-title">Ajouter un agent</h2>
+      <h2 className="form-title">{t('agentForm.title')}</h2>
 
       <label className="field">
-        <span className="field-label">Nom</span>
+        <span className="field-label">{t('agentForm.name')}</span>
         <input className="text-input" value={name} maxLength={40} autoFocus placeholder="Aider" onChange={(e) => setName(e.target.value)} />
       </label>
 
       <div className="field">
-        <span className="field-label">Commande à lancer</span>
+        <span className="field-label">{t('agentForm.command')}</span>
         <div className="field-row">
           <input
             className="text-input mono"
@@ -68,7 +70,7 @@ export default function AgentForm({ onSave, onCancel }) {
             }}
           />
           <button type="button" className="text-button" disabled={!command.trim() || test === 'pending'} onClick={runTest}>
-            Tester
+            {t('agentForm.test')}
           </button>
         </div>
         {test && test !== 'pending' && (
@@ -80,21 +82,21 @@ export default function AgentForm({ onSave, onCancel }) {
       </div>
 
       <div className="field">
-        <span className="field-label">Logo et couleur de secours</span>
+        <span className="field-label">{t('agentForm.logo')}</span>
         <div className="field-row">
           <span className="logo-preview"><AgentLogo agent={preview} size={26} /></span>
           <button type="button" className="text-button" onClick={pickLogo}>
             <ImagePlus size={15} />
-            {logo ? 'Changer le logo' : 'Choisir un logo'}
+            {t(logo ? 'agentForm.changeLogo' : 'agentForm.pickLogo')}
           </button>
-          <input type="color" value={color} title="Couleur affichée sans logo" onChange={(e) => setColor(e.target.value)} />
+          <input type="color" value={color} title={t('agentForm.colorTitle')} onChange={(e) => setColor(e.target.value)} />
         </div>
         {logoError && <span className="test-result error"><XCircle size={14} />{logoError}</span>}
       </div>
 
       <div className="form-actions">
-        <button type="button" className="text-button" onClick={cancel}>Annuler</button>
-        <button type="submit" className="text-button primary" disabled={!valid}>Ajouter</button>
+        <button type="button" className="text-button" onClick={cancel}>{t('common.cancel')}</button>
+        <button type="submit" className="text-button primary" disabled={!valid}>{t('common.add')}</button>
       </div>
     </form>
   );

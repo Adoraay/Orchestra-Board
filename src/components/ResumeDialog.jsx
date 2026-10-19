@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { History, LayoutGrid, MessageSquarePlus } from 'lucide-react';
 import AgentLogo from './AgentLogo.jsx';
+import useT from '../hooks/useT.js';
 
 const MAX_CHIPS = 8;
 
@@ -8,6 +9,8 @@ const MAX_CHIPS = 8;
 // « Voir le tableau » = choisir case par case (Échap fait pareil : rien n'est lancé sans choix).
 // agents : [{ id, name, agent }], boardCount : nombre de tableaux concernés.
 export default function ResumeDialog({ agents, boardCount, onChoose }) {
+  const t = useT();
+
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onChoose('manual');
@@ -16,7 +19,6 @@ export default function ResumeDialog({ agents, boardCount, onChoose }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onChoose]);
 
-  const plural = agents.length > 1;
   const hidden = agents.length - MAX_CHIPS;
 
   return (
@@ -24,17 +26,10 @@ export default function ResumeDialog({ agents, boardCount, onChoose }) {
       <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="resume-title" aria-describedby="resume-text">
         <header className="dialog-header">
           <span className="dialog-icon"><History size={18} /></span>
-          <h1 id="resume-title">Reprendre tes discussions ?</h1>
+          <h1 id="resume-title">{t('resume.title')}</h1>
         </header>
 
-        <p id="resume-text" className="dialog-text">
-          {plural ? `${agents.length} agents` : '1 agent'}
-          {boardCount > 1 ? ` sur ${boardCount} tableaux` : ''} {plural ? 'avaient' : 'avait'} une conversation en cours lors
-          de ta dernière session.{' '}
-          {plural
-            ? 'Veux-tu reprendre ces conversations là où elles s’étaient arrêtées ?'
-            : 'Veux-tu reprendre cette conversation là où elle s’était arrêtée ?'}
-        </p>
+        <p id="resume-text" className="dialog-text">{t('resume.text', { count: agents.length, boards: boardCount })}</p>
 
         <ul className="dialog-chips">
           {agents.slice(0, MAX_CHIPS).map((a) => (
@@ -47,17 +42,17 @@ export default function ResumeDialog({ agents, boardCount, onChoose }) {
         </ul>
 
         <div className="dialog-actions">
-          <button className="text-button" onClick={() => onChoose('manual')} title="Choisir case par case sur la map">
+          <button className="text-button" onClick={() => onChoose('manual')} title={t('resume.manualTitle')}>
             <LayoutGrid size={15} />
-            Voir le tableau
+            {t('resume.manual')}
           </button>
           <button className="text-button" onClick={() => onChoose('new')}>
             <MessageSquarePlus size={15} />
-            Nouvelle discussion
+            {t('resume.new')}
           </button>
           <button className="text-button primary" onClick={() => onChoose('resume')} autoFocus>
             <History size={15} />
-            Reprendre
+            {t('resume.resume')}
           </button>
         </div>
       </div>

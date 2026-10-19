@@ -2,6 +2,7 @@ import { GitBranch } from 'lucide-react';
 import { BRANCH_DRAG_TYPE, DRAG_TYPE } from '../agents.js';
 import { useSettings } from '../context/SettingsContext.jsx';
 import AgentLogo from './AgentLogo.jsx';
+import useT from '../hooks/useT.js';
 
 // Image vide pour masquer le « fantôme » du navigateur : seul l'aperçu de la map doit se voir.
 const emptyDragImage = new Image();
@@ -11,6 +12,7 @@ emptyDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAA
 // Sous un trait, le carré « Branche », à glisser sur une case (PLAN.md §3.10).
 export default function AgentDock({ draggedAgentId, draggingBranch, onDragStart, onBranchDragStart, onDragEnd }) {
   const { visibleAgents } = useSettings();
+  const t = useT();
 
   const handleDragStart = (event, agentId) => {
     event.dataTransfer.setData(DRAG_TYPE, agentId);
@@ -27,7 +29,7 @@ export default function AgentDock({ draggedAgentId, draggingBranch, onDragStart,
   };
 
   return (
-    <nav className="dock" aria-label="Agents">
+    <nav className="dock" aria-label={t('dock.label')}>
       {visibleAgents.map((agent) => (
         <div
           key={agent.id}
@@ -47,10 +49,10 @@ export default function AgentDock({ draggedAgentId, draggingBranch, onDragStart,
         draggable
         onDragStart={handleBranchDragStart}
         onDragEnd={onDragEnd}
-        aria-label="Branche Git"
+        aria-label={t('dock.branch')}
       >
         <GitBranch size={22} />
-        <span className="tooltip" role="tooltip">Branche Git</span>
+        <span className="tooltip" role="tooltip">{t('dock.branch')}</span>
       </div>
     </nav>
   );

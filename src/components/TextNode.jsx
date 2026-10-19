@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { RotateCw, Trash2 } from 'lucide-react';
 import useEditableText from '../hooks/useEditableText.js';
+import useT from '../hooks/useT.js';
 
 const DEFAULT_SIZE = 18;
 const MIN_SIZE = 8;
@@ -39,6 +40,7 @@ function trackPointer(event, onMove, onEnd) {
 // Choisi : flèche au-dessus pour l'angle, carré au coin pour la taille, corbeille en dessous.
 export default function TextNode({ id, data, selected }) {
   const { deleteElements, updateNodeData } = useReactFlow();
+  const t = useT();
   const boxRef = useRef(null);
   const [rotating, setRotating] = useState(false);
   const fontSize = data.fontSize ?? DEFAULT_SIZE;
@@ -92,7 +94,7 @@ export default function TextNode({ id, data, selected }) {
         style={{ fontSize, transform: rotation ? `rotate(${rotation}deg)` : undefined }}
       >
         {editing ? (
-          <textarea className="text-input-free nodrag nowheel" placeholder="Texte" rows={1} {...inputProps} />
+          <textarea className="text-input-free nodrag nowheel" placeholder={t('text.placeholder')} rows={1} {...inputProps} />
         ) : (
           <div className="text-content">{data.text}</div>
         )}
@@ -100,14 +102,14 @@ export default function TextNode({ id, data, selected }) {
         {showControls && (
           // Un double-clic sur une poignée ne doit pas ouvrir la modification du texte.
           <span className="text-controls" onDoubleClick={(e) => e.stopPropagation()}>
-            <button className="text-control rotate nodrag nopan" title="Tourner (Maj : pas de 15°)" onPointerDown={startRotate}>
+            <button className="text-control rotate nodrag nopan" title={t('text.rotate')} onPointerDown={startRotate}>
               <RotateCw size={13} />
               {rotating && <span className="angle-label">{rotation}°</span>}
             </button>
-            <span className="text-control resize nodrag nopan" title="Taille" onPointerDown={startResize} />
+            <span className="text-control resize nodrag nopan" title={t('text.size')} onPointerDown={startResize} />
             <button
               className="text-control trash nodrag nopan"
-              title="Supprimer"
+              title={t('common.delete')}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={remove}
             >
