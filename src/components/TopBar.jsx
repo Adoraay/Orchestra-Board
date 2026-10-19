@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Folder, Settings } from 'lucide-react';
 import lockup from '../assets/orchestra-lockup.svg';
 import lockupLight from '../assets/orchestra-lockup-light.svg';
@@ -8,35 +7,15 @@ import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
 import BoardTabs from './BoardTabs.jsx';
 
-const CONTROLS_FALLBACK = 140; // px : largeur des boutons Windows si l'API ne la donne pas
-
-// Place laissée à droite pour les boutons Windows (réduire, agrandir, fermer) dessinés par-dessus la barre.
-function useWindowControlsWidth() {
-  const [width, setWidth] = useState(CONTROLS_FALLBACK);
-  useEffect(() => {
-    const overlay = navigator.windowControlsOverlay;
-    if (!overlay?.visible) return;
-    const update = () => {
-      const rect = overlay.getTitlebarAreaRect();
-      if (rect.width) setWidth(Math.max(0, window.innerWidth - rect.x - rect.width));
-    };
-    update();
-    overlay.addEventListener('geometrychange', update);
-    return () => overlay.removeEventListener('geometrychange', update);
-  }, []);
-  return width;
-}
-
 // Seule barre en haut de la fenêtre (elle sert aussi à la déplacer) : logo et nom, onglets des tableaux,
 // dossier actif (donné au prochain agent), paramètres, puis les boutons Windows.
 export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSettings }) {
   const { activeFolder, homeDir } = useWorkspace();
-  const controlsWidth = useWindowControlsWidth();
   const { settings } = useSettings();
   const t = useT();
 
   return (
-    <header className="topbar" style={{ paddingRight: controlsWidth }}>
+    <header className="topbar">
       <img className="topbar-lockup" src={settings.appearance.theme === 'light' ? lockupLight : lockup} alt="Orchestra" draggable={false} />
       <span className="topbar-separator" />
 

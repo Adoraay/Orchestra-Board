@@ -89,6 +89,9 @@ button { font: inherit; color: inherit; }
   border-bottom: 1px solid var(--border);
   user-select: none;
   -webkit-app-region: drag;
+  /* Place des boutons Windows, lue en CSS : toujours à jour, même juste après agrandi / plein écran
+     (en JS, la largeur de la fenêtre pouvait être encore l'ancienne et écraser la barre). 140 px sans l'API. */
+  padding-right: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 140px))));
 }
 .topbar-lockup { display: block; height: 20px; width: auto; flex-shrink: 0; }
 .topbar-separator { width: 1px; height: 20px; flex-shrink: 0; background: var(--border); }
