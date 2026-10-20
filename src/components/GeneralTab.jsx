@@ -1,4 +1,5 @@
 import { Compass, FolderInput, Home } from 'lucide-react';
+import AboutSection from './AboutSection.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { LINK_MODES } from '../lib/links.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
@@ -99,6 +100,8 @@ export default function GeneralTab({ onStartTutorial }) {
         </div>
         <span className="hint">{t('general.tutorialHint')}</span>
       </div>
+
+      <AboutSection />
     </div>
   );
 }

@@ -1514,6 +1514,41 @@ kbd {
   .splash-backdrop { animation: splash-out 0.4s ease 1s forwards; }
 }
 
+/* Mention de l'auteur sous l'animation de démarrage : couleurs fixes comme splash.css (fond toujours sombre) */
+.splash-credit {
+  position: fixed;
+  bottom: 28px;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  color: #9c9a92;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  animation: splash-credit-in 0.8s ease 1.2s forwards, splash-out 0.8s ease 3.9s forwards;
+}
+@keyframes splash-credit-in { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .splash-credit { opacity: 1; animation: splash-out 0.4s ease 1s forwards; }
+}
+
+/* À propos (Paramètres › Général) */
+.about-card { display: flex; align-items: center; gap: 12px; }
+.about-mark { width: 36px; height: 36px; }
+.about-text { display: flex; flex-direction: column; gap: 2px; }
+.about-name { font-weight: 600; }
+.about-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.about-link:hover { color: var(--accent-hover); text-decoration: underline; }
+
 /* Rectangle de sélection au clic droit (outil Sélection) */
 .selection-box {
   position: absolute;

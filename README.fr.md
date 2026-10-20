@@ -172,7 +172,7 @@ Claude Code et Codex peuvent transmettre, déléguer et piloter un terminal. Les
 <details>
 <summary><b>Je peux ajouter un autre CLI ?</b></summary>
 
-Oui : **Paramètres › Agents**. Choisis un agent connu (Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) ou ajoute ta propre commande, ton logo et ta couleur. *Tester* vérifie que la commande existe.
+Oui : **Paramètres › Agents**. Choisis un agent connu (Google Antigravity, Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) ou ajoute ta propre commande, ton logo et ta couleur. *Tester* vérifie que la commande existe.
 </details>
 
 <details>

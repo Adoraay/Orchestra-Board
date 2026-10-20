@@ -81,6 +81,12 @@ contextBridge.exposeInMainWorld('agentEvents', {
 });
 
 // Fenêtre : confirmation avant de quitter (agents qui travaillent) et couleurs des boutons Windows.
+// Section « À propos » : version de l'app, liens du projet (author, repo, issues) ouverts dans le navigateur.
+contextBridge.exposeInMainWorld('about', {
+  info: () => ipcRenderer.invoke('about:info'),
+  open: (key) => ipcRenderer.send('about:open', key),
+});
+
 contextBridge.exposeInMainWorld('appWindow', {
   onConfirmQuit: (cb) => {
     const listener = (_e, agents) => cb(agents);

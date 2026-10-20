@@ -17,6 +17,7 @@ const BUILTIN_AGENTS = [
 // Catalogue : agents connus, absents du dock tant qu'on ne les ajoute pas (Paramètres › Agents). Logos dans
 // src/assets/agents/<id>, descriptions dans src/locales (catalog.<id>). resumeArgs seulement quand l'option de reprise est sûre.
 const CATALOG_AGENTS = [
+  { id: 'antigravity', name: 'Antigravity', command: 'agy', color: '#3186ff', resumeArgs: '--continue' }, // successeur de Gemini CLI
   { id: 'aider', name: 'Aider', command: 'aider', color: '#14b014', resumeArgs: '--restore-chat-history' },
   { id: 'qwen', name: 'Qwen Code', command: 'qwen', color: '#615ced' },
   { id: 'opencode', name: 'OpenCode', command: 'opencode', color: '#8b93a7', resumeArgs: '--continue' },

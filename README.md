@@ -172,7 +172,7 @@ Claude Code and Codex can relay, delegate and drive a terminal. Any other CLI (A
 <details>
 <summary><b>Can I add another CLI?</b></summary>
 
-Yes: **Settings › Agents**. Pick a known agent (Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) or add your own command, logo and color. *Test* checks that the command exists.
+Yes: **Settings › Agents**. Pick a known agent (Google Antigravity, Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) or add your own command, logo and color. *Test* checks that the command exists.
 </details>
 
 <details>

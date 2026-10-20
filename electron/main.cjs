@@ -1,7 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { app, BrowserWindow, Menu, Notification, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Notification, ipcMain, shell } = require('electron');
 const ptyManager = require('./ptyManager.cjs');
 const fsHandlers = require('./fsHandlers.cjs');
 const settingsStore = require('./settingsStore.cjs');
@@ -257,6 +257,18 @@ ipcMain.on('pty:kill', (_e, id) => {
 });
 
 // Réponse à app:confirmQuit : « Quitter quand même ».
+// Section « À propos » des paramètres : version de l'app et liens du projet. L'interface envoie un nom de
+// lien, jamais une adresse : seules ces pages peuvent s'ouvrir dans le navigateur.
+const ABOUT_LINKS = {
+  author: 'https://github.com/Adoraay',
+  repo: 'https://github.com/Adoraay/Orchestra-Board',
+  issues: 'https://github.com/Adoraay/Orchestra-Board/issues/new/choose',
+};
+ipcMain.handle('about:info', () => ({ version: app.getVersion() }));
+ipcMain.on('about:open', (_e, key) => {
+  if (Object.hasOwn(ABOUT_LINKS, key)) shell.openExternal(ABOUT_LINKS[key]);
+});
+
 ipcMain.on('app:quit', () => {
   if (!win || win.isDestroyed()) return;
   quitConfirmed = true;
