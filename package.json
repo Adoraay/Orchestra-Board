@@ -3,6 +3,7 @@
   "productName": "Orchestra",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Une grande map où l'on glisse des agents IA (Claude Code, Codex...) qui tournent chacun dans un vrai terminal.",
   "main": "electron/main.cjs",
   "scripts": {

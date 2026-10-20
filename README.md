@@ -1,109 +1,224 @@
-# Orchestra
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="src/assets/orchestra-lockup.svg">
+    <img src="src/assets/orchestra-lockup-light.svg" alt="Orchestra" height="72">
+  </picture>
+</p>
 
-*« Sois le maestro de ton orchestre d'IA ! »*
+<p align="center"><b>Be the maestro of your AI orchestra.</b></p>
 
-Une grande map où tu glisses des agents IA (Claude Code, Codex, Gemini CLI…) depuis le dock de gauche. Chaque agent tourne dans un vrai terminal, et tu peux en mettre autant que tu veux côte à côte.
+<p align="center">
+  A big canvas where you drop AI coding agents (Claude Code, Codex…), each in its own real terminal,<br>
+  and wire them together so they hand work to each other.
+</p>
 
-## Lancer le projet
+<p align="center">
+  <a href="../../releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows-d97757?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848f?style=for-the-badge&logo=electron&logoColor=white">
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-3c3a36?style=for-the-badge"></a>
+</p>
 
-Prérequis : Node.js 20+, et les CLI que tu veux utiliser déjà installés et connectés (`claude`, `codex`, `gemini` doivent marcher dans ton terminal).
+<p align="center"><a href="README.fr.md">🇫🇷 Lire en français</a></p>
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/map-light.png">
+  <img src="docs/images/map-dark.png" alt="An Orchestra board: a Claude Code lead delegating to a Codex and a Claude Code reviewer, and running commands in a visible terminal">
+</picture>
+
+<!-- GIF à ajouter ici : docs/images/demo.gif (glisser deux agents, les relier, un message qui passe) -->
+
+## What is Orchestra?
+
+You already run Claude Code or Codex in a terminal. Orchestra puts as many of them as you want **side by side on an infinite map**, each one in a real terminal, and lets you **link them**:
+
+- a **Lead** agent can **delegate** tasks to other agents and collect their answers by itself,
+- a **Frontend** agent can **relay** its finished work to a **Reviewer** automatically,
+- an agent can **drive a terminal you can see** (`npm run dev`, tests, builds) instead of running hidden commands.
+
+Everything stays on your machine. Orchestra only starts the CLIs you already use, with your own accounts.
+
+## Features
+
+| | |
+|---|---|
+| 🗺️ **Infinite map** | Drag agents from the dock onto a canvas with pan, zoom and minimap. Several boards in tabs; agents keep running in the background. |
+| 💻 **Real terminals** | Every tile is a real terminal (xterm.js + node-pty), started in the folder you picked in the file explorer. |
+| 🔗 **Links between agents** | **Relay** (automatic hand-off), **Delegation** (an agent talks to other agents through tools) and **Terminal** (an agent runs commands in a visible terminal). Turn limits prevent endless loops. |
+| 🎭 **Roles** | Give each agent a lasting role (“You are the reviewer, you never edit files…”). |
+| 📜 **Exchange log** | See every message, reply, command and refusal that went through a link. |
+| 🔍 **Changes** | Review the files an agent changed, with a colored diff, and open them in VS Code. |
+| 🌿 **Git branches** | Drop the *Branch* square on a tile to move its agent to another branch, in its own `git worktree`. |
+| 🟢 **Status & notifications** | Working / waiting for permission / done, with a green glow, a sound and a Windows notification when an agent finishes. |
+| 🎨 **Themes** | Standard, Light, ChatGPT, Gemini, VS Code, GitHub, Dracula and Nord, plus your own accent color. English and French. |
+| 🧭 **Guided tour** | A one-minute tutorial on first launch, available again in the settings. |
+
+## Getting started
+
+### 1. Install
+
+1. Download **`Orchestra-Setup-<version>.exe`** from the [latest release](../../releases/latest) and run it.
+2. Windows may say *“Windows protected your PC”* (the app is not code-signed yet): click **More info → Run anyway**.
+
+**Requirements:** Windows 10 or 11, and the agent CLIs you want to use, installed and logged in: [`claude`](https://docs.anthropic.com/en/docs/claude-code) and/or [`codex`](https://github.com/openai/codex) must work in a normal terminal.
+
+### 2. Take the tour
+
+On first launch, Orchestra offers a short guided tour. It walks you through everything below, on your own board.
+
+<p align="center"><img src="docs/images/tour.png" alt="The guided tour pointing at the agent dock" width="420"></p>
+
+## Tutorial
+
+### Drop your agents
+
+1. In the **file explorer** on the right, click the folder you want to work in: it becomes the *active folder*.
+2. **Drag an agent** from the dock on the left onto the map. It starts in a real terminal, in the active folder.
+3. Drop a second one. Each tile can be moved, resized (click its title bar first) and renamed (double-click its name).
+
+<!-- GIF à ajouter ici : docs/images/drag-drop.gif (glisser Claude Code puis Codex depuis le dock) -->
+
+### Link them
+
+Pick the **Link tool** (`L`) in the toolbar, click the first tile, then the second one. Then, with the **Select tool** (`V`), click the label in the middle of the link to choose how they talk:
+
+<p align="center"><img src="docs/images/link-types.svg" alt="Relay, Delegation and Terminal links" width="100%"></p>
+
+| Link | What happens | Good for |
+|---|---|---|
+| **Relay** | When A finishes, its last reply is pasted into B with your instruction (`{response}` is replaced by the reply). | Dev → reviewer, writer → translator |
+| **Delegation** | A sees B in its tools and decides itself when to write to it; B's reply comes back to A. | A lead that splits work between several agents |
+| **Terminal** | A runs commands in a Terminal tile you can watch, after asking your permission. | Dev servers, tests, builds |
+
+Links can be reversed or made two-way, and every link has a **turn limit** (3 by default).
+
+<p align="center"><img src="docs/images/link-panel.png" alt="The link panel: Relay or Delegation, instruction, turn limit" width="100%"></p>
+
+<!-- GIF à ajouter ici : docs/images/relay.gif (un agent termine, le point lumineux descend le lien, l'autre reçoit le message) -->
+
+### Give a role
+
+Hover the small tab peeking above a Claude Code or Codex tile and click the **mask**. The role is given to the agent at the start of each session (and again after `/clear`). A tile with a role shows an orange tab.
+
+<p align="center"><img src="docs/images/role.png" alt="Editing the role of an agent" width="520"></p>
+
+### Follow the exchanges
+
+Open the **Log** tab on the right edge of the map (`Ctrl+Shift+J`). It lists everything that went through a link: relayed messages, delegated tasks and their replies, terminal commands and their output, and refusals in red (turn limit reached, busy terminal…). Click a name to jump to its tile.
+
+<p align="center"><img src="docs/images/log.png" alt="The exchange log next to the board" width="100%"></p>
+
+### Review the changes
+
+When a tile works in a Git repository, a second tab above it opens the **Changes** window: every file changed since the last commit, with a colored diff and an *Open in VS Code* button. Orchestra only reads Git here.
+
+<p align="center"><img src="docs/images/changes.png" alt="The changes window with a diff" width="100%"></p>
+
+## Recipes
+
+**A lead and two workers** — Put a Claude Code *Lead* above a Codex and a Claude Code, linked with **Delegation**. Ask the lead: *“Ask each of your agents for a short poem and tell me which one is best.”* It writes to both, waits for their replies and answers you.
+
+**Dev + reviewer** — Link a *Frontend* agent to a *Reviewer* with a **Relay** and the instruction *“Review this change and list any bug: {response}”*. Give the reviewer the role *“You never edit files.”* Every time the frontend agent finishes, the reviewer checks its work.
+
+**An agent that runs your dev server** — Link an agent to a **Terminal** tile, then ask: *“Start the dev server in the linked terminal and tell me when it's ready.”* You see the command run; the agent reads the output and can stop it with Ctrl+C.
+
+## Keyboard shortcuts
+
+| Everywhere (even in a terminal) | |
+|---|---|
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous board |
+| `Ctrl+1…9` | Go to board |
+| `Ctrl+Shift+T` | New board |
+| `Ctrl+,` | Settings |
+| `Ctrl+Shift+E` / `A` / `U` / `J` | Files / active agents / usage / log |
+
+| On the map | |
+|---|---|
+| `V` `P` `N` `T` `L` | Select, pen, sticky note, text, link |
+| `F` | Fit everything in view |
+| `Del` | Delete the selection (with confirmation) |
+| `F2` | Rename the selected tile |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+
+In a terminal, `Ctrl+C` copies when text is selected (otherwise it interrupts) and `Ctrl+V` pastes. The full list is in **Settings › Shortcuts**.
+
+## Themes
+
+<p align="center"><img src="docs/images/themes.png" alt="Theme picker in the settings" width="560"></p>
+
+## Privacy and safety
+
+- **Local only.** Orchestra talks to agents through a small server bound to `127.0.0.1`, protected by a secret token that changes at every launch. Nothing is sent anywhere by Orchestra itself.
+- **Your permissions stay yours.** Orchestra never approves a permission request for an agent. Its own tools are pre-approved, except `run_in_terminal`, which always asks.
+- **Git, read-mostly.** Orchestra only runs `git fetch` and `git worktree add` (when you pick a branch) and read-only commands. It never commits or pushes.
+- **What it writes outside its folder:**
+  - `~/.claude.json`: marks a folder as trusted before launching Claude Code in it (can be turned off in *Settings › General*);
+  - `~/.codex/orchestra.config.toml` (an Orchestra profile with its MCP server, used as `codex -p orchestra`) and Orchestra's own entries in `~/.codex/hooks.json`. They do nothing when Codex runs outside Orchestra.
+- App data (settings, boards) lives in `%APPDATA%\Orchestra`. The exchange log stays in memory only.
+
+## FAQ
+
+<details>
+<summary><b>Codex asks me to approve “5 hooks”</b></summary>
+
+That's Orchestra's status hooks (working / done). Choose **Trust all and continue** once; Codex remembers it.
+</details>
+
+<details>
+<summary><b>Which agents can use links?</b></summary>
+
+Claude Code and Codex can relay, delegate and drive a terminal. Any other CLI (Aider, Gemini CLI, your own…) works in a tile and can *receive* relayed messages, but cannot send them. Gemini CLI is no longer maintained by Google and has no orchestration.
+</details>
+
+<details>
+<summary><b>Can I add another CLI?</b></summary>
+
+Yes: **Settings › Agents**. Pick a known agent (Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) or add your own command, logo and color. *Test* checks that the command exists.
+</details>
+
+<details>
+<summary><b>macOS / Linux?</b></summary>
+
+Windows comes first. The code is cross-platform and should run from source elsewhere, but it is not tested or packaged yet.
+</details>
+
+## Build from source
+
+Requires Node.js 20+.
 
 ```bash
-npm install      # installe tout (node-pty arrive avec ses binaires précompilés pour Windows)
-npm run dev      # lance Vite + Electron avec rechargement à chaud
+npm install      # node-pty ships prebuilt binaries: no Visual Studio or Python needed
+npm run dev      # Vite + Electron with hot reload
+npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 ```
 
-Pour lancer l'app sans terminal : double-clic sur `launcher.exe` à la racine du projet (reconstruit l'interface puis ouvre l'app, détails d'une erreur dans `launcher.log`). Il doit rester à la racine. Pour le recompiler après une modification de `scripts/launcher.cs` :
+`launcher.exe` at the root rebuilds the interface and opens the app without a terminal window (`npm run build:launcher` to recompile it).
 
-```bash
-npm run build:launcher
-```
+If Windows' ransomware protection (*Controlled folder access*) is on and the project is in `Documents`, it may block the installer build: allow `makensis.exe` or build elsewhere.
 
-Pour fabriquer l'installateur Windows (`release/Orchestra-Setup-<version>.exe`) :
-
-```bash
-npm run dist
-```
-
-L'installateur propose le dossier d'installation et crée les raccourcis bureau et menu Démarrer. L'exe n'est pas signé : au premier lancement, Windows affiche « Windows a protégé votre ordinateur » (cliquer sur « Informations complémentaires » puis « Exécuter quand même »). Si la protection anti-ransomware de Windows (« Dossiers contrôlés ») est active et que le projet est dans `Documents`, elle bloque l'écriture de l'installateur : autoriser `makensis.exe` ou fabriquer ailleurs.
-
-node-pty 1.1 fournit des binaires précompilés qui marchent avec Electron : pas besoin de Visual Studio ni de Python. npm peut signaler qu'il n'a pas lancé le script d'installation de node-pty (`install-scripts`) : c'est normal, ce script ne ferait que recompiler.
-
-## Structure
+<details>
+<summary><b>Project structure</b></summary>
 
 ```
-electron/                 côté Node : système, terminaux, fichiers
-  main.cjs                fenêtre, routes IPC, notifications Windows
-  preload.cjs             seul pont vers l'interface (window.pty, fs, settings, agents, workspace, git, links, agentEvents)
-  ptyManager.cjs          un vrai PTY (node-pty) par case, dernières sorties gardées pour les tableaux fermés
-  agentStatus.cjs         statut de chaque case (inactif / travaille / attend / a fini)
-  hookServer.cjs          petit serveur local (127.0.0.1 + jeton) qui reçoit les hooks de Claude Code et de Codex
-  codexProfile.cjs        Codex : profil ~/.codex/orchestra.config.toml (serveur MCP) et hooks de statut dans ~/.codex/hooks.json
-  claudeHooks.cjs         fichiers --settings (hooks, outils autorisés) et --mcp-config par case Claude
-  claudeTrust.cjs         dossier marqué « de confiance » dans ~/.claude.json avant de lancer Claude
-  settingsStore.cjs       settings.json : apparence, agents, général (validé à chaque lecture/écriture)
-  workspaceStore.cjs      workspace.json : tableaux, cases, liens, dessins, notes, vue
-  agentsHandlers.cjs      logos des agents ajoutés, bouton « Tester » (where / which)
-  fsHandlers.cjs          explorateur : lecture des dossiers, choix d'un dossier, créer / renommer / corbeille (avec garde-fous)
-  git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add), changements et diff en lecture seule
-  linkRelay.cjs           liens en Transmission : réponse de A envoyée dans le terminal de B, file d'attente, limite de tours
-  i18n.cjs                textes côté Node en anglais et en français (erreurs, notifications, orchestration)
-  usage.cjs               utilisation (quotas) : cache /usage de Claude (+ /usage invisible), rate_limits de Codex
-  delegation.cjs          liens en Délégation : outils list_agents, send_to_agent, wait_for_replies
-  terminalLink.cjs        liens Terminal : outils list_terminals, run_in_terminal, read_terminal, interrupt_terminal
-  activityLog.cjs         journal des échanges entre agents (en mémoire, 500 entrées)
-  mcpServer.cjs           serveur MCP « orchestra » lancé par chaque Claude (stdio), relaie ses appels à l'app
-src/                      interface React
-  App.jsx                 chargement, onglets de tableaux, map (React Flow)
-  components/             barres, dock, explorateur, cases (terminal, post-it, texte), paramètres, écran de démarrage
-  context/                SettingsContext, WorkspaceContext, BoardContext
-  hooks/                  tableaux, historique Ctrl+Z, raccourcis, stylo, notifications, effets des cases
-  lib/                    thème xterm, chemins, (dé)sérialisation des tableaux, traduction (i18n.js)
-  locales/                textes de l'interface : en.js (anglais, par défaut) et fr.js
-  assets/                 logos des agents, logo Orchestra, son de fin de tâche
-  theme.css               toutes les couleurs (variables CSS)
-  styles.css
-design/                   identité visuelle validée (logos, écran de démarrage) : ne pas modifier
-build/                    icône de l'app (générée par npm run build:icon)
-scripts/                  source de launcher.exe, génération de l'icône
+electron/            Node side: windows, terminals, files, local server, MCP
+  main.cjs           window, IPC routes, notifications
+  preload.cjs        the only bridge to the UI (window.pty, fs, settings, workspace, git…)
+  ptyManager.cjs     one real PTY per tile
+  hookServer.cjs     local server (127.0.0.1 + token) for agent hooks and MCP tools
+  mcpServer.cjs      the "orchestra" MCP server started by each agent (stdio)
+  linkRelay.cjs      Relay links
+  delegation.cjs     Delegation links (list_agents, send_to_agent, wait_for_replies)
+  terminalLink.cjs   Terminal links (run_in_terminal, read_terminal, interrupt_terminal)
+  activityLog.cjs    exchange log (memory only)
+  claudeHooks.cjs    per-tile Claude Code settings and MCP config
+  codexProfile.cjs   Codex profile and hooks
+  git.cjs            branches, worktrees, read-only changes and diffs
+src/                 React interface (map, tiles, panels, settings, tutorial)
+docs/images/         README images
 ```
 
-Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty → le CLI. La sortie fait le chemin inverse via `pty:data:<id>`.
+The path of a keystroke: xterm.js → `window.pty.write` → IPC → node-pty → the CLI, and back through `pty:data:<id>`.
+</details>
 
-Données de l'app : `%APPDATA%\Orchestra\` (`settings.json`, `workspace.json`, `logos\`, `hooks\`).
+## License
 
-## Ajouter un agent
-
-Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents connus avec leur logo (Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Hermes Agent, Goose, Amp, Kimi CLI) : « + » les ajoute au dock. Pour un autre outil : « Ajouter un agent » (nom, commande, logo, couleur), le bouton « Tester » vérifie que la commande existe.
-
-## Ce qui marche déjà
-
-- **Map** infinie avec pan, zoom, minimap et grille ; plusieurs **tableaux** en onglets (créer, renommer, supprimer). Les agents des autres tableaux continuent en arrière-plan.
-- **Agents** : glisser un agent du dock sur la map (aperçu en pointillés) ouvre un vrai terminal dans le dossier actif de l'explorateur. Claude Code, Codex, Gemini CLI, Terminal, et tes propres agents.
-- **Cases** : déplacement avec effet « soulever puis fixer », sélection au clic, sélection multiple par rectangle au clic droit (et déplacement en groupe), redimensionnement après un clic sur la barre de titre, renommage par double-clic sur le titre (ex. « Claude design »), bouton « relancer », confirmation avant de fermer un agent (ou l'app) pendant qu'il travaille.
-- **Statuts** : pastille grise / orange / jaune / verte (hooks pour Claude Code et Codex, activité du terminal pour les autres). La languette « Agents actifs » en bas de la map ouvre la liste de tous les agents lancés (tous tableaux) ; un clic centre la map sur l'agent.
-- **Utilisation** : languette « Utilisation » sur le bord droit de la map : quota de session et de la semaine de Claude (mis à jour par un `/usage` invisible), limites de Codex.
-- **Confiance** : Claude Code ne demande plus de faire confiance à chaque dossier ouvert par Orchestra (désactivable dans Général).
-- **Fin de tâche** : lueur verte, bulle « Claude design a terminé sa tâche » (avec le nom de la case), son, notification Windows (un clic ramène sur la case), point vert sur l'onglet d'un tableau fermé.
-- **Barre d'outils** : Sélection, Stylo (clic droit pour gommer), Post-it, Texte (rotation, taille), Lien par deux clics (clic droit pour supprimer un lien) ; Ctrl+Z / Ctrl+Y.
-- **Sauvegarde** de tout à chaque changement ; au redémarrage, une seule question « Reprendre tes discussions ? » relance tous les agents en reprenant leur conversation (`claude --continue`, `codex resume --last`, `gemini --resume latest`), en nouvelle discussion, ou laisse choisir case par case.
-- **Fenêtre** : une seule barre en haut (logo, onglets, dossier actif, paramètres, boutons Windows) qui sert aussi à déplacer la fenêtre ; confirmation avant de quitter quand un agent travaille.
-- **Langues** : anglais (par défaut) et français, au choix dans Paramètres › Général, appliqué en direct.
-- **Paramètres** : thèmes Standard, Clair, ChatGPT, Gemini, VS Code, GitHub, Dracula et Nord (vignettes avec aperçu) et couleur d'accent en direct, police des terminaux, grille, agents, racine de l'explorateur, shell, notifications.
-- **Branches Git** : glisser le carré « Branche » sur une case ouvre la liste des branches ; en choisir une relance l'agent dans son propre `git worktree` (`<dépôt>-worktrees/<branche>`), avec une encoche sous la case.
-- **Liens qui transmettent** : clic sur un lien = panneau (consigne avec `{reponse}`, limite de tours, actif). Quand Claude (A) termine, sa dernière réponse part dans le terminal de B avec la consigne ; B attend s'il travaille encore.
-- **Orchestration** : un lien en Délégation laisse un Claude ou un Codex parler lui-même aux agents reliés (Claude Code ou Codex). Il les voit (`list_agents`), leur écrit (`send_to_agent`) et récupère leurs réponses (`wait_for_replies`). Exemple : un Claude principal relié à 3 Claude leur demande un poème chacun et choisit le meilleur. Le type de lien se choisit dans son panneau (défaut dans les paramètres), avec inversion et double sens.
-- **Lien Terminal** : relier un Claude ou un Codex à une case Terminal lui permet d'y lancer ses commandes sous tes yeux (après ta permission), d'en lire la sortie et de les arrêter (Ctrl+C).
-- **Journal** : languette « Journal » sur le bord droit de la map (Ctrl+Maj+J) : tout ce que les agents se transmettent (messages, réponses, commandes du terminal, refus), un clic sur un nom centre la map sur la case.
-- **Rôle par case** : bouton masque dans la barre de titre d'un Claude ou d'un Codex : un rôle durable donné à l'agent au début de chaque session (« tu es le relecteur… »).
-- **Changements** : bouton diff dans la barre de titre d'une case dans un dépôt Git : fichiers modifiés depuis le dernier commit et leur diff, ouverture dans VS Code.
-- **Explorateur** : clic droit sur un dossier ou un fichier pour créer un dossier, renommer (F2), supprimer vers la corbeille (Suppr, avec confirmation), copier le chemin, ouvrir dans l'Explorateur Windows ou lancer un agent dans ce dossier. Les dossiers utilisés par les agents de la map sont protégés.
-- **Raccourcis clavier** : changer de tableau (Ctrl+Tab, Ctrl+1…9), paramètres (Ctrl+,), F2 pour renommer une case, Suppr pour supprimer la sélection (avec confirmation), copier / coller dans les terminaux ; liste complète dans Paramètres › Raccourcis.
-- **Tutoriel** : au premier lancement, une visite guidée (poser deux agents, les relier, donner un rôle, suivre le journal), à refaire dans Paramètres › Général.
-- **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
-
-## Ce qui reste à faire
-
-1. Gemini CLI n'est plus maintenu (remplacé par Google Antigravity) : il reste dans le dock, sans orchestration.
-
-Le détail de chaque fonctionnalité est dans `PLAN.md`, l'ordre de travail dans `CLAUDE.md`.
+[MIT](LICENSE) © 2026 Dimitri

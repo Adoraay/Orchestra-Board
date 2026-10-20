@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="330" viewBox="0 0 880 330" font-family="Segoe UI, -apple-system, Helvetica, Arial, sans-serif">
+  <title>Orchestra link types: Relay, Delegation, Terminal</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#d97757"/>
+    </marker>
+    <style>
+      .card { fill: #2b2a28; stroke: #4a4844; stroke-width: 1.5; }
+      .tile { fill: #1f1e1d; stroke: #d97757; stroke-width: 1.5; }
+      .name { fill: #ece9e2; font-size: 15px; font-weight: 600; }
+      .agent { fill: #9c9a92; font-size: 12px; }
+      .title { fill: #d97757; font-size: 17px; font-weight: 700; }
+      .text { fill: #c9c6be; font-size: 13px; }
+      .line { stroke: #d97757; stroke-width: 2; fill: none; }
+      .dash { stroke: #d97757; stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <!-- Transmission (Relay) -->
+  <rect class="card" x="8" y="8" width="280" height="314" rx="12"/>
+  <text class="title" x="28" y="40">Relay</text>
+  <rect class="tile" x="28" y="62" width="100" height="56" rx="8"/>
+  <text class="name" x="42" y="86">Frontend</text>
+  <text class="agent" x="42" y="105">Codex</text>
+  <rect class="tile" x="168" y="62" width="100" height="56" rx="8"/>
+  <text class="name" x="182" y="86">Reviewer</text>
+  <text class="agent" x="182" y="105">Claude Code</text>
+  <path class="line" d="M128 90 L166 90" marker-end="url(#arrow)"/>
+  <text class="text" x="28" y="150">When Frontend finishes, its last</text>
+  <text class="text" x="28" y="170">reply is sent to Reviewer, wrapped</text>
+  <text class="text" x="28" y="190">in your instruction:</text>
+  <text class="text" x="28" y="216" font-style="italic">“Review this change: {response}”</text>
+  <text class="text" x="28" y="250">Automatic, with a turn limit so</text>
+  <text class="text" x="28" y="270">agents never loop forever.</text>
+
+  <!-- Délégation -->
+  <rect class="card" x="300" y="8" width="280" height="314" rx="12"/>
+  <text class="title" x="320" y="40">Delegation</text>
+  <rect class="tile" x="390" y="56" width="100" height="50" rx="8"/>
+  <text class="name" x="404" y="78">Lead</text>
+  <text class="agent" x="404" y="96">Claude Code</text>
+  <rect class="tile" x="320" y="146" width="100" height="50" rx="8"/>
+  <text class="name" x="334" y="168">Worker 1</text>
+  <text class="agent" x="334" y="186">Codex</text>
+  <rect class="tile" x="460" y="146" width="100" height="50" rx="8"/>
+  <text class="name" x="474" y="168">Worker 2</text>
+  <text class="agent" x="474" y="186">Claude Code</text>
+  <path class="line" d="M420 106 L385 144" marker-end="url(#arrow)"/>
+  <path class="line" d="M460 106 L495 144" marker-end="url(#arrow)"/>
+  <text class="text" x="320" y="228">Lead sees its workers as tools and</text>
+  <text class="text" x="320" y="248">decides itself when to write to them</text>
+  <text class="text" x="320" y="268">(send_to_agent), then collects their</text>
+  <text class="text" x="320" y="288">replies (wait_for_replies).</text>
+
+  <!-- Terminal -->
+  <rect class="card" x="592" y="8" width="280" height="314" rx="12"/>
+  <text class="title" x="612" y="40">Terminal</text>
+  <rect class="tile" x="612" y="62" width="100" height="56" rx="8"/>
+  <text class="name" x="626" y="86">Lead</text>
+  <text class="agent" x="626" y="105">Claude Code</text>
+  <rect class="tile" x="752" y="62" width="100" height="56" rx="8"/>
+  <text class="name" x="766" y="86">Dev server</text>
+  <text class="agent" x="766" y="105">Terminal</text>
+  <path class="dash" d="M712 90 L750 90" marker-end="url(#arrow)"/>
+  <text class="text" x="612" y="150">The agent runs its commands in a</text>
+  <text class="text" x="612" y="170">terminal you can see: npm run dev,</text>
+  <text class="text" x="612" y="190">tests, builds. It asks your</text>
+  <text class="text" x="612" y="210">permission first, reads the output</text>
+  <text class="text" x="612" y="230">and can stop it with Ctrl+C.</text>
+</svg>
