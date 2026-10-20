@@ -25,6 +25,7 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+*.lnk
 .vscode/
 .idea/
 design/README.md
