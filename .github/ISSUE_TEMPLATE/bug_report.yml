@@ -1,0 +1,99 @@
+name: Bug report
+description: Something doesn't work as expected in Orchestra.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! The more precise you are, the faster it gets fixed.
+        Please don't paste API keys, tokens or private code.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+      placeholder: When Claude finishes, the relayed message never reaches Codex. I expected…
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Drop a Claude Code and a Codex on the map
+        2. Link them with a Relay link
+        3. …
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Map / tiles / boards
+        - Terminals
+        - Relay link
+        - Delegation link
+        - Terminal link
+        - Role
+        - Exchange log
+        - Changes / Git branches
+        - Agent status / notifications
+        - Settings / themes / language
+        - Tutorial
+        - Installer / startup
+        - Other
+
+  - type: dropdown
+    id: agents
+    attributes:
+      label: Agents involved
+      multiple: true
+      options:
+        - Claude Code
+        - Codex
+        - Gemini CLI
+        - Terminal
+        - Another CLI (say which below)
+
+  - type: input
+    id: orchestra-version
+    attributes:
+      label: Orchestra version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: agent-versions
+    attributes:
+      label: Agent CLI versions
+      description: Output of `claude --version` and/or `codex --version`, if relevant.
+      placeholder: "Claude Code 2.1.304, codex-cli 0.163.0"
+
+  - type: input
+    id: os
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run Orchestra?
+      options:
+        - Installer (Orchestra-Setup-x.y.z.exe)
+        - From source (npm run dev / launcher.exe)
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots, logs or anything else
+      description: A screenshot of the board, the exchange log (Ctrl+Shift+J) or the terminal output often helps a lot.

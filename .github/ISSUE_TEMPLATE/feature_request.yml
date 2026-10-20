@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest an idea or an improvement for Orchestra.
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape Orchestra! Tell us about the problem first: it helps find the best solution.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation or problem behind the idea.
+      placeholder: I run 5 agents on the same repo and I can't tell which one changed which file…
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like Orchestra to do?
+      placeholder: Show a small badge on each tile with the number of files it changed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: How do you deal with it today, if at all?
+
+  - type: dropdown
+    id: agents
+    attributes:
+      label: Agents concerned
+      multiple: true
+      options:
+        - Claude Code
+        - Codex
+        - Gemini CLI
+        - Terminal
+        - Another CLI (say which above)
+        - Not agent-specific
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Sketches, screenshots, links to similar tools…

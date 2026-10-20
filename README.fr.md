@@ -219,6 +219,12 @@ docs/images/         images du README
 Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty → le CLI, et retour par `pty:data:<id>`.
 </details>
 
+## Retours et aide
+
+Un bug ou une idée ? [Ouvre une issue](../../issues/new/choose) : il y a un court formulaire pour les bugs et un pour les demandes de fonctionnalités. Les questions, les retours et ta façon d'utiliser Orchestra sont les bienvenus dans les [Discussions](../../discussions).
+
+Pour tout le reste : **orchestraboardai [at] gmail [dot] com**
+
 ## Licence
 
 [MIT](LICENSE) © 2026 Dimitri ([@Adoraay](https://github.com/Adoraay))

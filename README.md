@@ -219,6 +219,12 @@ docs/images/         README images
 The path of a keystroke: xterm.js → `window.pty.write` → IPC → node-pty → the CLI, and back through `pty:data:<id>`.
 </details>
 
+## Feedback & support
+
+Found a bug or have an idea? [Open an issue](../../issues/new/choose): there is a short form for bugs and one for feature requests. Questions, feedback and stories about how you use Orchestra are welcome in [Discussions](../../discussions).
+
+For anything else: **orchestraboardai [at] gmail [dot] com**
+
 ## License
 
 [MIT](LICENSE) © 2026 Dimitri ([@Adoraay](https://github.com/Adoraay))
