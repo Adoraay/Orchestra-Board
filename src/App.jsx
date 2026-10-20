@@ -29,6 +29,7 @@ import SettingsModal from './components/SettingsModal.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
 import UsagePanel from './components/UsagePanel.jsx';
 import TextNode from './components/TextNode.jsx';
+import Tutorial from './components/Tutorial.jsx';
 import Toast from './components/Toast.jsx';
 import TopBar from './components/TopBar.jsx';
 import { BoardContext } from './context/BoardContext.jsx';
@@ -96,7 +97,17 @@ function Workspace({ saved }) {
   const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
   const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
   const clearLaunch = useCallback(() => setLaunchRequest(null), []);
-  const { agentById } = useSettings();
+  const { settings, agentById, updateSettings } = useSettings();
+  // Tutoriel (PLAN.md §3.21) : 'welcome' au premier lancement, 'tour' relancé depuis les paramètres.
+  const [tutorial, setTutorial] = useState(() => (settings.general.tutorialDone ? null : 'welcome'));
+  const finishTutorial = useCallback(() => {
+    setTutorial(null);
+    updateSettings('general', { tutorialDone: true });
+  }, [updateSettings]);
+  const startTutorial = useCallback(() => {
+    setSettingsOpen(false);
+    setTutorial('tour');
+  }, []);
 
   useAppShortcuts({
     toggleSettings: () => setSettingsOpen((o) => !o),
@@ -185,7 +196,10 @@ function Workspace({ saved }) {
           onLaunchAgent={(agentId, cwd) => setLaunchRequest({ agentId, cwd, at: Date.now() })}
         />
       </div>
-      {settingsOpen && <SettingsModal onClose={closeSettings} />}
+      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} />}
+      {tutorial && resumeChoice !== 'pending' && (
+        <Tutorial key={tutorial} board={content[activeId]} welcome={tutorial === 'welcome'} onFinish={finishTutorial} />
+      )}
       {resumeChoice === 'pending' && (
         <ResumeDialog
           agents={resumable}

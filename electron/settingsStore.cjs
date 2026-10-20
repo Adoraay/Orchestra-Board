@@ -115,6 +115,8 @@ function sanitize(input) {
       notifyDesktop: g.notifyDesktop !== false,
       linkMode: pick(g.linkMode, LINK_MODES, DEFAULTS.general.linkMode),
       trustFolders: g.trustFolders !== false,
+      // Tutoriel du premier lancement (PLAN.md §3.21) : un settings.json d'avant le tutoriel = déjà fait.
+      tutorialDone: typeof g.tutorialDone === 'boolean' ? g.tutorialDone : input != null,
     },
   };
 }

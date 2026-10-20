@@ -9,7 +9,7 @@ import useT from '../hooks/useT.js';
 const TABS = ['appearance', 'agents', 'general', 'shortcuts'];
 
 // Fenêtre de paramètres centrée (PLAN.md §3.3) : fermeture par ×, Échap ou clic à côté.
-export default function SettingsModal({ onClose }) {
+export default function SettingsModal({ onClose, onStartTutorial }) {
   const t = useT();
   const [tab, setTab] = useState('appearance');
 
@@ -48,7 +48,7 @@ export default function SettingsModal({ onClose }) {
         <div className="modal-body no-scrollbar" role="tabpanel">
           {tab === 'appearance' && <AppearanceTab />}
           {tab === 'agents' && <AgentsTab />}
-          {tab === 'general' && <GeneralTab />}
+          {tab === 'general' && <GeneralTab onStartTutorial={onStartTutorial} />}
           {tab === 'shortcuts' && <ShortcutsTab />}
         </div>
       </div>

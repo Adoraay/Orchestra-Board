@@ -18,6 +18,7 @@ export default function BoardToolbar({ tool, onChange }) {
       {TOOLS.map(({ id, key, icon: Icon }) => (
         <button
           key={id}
+          data-tool={id}
           className={`tool-button ${tool === id ? 'active' : ''}`}
           aria-pressed={tool === id}
           aria-label={t(`tool.${id}`)}

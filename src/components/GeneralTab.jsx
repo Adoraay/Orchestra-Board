@@ -1,4 +1,4 @@
-import { FolderInput, Home } from 'lucide-react';
+import { Compass, FolderInput, Home } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { LINK_MODES } from '../lib/links.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
@@ -15,7 +15,7 @@ const SHELLS = [
   { id: 'bash', name: 'Git Bash' },
 ];
 
-export default function GeneralTab() {
+export default function GeneralTab({ onStartTutorial }) {
   const { settings, updateSettings } = useSettings();
   const { rootPath, homeDir, changeRoot, resetRoot } = useWorkspace();
   const general = settings.general;
@@ -87,6 +87,17 @@ export default function GeneralTab() {
           {t('general.trustFolders')}
         </label>
         <span className="hint">{t('general.trustHint')}</span>
+      </div>
+
+      <div className="field">
+        <span className="field-label">{t('general.tutorial')}</span>
+        <div className="field-row">
+          <button className="text-button" onClick={onStartTutorial}>
+            <Compass size={15} />
+            {t('general.tutorialRestart')}
+          </button>
+        </div>
+        <span className="hint">{t('general.tutorialHint')}</span>
       </div>
     </div>
   );

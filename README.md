@@ -99,6 +99,7 @@ Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents c
 - **Changements** : bouton diff dans la barre de titre d'une case dans un dépôt Git : fichiers modifiés depuis le dernier commit et leur diff, ouverture dans VS Code.
 - **Explorateur** : clic droit sur un dossier ou un fichier pour créer un dossier, renommer (F2), supprimer vers la corbeille (Suppr, avec confirmation), copier le chemin, ouvrir dans l'Explorateur Windows ou lancer un agent dans ce dossier. Les dossiers utilisés par les agents de la map sont protégés.
 - **Raccourcis clavier** : changer de tableau (Ctrl+Tab, Ctrl+1…9), paramètres (Ctrl+,), F2 pour renommer une case, Suppr pour supprimer la sélection (avec confirmation), copier / coller dans les terminaux ; liste complète dans Paramètres › Raccourcis.
+- **Tutoriel** : au premier lancement, une visite guidée (poser deux agents, les relier, donner un rôle, suivre le journal), à refaire dans Paramètres › Général.
 - **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.
 
 ## Ce qui reste à faire
