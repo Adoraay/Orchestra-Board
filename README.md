@@ -221,4 +221,4 @@ The path of a keystroke: xterm.js → `window.pty.write` → IPC → node-pty �
 
 ## License
 
-[MIT](LICENSE) © 2026 Dimitri
+[MIT](LICENSE) © 2026 Dimitri ([@Adoraay](https://github.com/Adoraay))

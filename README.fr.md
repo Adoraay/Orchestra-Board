@@ -221,4 +221,4 @@ Le chemin d'une frappe : xterm.js → `window.pty.write` → IPC → node-pty �
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Dimitri
+[MIT](LICENSE) © 2026 Dimitri ([@Adoraay](https://github.com/Adoraay))
