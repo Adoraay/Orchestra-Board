@@ -10,6 +10,7 @@ const MAX_STROKES = 2000;
 const MAX_POINTS = 5000;
 const MAX_BOARDS = 50;
 const MAX_NAME = 40;
+const MAX_ROLE = 2000;
 
 const filePath = () => path.join(app.getPath('userData'), 'workspace.json');
 
@@ -27,11 +28,13 @@ function sanitizeData(type, data = {}) {
       const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
       const branch = typeof data.branch === 'string' ? data.branch.slice(0, 255) : '';
       const worktree = typeof data.worktree === 'string' ? data.worktree.slice(0, 1024) : '';
+      const role = typeof data.role === 'string' ? data.role.trim().slice(0, MAX_ROLE) : '';
       return {
         agentId: typeof data.agentId === 'string' ? data.agentId.slice(0, 64) : 'shell',
         cwd: typeof data.cwd === 'string' ? data.cwd.slice(0, 1024) : null,
         ...(label && { label }), // nom choisi par double-clic sur le titre
         ...(branch && worktree && { branch, worktree }), // branche Git choisie et dossier où l'agent tourne
+        ...(role && { role }), // rôle donné à l'agent (PLAN.md §3.19)
       };
     }
     case 'note':

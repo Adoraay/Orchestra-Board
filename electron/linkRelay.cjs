@@ -12,7 +12,7 @@ const TRANSCRIPT_TAIL = 2 * 1024 * 1024; // octets lus en fin de transcript
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 
-let deps = { write: () => {}, status: () => null, arm: () => {}, emit: () => {} };
+let deps = { write: () => {}, status: () => null, arm: () => {}, emit: () => {}, log: () => {} };
 // Un lien « dans les deux sens » donne deux entrées (key = id, puis id:r), chacune avec son compteur.
 let links = new Map(); // source -> [{ key, id, source, target, prompt, maxTurns, enabled }]
 const chains = new Map(); // case -> { counts: Map(key -> envois) }
@@ -21,7 +21,7 @@ const queues = new Map(); // case cible -> [{ key, text, chain, turns }]
 const newChain = () => ({ counts: new Map() });
 
 // write(id, data), status(id) -> statut ou null si pas lancé, arm(id) : la sortie qui suit = travaille,
-// emit(linkId, event) : état d'un lien pour l'interface.
+// emit(linkId, event) : état d'un lien pour l'interface, log(entrée) : journal des échanges (activityLog).
 function init(d) {
   deps = d;
 }
@@ -152,24 +152,30 @@ function onStop(id, payload) {
   setTimeout(() => {
     const reply = lastReply(payload);
     for (const link of outgoing) {
+      const refuse = (text) => deps.log({ kind: 'refused', linkId: link.id, from: id, to: link.target, text });
       if (!reply) {
         deps.emit(link.id, { state: 'error', message: t('link.noReply') });
+        refuse(t('link.noReply'));
         continue;
       }
       const used = chain.counts.get(link.key) ?? 0;
       if (used >= link.maxTurns) {
         deps.emit(link.id, { state: 'limit', turns: used, maxTurns: link.maxTurns });
+        refuse(t('link.limitReached', { max: link.maxTurns }));
         continue;
       }
       if (!deps.status(link.target)) {
         deps.emit(link.id, { state: 'error', message: t('link.targetNotRunning') });
+        refuse(t('link.targetNotRunning'));
         continue;
       }
       chain.counts.set(link.key, used + 1);
+      const text = buildText(link.prompt, reply);
+      deps.log({ kind: 'relay', linkId: link.id, from: id, to: link.target, text });
       enqueue(link.target, {
         key: link.key,
         id: link.id,
-        text: buildText(link.prompt, reply),
+        text,
         chain,
         turns: used + 1,
         maxTurns: link.maxTurns,

@@ -20,6 +20,7 @@ import DropPreview from './components/DropPreview.jsx';
 import ExplorerPanel from './components/ExplorerPanel.jsx';
 import FloatingEdge from './components/FloatingEdge.jsx';
 import LinkPanel from './components/LinkPanel.jsx';
+import LogPanel from './components/LogPanel.jsx';
 import MiniMapNode from './components/MiniMapNode.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import QuitDialog from './components/QuitDialog.jsx';
@@ -81,6 +82,16 @@ function Workspace({ saved }) {
   const [agentsBarOpen, setAgentsBarOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [usageAgent, setUsageAgent] = useState('claude-code');
+  const [logOpen, setLogOpen] = useState(false);
+  // Utilisation et Journal partagent le bord droit de la map : un seul ouvert à la fois.
+  const toggleUsage = useCallback(() => {
+    setLogOpen(false);
+    setUsageOpen((o) => !o);
+  }, []);
+  const toggleLog = useCallback(() => {
+    setUsageOpen(false);
+    setLogOpen((o) => !o);
+  }, []);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
   const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
@@ -102,7 +113,8 @@ function Workspace({ saved }) {
     createBoard: () => setRenameRequest(boards.createBoard()),
     toggleExplorer: () => setExplorerOpen((o) => !o),
     toggleAgentsBar: () => setAgentsBarOpen((o) => !o),
-    toggleUsage: () => setUsageOpen((o) => !o),
+    toggleUsage,
+    toggleLog,
   });
 
   // Démarrage : une seule question pour reprendre (ou non) les conversations de tous les agents restaurés.
@@ -130,7 +142,8 @@ function Workspace({ saved }) {
   // Panneaux posés sur la map : leur état vit ici, car la map est recréée à chaque changement de tableau.
   const overlays = (
     <>
-      <UsagePanel open={usageOpen} onToggle={() => setUsageOpen((o) => !o)} agentId={usageAgent} onSelectAgent={setUsageAgent} />
+      <UsagePanel open={usageOpen} onToggle={toggleUsage} agentId={usageAgent} onSelectAgent={setUsageAgent} />
+      <LogPanel open={logOpen} onToggle={toggleLog} onFocus={focusAgent} />
       <AgentsBar
         boards={boards.boards}
         content={content}

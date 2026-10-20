@@ -13,6 +13,7 @@ export const SHORTCUT_GROUPS = [
       { keys: ['Ctrl', 'Shift', 'E'], label: 'shortcut.toggleFiles' },
       { keys: ['Ctrl', 'Shift', 'A'], label: 'shortcut.toggleAgents' },
       { keys: ['Ctrl', 'Shift', 'U'], label: 'shortcut.toggleUsage' },
+      { keys: ['Ctrl', 'Shift', 'J'], label: 'shortcut.toggleLog' },
     ],
   },
   {

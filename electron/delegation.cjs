@@ -7,7 +7,7 @@ const DEFAULT_WAIT = 180; // s
 const MAX_WAIT = 300; // s
 const MAX_MESSAGE = 20000;
 
-let deps = { info: () => null, agent: () => ({ name: '?', hooks: null }), emit: () => {} };
+let deps = { info: () => null, agent: () => ({ name: '?', hooks: null }), emit: () => {}, log: () => {} };
 let cases = new Map(); // id -> { name, agent, cwd, branch }
 let reachable = new Map(); // appelant -> [{ key, id, target, maxTurns, enabled }]
 const expects = new Map(); // cible -> { from, key, id, turns, maxTurns, delivered, reply }
@@ -18,7 +18,7 @@ const languages = new Map(); // case -> 'en' | 'fr'
 const langOf = (id) => languages.get(id) ?? appLanguage();
 
 // info(id) : statut de la case (agentStatus), agent(agentId) : { name, hooks } depuis les paramètres,
-// emit(linkId, event) : état d'un lien pour l'interface.
+// emit(linkId, event) : état d'un lien pour l'interface, log(entrée) : journal des échanges (activityLog).
 function init(d) {
   deps = d;
 }
@@ -84,18 +84,23 @@ function sendToAgent(caller, { name, message } = {}) {
   const link = findLink(caller, name);
   if (!link) return unknownAgent(caller, name);
   const target = cases.get(link.target);
-  if (!target.agent.hooks) return result(tIn(lang, 'delegate.noHooks', { name: target.name }), true);
+  const refuse = (text) => {
+    deps.log({ kind: 'refused', linkId: link.id, from: caller, to: link.target, text });
+    return result(text, true);
+  };
+  if (!target.agent.hooks) return refuse(tIn(lang, 'delegate.noHooks', { name: target.name }));
   const info = deps.info(link.target);
-  if (!info) return result(tIn(lang, 'delegate.notRunning', { name: target.name }), true);
+  if (!info) return refuse(tIn(lang, 'delegate.notRunning', { name: target.name }));
 
   // Limite de tours de la chaîne en cours (PLAN.md §3.5) : pas de boucle sans fin entre agents.
   const chain = chainOf(caller);
   const used = chain.counts.get(link.key) ?? 0;
   if (used >= link.maxTurns) {
     deps.emit(link.id, { state: 'limit', turns: used, maxTurns: link.maxTurns });
-    return result(tIn(lang, 'delegate.limit', { max: link.maxTurns, name: target.name }), true);
+    return refuse(tIn(lang, 'delegate.limit', { max: link.maxTurns, name: target.name }));
   }
   chain.counts.set(link.key, used + 1);
+  deps.log({ kind: 'delegate', linkId: link.id, from: caller, to: link.target, text: message.trim() });
 
   const expect = { from: caller, key: link.key, id: link.id, turns: used + 1, maxTurns: link.maxTurns, delivered: false, reply: null };
   expects.set(link.target, expect);
@@ -131,6 +136,7 @@ function onStop(id, payload) {
   setTimeout(() => {
     if (expects.get(id) !== expect) return;
     expect.reply = lastReply(payload) || tIn(langOf(expect.from), 'delegate.emptyReply');
+    deps.log({ kind: 'reply', linkId: expect.id, from: id, to: expect.from, text: expect.reply });
     deps.emit(expect.id, { state: 'sent', to: expect.from, turns: expect.turns, maxTurns: expect.maxTurns });
     checkWaiters();
   }, READ_DELAY);

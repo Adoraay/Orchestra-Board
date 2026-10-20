@@ -12,14 +12,15 @@ const DEFAULT_LINES = 50;
 const MAX_LINES = 500;
 const MAX_COMMAND = 4000;
 
-let deps = { write: () => {}, buffer: () => null, info: () => null, arm: () => {}, emit: () => {} };
+let deps = { write: () => {}, buffer: () => null, info: () => null, arm: () => {}, emit: () => {}, log: () => {} };
 let terminals = new Map(); // id d'une case Terminal -> { name, cwd }
 let reachable = new Map(); // agent -> [{ id (lien), target }]
 const running = new Map(); // case Terminal -> { output } : run_in_terminal en cours
 const knownPrompts = new Set(); // cases Terminal dont l'invite du shell a été reconnue au moins une fois
 
 // write(id, data), buffer(id) : dernières sorties, info(id) : statut ou null si pas lancé,
-// arm(id) : la sortie qui suit = travaille, emit(linkId, event) : animation du lien.
+// arm(id) : la sortie qui suit = travaille, emit(linkId, event) : animation du lien,
+// log(entrée) : journal des échanges (activityLog).
 function init(d) {
   deps = d;
 }
@@ -111,13 +112,18 @@ async function runInTerminal(caller, { name, command, wait_seconds: wait } = {},
   if (typeof command !== 'string' || !command.trim()) return result(t('terminal.emptyCommand'), true);
   if (command.length > MAX_COMMAND) return result(t('terminal.tooLong', { max: MAX_COMMAND }), true);
   const idle = shellIdle(link.target);
-  if (idle === false) return result(t('terminal.busy', { name: terminal.name }), true);
+  if (idle === false) {
+    const text = t('terminal.busy', { name: terminal.name });
+    deps.log({ kind: 'refused', linkId: link.id, from: caller, to: link.target, text });
+    return result(text, true);
+  }
   const promptAware = idle === true;
 
   const seconds = Math.min(MAX_WAIT, Math.max(1, Number.isFinite(wait) ? Math.round(wait) : DEFAULT_WAIT));
   const run = { output: '', onOutput: null };
   running.set(link.target, run);
   deps.emit(link.id, { state: 'sent', to: link.target });
+  deps.log({ kind: 'command', linkId: link.id, from: caller, to: link.target, text: command.trim() });
   deps.arm(link.target);
   deps.write(link.target, command.trim().replace(/\r?\n/g, '\r') + '\r');
 
@@ -145,9 +151,10 @@ async function runInTerminal(caller, { name, command, wait_seconds: wait } = {},
   deps.emit(link.id, { state: 'sent', to: caller });
 
   const output = truncate(clean(run.output)) || t('terminal.noOutput');
-  if (outcome === 'done') return result(output);
-  const note = outcome === 'timeout' ? t('terminal.stillRunning', { seconds }) : t('terminal.notFinished');
-  return result(`${output}\n\n${note}`);
+  const note = outcome === 'done' ? '' : outcome === 'timeout' ? t('terminal.stillRunning', { seconds }) : t('terminal.notFinished');
+  const text = note ? `${output}\n\n${note}` : output;
+  deps.log({ kind: 'output', linkId: link.id, from: link.target, to: caller, text });
+  return result(text);
 }
 
 function readTerminal(caller, { name, lines } = {}) {
@@ -164,6 +171,7 @@ function interruptTerminal(caller, { name } = {}) {
   deps.write(found.link.target, '\x03');
   knownPrompts.delete(found.link.target); // invite changée entre-temps : on ne reste pas « occupé » pour toujours
   deps.emit(found.link.id, { state: 'sent', to: found.link.target });
+  deps.log({ kind: 'interrupt', linkId: found.link.id, from: caller, to: found.link.target, text: 'Ctrl+C' });
   return result(t('terminal.interrupted', { name: found.terminal.name }));
 }
 

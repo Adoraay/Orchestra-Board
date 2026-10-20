@@ -400,6 +400,74 @@ button { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .terminal-header .close:hover { color: var(--danger); background: var(--surface); }
+/* Encoches au-dessus de la case (Changements, Rôle) : rangées derrière son bord haut, seul un liseré
+   dépasse ; au survol elles sortent avec leur icône. Décalées à gauche du bouton de fermeture. */
+.case-tabs {
+  position: absolute;
+  bottom: calc(100% - 12px);
+  right: 46px;
+  z-index: -1; /* derrière la case */
+  display: flex;
+  gap: 4px;
+}
+.case-tab {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding-top: 5px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transform: translateY(16px); /* 6 px visibles au-dessus de la case */
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), color 120ms, border-color 120ms;
+}
+.case-tab svg { opacity: 0; transition: opacity 120ms; }
+.case-tab:hover, .case-tab:focus-visible { transform: translateY(-2px); color: var(--text); }
+.case-tab:hover svg, .case-tab:focus-visible svg { opacity: 1; }
+/* Rôle défini : le liseré visible est orange */
+.case-tab.active { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.case-tab.active:hover, .case-tab.active:focus-visible { color: var(--on-accent); }
+@media (prefers-reduced-motion: reduce) {
+  .case-tab, .case-tab svg { transition: none; }
+}
+
+/* Rôle d'une case (PLAN.md §3.19) */
+.role-editor {
+  position: absolute;
+  top: 44px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, calc(100% - 20px));
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 12px 28px var(--shadow);
+  animation: bubble-in-bar 150ms ease-out;
+  cursor: default;
+}
+.role-editor-label { font-weight: 600; }
+.role-editor textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.role-editor textarea:focus { outline: none; border-color: var(--accent); }
+.role-editor-text { margin: 0; }
+.role-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .badge {
   font-size: 11px;
   padding: 1px 6px;
@@ -457,6 +525,50 @@ button { font: inherit; color: inherit; }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 6px 20px; }
 .modal-header h1 { margin: 0; font-size: 16px; font-weight: 600; }
 .modal-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px; }
+
+/* Changements d'une case (PLAN.md §3.20) */
+.modal.changes-modal { width: 1100px; height: 720px; }
+.changes-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.changes-branch { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); font-size: 13px; font-weight: 400; }
+.changes-actions { display: flex; align-items: center; gap: 6px; }
+.changes-message { margin: 0; padding: 18px 20px; }
+.changes-body { display: grid; grid-template-columns: 300px 1fr; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+.changes-files { margin: 0; padding: 6px; overflow-y: auto; border-right: 1px solid var(--border); list-style: none; }
+.changes-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.changes-file:hover { background: var(--surface); }
+.changes-file.active { background: var(--surface); box-shadow: inset 2px 0 0 var(--accent); }
+.changes-status { flex-shrink: 0; width: 14px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; text-align: center; }
+.changes-status.s-M, .changes-status.s-R, .changes-status.s-C { color: var(--warning); }
+.changes-status.s-A, .changes-status.s-new { color: var(--success); }
+.changes-status.s-D { color: var(--danger); }
+.changes-path { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.changes-name, .changes-folder { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.changes-folder { color: var(--text-muted); font-size: 11px; direction: rtl; text-align: left; }
+.changes-count { display: flex; gap: 6px; flex-shrink: 0; font-family: var(--font-mono); font-size: 11px; }
+.changes-count .add { color: var(--success); }
+.changes-count .del { color: var(--danger); }
+.changes-diff { min-width: 0; overflow: auto; padding: 10px 0; }
+.changes-diff > .hint, .changes-diff > .changes-message { display: block; padding: 0 16px; }
+.changes-code { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; }
+.changes-line { min-width: max-content; padding: 0 16px; white-space: pre; }
+.changes-line.add { background: color-mix(in srgb, var(--success) 18%, transparent); }
+.changes-line.del { background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.changes-line.hunk { margin-top: 6px; color: var(--text-muted); background: var(--surface); }
+.changes-line.meta { color: var(--text-muted); }
 
 .tabs { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .tab {
@@ -988,6 +1100,8 @@ kbd {
   cursor: pointer;
   transition: color 150ms;
 }
+/* Hauteur fixe : la languette du Journal se place juste sous celle de l'Utilisation, quelle que soit la langue. */
+.usage-tab { position: relative; min-height: 128px; box-sizing: border-box; justify-content: center; }
 .usage-tab:hover, .usage-tab.open { color: var(--text); }
 .usage-tab.open { color: var(--accent); }
 .usage-tab-label { writing-mode: vertical-rl; }
@@ -1018,6 +1132,53 @@ kbd {
   transition: opacity 180ms, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .usage-slide.open .usage-panel { opacity: 1; transform: none; }
+
+/* Journal des échanges (PLAN.md §3.18) : même panneau que l'Utilisation, languette en dessous */
+.log-wrap { pointer-events: none; }
+.log-wrap > * { pointer-events: auto; }
+.log-wrap .usage-tab { margin-top: 136px; }
+.log-unseen { position: absolute; top: 6px; left: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.usage-panel.log-panel { width: 340px; }
+.log-list { display: flex; flex-direction: column; gap: 6px; max-height: min(60vh, 520px); overflow-y: auto; margin-right: -6px; padding-right: 6px; }
+.log-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.log-entry:hover { border-color: var(--text-muted); }
+.log-entry.refused { border-color: var(--danger); }
+.log-entry-head { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 12px; }
+.log-icon { flex-shrink: 0; color: var(--accent); }
+.log-entry.refused .log-icon { color: var(--danger); }
+.log-kind { flex-shrink: 0; font-weight: 600; }
+.log-arrow { flex-shrink: 0; color: var(--text-muted); }
+.log-case {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.log-case:hover { color: var(--accent); text-decoration: underline; }
+.log-time { margin-left: auto; flex-shrink: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.log-text {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.log-entry.expanded .log-text { color: var(--text); font-family: var(--font-mono); white-space: pre-wrap; word-break: break-word; }
 .usage-header { display: flex; align-items: center; justify-content: space-between; min-height: 26px; }
 .usage-title { font-weight: 600; }
 .icon-button.spinning svg { animation: usage-spin 0.9s linear infinite; }

@@ -35,6 +35,9 @@ contextBridge.exposeInMainWorld('git', {
   isRepo: (cwd) => ipcRenderer.invoke('git:isRepo', cwd),
   listBranches: (cwd, fetch) => ipcRenderer.invoke('git:listBranches', cwd, fetch),
   ensureWorktree: (cwd, branch) => ipcRenderer.invoke('git:ensureWorktree', cwd, branch),
+  changes: (cwd) => ipcRenderer.invoke('git:changes', cwd),
+  diff: (cwd, file) => ipcRenderer.invoke('git:diff', cwd, file),
+  openInEditor: (cwd, file) => ipcRenderer.invoke('git:openInEditor', cwd, file),
 });
 
 // Utilisation (quotas) de Claude Code et Codex. refresh(agentId, force) peut lancer un /usage invisible.
@@ -49,6 +52,17 @@ contextBridge.exposeInMainWorld('links', {
     const listener = (_e, linkId, event) => cb(linkId, event);
     ipcRenderer.on('link:event', listener);
     return () => ipcRenderer.removeListener('link:event', listener);
+  },
+});
+
+// Journal des échanges entre agents (PLAN.md §3.18).
+contextBridge.exposeInMainWorld('activityLog', {
+  get: () => ipcRenderer.invoke('log:get'),
+  clear: () => ipcRenderer.invoke('log:clear'),
+  onEntry: (cb) => {
+    const listener = (_e, entry) => cb(entry);
+    ipcRenderer.on('log:entry', listener);
+    return () => ipcRenderer.removeListener('log:entry', listener);
   },
 });
 

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Handle, NodeResizer, Position, useReactFlow, useStoreApi } from '@xyflow/react';
-import { GitBranch, History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
+import { Drama, FileDiff, GitBranch, History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
 import BranchBar from './BranchBar.jsx';
+import ChangesDialog from './ChangesDialog.jsx';
 import FinishBubble from './FinishBubble.jsx';
+import RoleEditor from './RoleEditor.jsx';
 import StatusDot from './StatusDot.jsx';
 import TerminalTitle from './TerminalTitle.jsx';
 import { useBoard } from '../context/BoardContext.jsx';
@@ -28,6 +30,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const [status, setStatus] = useState('idle');
   const [finished, setFinished] = useState(false); // a fini et pas encore vu : lueur verte (PLAN.md §3.6)
   const [confirmingClose, setConfirmingClose] = useState(false);
+  const [editingRole, setEditingRole] = useState(false);
+  const [inRepo, setInRepo] = useState(false);
+  const [showingChanges, setShowingChanges] = useState(false);
   const { deleteElements, updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
@@ -125,6 +130,15 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     // Police et thème sont appliqués en direct par l'effet suivant, sans recréer le terminal.
   }, [id, data.agentId, data.cwd]);
 
+  // Bouton « Changements » seulement pour un dossier dans un dépôt Git (PLAN.md §3.20).
+  useEffect(() => {
+    let cancelled = false;
+    window.git.isRepo(runDir).then((result) => !cancelled && setInRepo(!result.error));
+    return () => {
+      cancelled = true;
+    };
+  }, [runDir]);
+
   // Paramètres d'apparence changés : on met à jour le terminal existant.
   useEffect(() => {
     const term = termRef.current;
@@ -162,20 +176,25 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     term.focus();
   };
 
-  // Branche choisie dans la barre : l'agent est relancé dans le worktree, sauf s'il y tourne déjà.
-  const switchBranch = (dir, branch) => {
-    setBranchPicker(null);
-    updateNodeData(id, { branch, worktree: dir, restored: false });
+  // Agent arrêté puis relancé dans la même case (autre dossier, ou reprise de sa conversation).
+  const respawn = (dir, resume) => {
     const term = termRef.current;
-    if (dir === runDir || !term) return;
+    if (!term) return;
     window.pty.kill(id);
     setExited(false);
     setStatus('idle');
     setFinished(false);
     setConfirmingClose(false);
     term.reset();
-    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows });
+    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume });
     term.focus();
+  };
+
+  // Branche choisie dans la barre : l'agent est relancé dans le worktree, sauf s'il y tourne déjà.
+  const switchBranch = (dir, branch) => {
+    setBranchPicker(null);
+    updateNodeData(id, { branch, worktree: dir, restored: false });
+    if (dir !== runDir) respawn(dir, false);
   };
 
   const close = () => {
@@ -219,6 +238,35 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
       <FinishBubble agent={agent} name={name} finished={finished} />
+      {/* Encoches rangées derrière le bord haut de la case : elles sortent au survol (Changements, Rôle). */}
+      {(inRepo || agent.hooks) && (
+        <div className="case-tabs nodrag nopan">
+          {inRepo && (
+            <button className="case-tab" onClick={() => setShowingChanges(true)} title={t('changes.open')}>
+              <FileDiff size={14} />
+            </button>
+          )}
+          {agent.hooks && (
+            <button
+              className={`case-tab ${data.role ? 'active' : ''}`}
+              onClick={() => setEditingRole((o) => !o)}
+              title={data.role ? t('role.current', { role: data.role }) : t('role.add')}
+            >
+              <Drama size={14} />
+            </button>
+          )}
+        </div>
+      )}
+      {showingChanges && <ChangesDialog dir={runDir} name={name} onClose={() => setShowingChanges(false)} />}
+      {editingRole && (
+        <RoleEditor
+          role={data.role}
+          running={!exited && !askResume}
+          onSave={(role) => updateNodeData(id, { role: role || undefined })}
+          onRelaunch={() => respawn(runDir, true)}
+          onClose={() => setEditingRole(false)}
+        />
+      )}
       {pickingBranch && (
         <BranchBar dir={runDir} busy={busy} name={name} onClose={() => setBranchPicker(null)} onSwitched={switchBranch} />
       )}

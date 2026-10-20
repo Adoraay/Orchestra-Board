@@ -36,6 +36,9 @@ const DICTIONARIES = {
     'git.branchNotFound': 'Branch not found',
     'git.folderExists': 'The folder {path} already exists',
     'git.worktreeFailed': 'Could not create the worktree',
+    'git.fileUnchanged': 'This file has no changes anymore',
+    'git.newFile': 'new file',
+    'git.diffFailed': 'Could not read the changes of this file',
 
     'agents.invalid': 'Invalid agent',
     'agents.logoFormat': 'Unsupported format',
@@ -47,6 +50,8 @@ const DICTIONARIES = {
     'link.targetGone': 'The target agent is no longer running',
     'link.targetNotRunning': 'The target agent is not running',
     'link.noReply': 'Reply not found in the transcript',
+    'link.limitReached': 'Turn limit reached ({max})',
+    'role.context': 'Role given to you by the user in Orchestra, the app where you run (follow it for the whole session):\n\n{role}',
 
     'usage.session': 'Session (5 h)',
     'usage.weekAll': 'Week (all models)',
@@ -141,6 +146,9 @@ const DICTIONARIES = {
     'git.branchNotFound': 'Branche introuvable',
     'git.folderExists': 'Le dossier {path} existe déjà',
     'git.worktreeFailed': 'Impossible de créer le worktree',
+    'git.fileUnchanged': "Ce fichier n'a plus de changement",
+    'git.newFile': 'nouveau fichier',
+    'git.diffFailed': 'Impossible de lire les changements de ce fichier',
 
     'agents.invalid': 'Agent invalide',
     'agents.logoFormat': 'Format non pris en charge',
@@ -152,6 +160,8 @@ const DICTIONARIES = {
     'link.targetGone': "L'agent cible n'est plus lancé",
     'link.targetNotRunning': "L'agent cible n'est pas lancé",
     'link.noReply': 'Réponse introuvable dans le transcript',
+    'link.limitReached': 'Limite de tours atteinte ({max})',
+    'role.context': "Rôle que l'utilisateur t'a donné dans Orchestra, l'app où tu tournes (suis-le pendant toute la session) :\n\n{role}",
 
     'usage.session': 'Session (5 h)',
     'usage.weekAll': 'Semaine (tous modèles)',

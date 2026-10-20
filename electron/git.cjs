@@ -1,11 +1,14 @@
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { ipcMain } = require('electron');
+const { ipcMain, shell } = require('electron');
 const { t } = require('./i18n.cjs');
 
 // Branches Git d'une case (PLAN.md §3.10). Seules écritures : fetch et worktree add.
+// Changements d'une case (§3.20) : lecture seule (status, diff).
 const MAX_BRANCH = 255;
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'; // base d'un dépôt sans commit
+const MAX_UNTRACKED = 200 * 1024; // octets montrés d'un fichier non suivi
 
 const isDir = (p) => {
   try {
@@ -120,10 +123,123 @@ async function ensureWorktree(cwd, branch) {
   }
 }
 
+// Sortie de « git status --porcelain=v1 -z » : « XY chemin », suivi de l'ancien chemin pour un renommage.
+function parseStatus(output) {
+  const parts = output.split('\0');
+  const files = [];
+  for (let i = 0; i < parts.length; i++) {
+    const entry = parts[i];
+    if (entry.length < 4) continue;
+    const [x, y] = entry;
+    const file = { path: entry.slice(3), status: x === '?' ? '?' : x !== ' ' ? x : y };
+    if (x === 'R' || x === 'C') file.from = parts[++i];
+    files.push(file);
+  }
+  return files;
+}
+
+// Sortie de « git diff --numstat -z » : lignes ajoutées et retirées par fichier (« - » = binaire).
+function parseNumstat(output) {
+  const stats = new Map();
+  const parts = output.split('\0');
+  for (let i = 0; i < parts.length; i++) {
+    const match = parts[i].match(/^(\d+|-)\t(\d+|-)\t(.*)$/s);
+    if (!match) continue;
+    let file = match[3];
+    if (!file) {
+      i += 2; // renommage : ancien puis nouveau chemin
+      file = parts[i];
+    }
+    stats.set(file, match[1] === '-' ? { binary: true } : { added: Number(match[1]), removed: Number(match[2]) });
+  }
+  return stats;
+}
+
+const readHead = (file) => {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buffer = Buffer.alloc(Math.min(fs.fstatSync(fd).size, MAX_UNTRACKED));
+    fs.readSync(fd, buffer, 0, buffer.length, 0);
+    return { buffer, truncated: fs.fstatSync(fd).size > MAX_UNTRACKED };
+  } finally {
+    fs.closeSync(fd);
+  }
+};
+
+// Racine du worktree de la case et base de comparaison (HEAD, ou l'arbre vide sans commit).
+async function workTree(cwd) {
+  const top = path.normalize((await git(cwd, ['rev-parse', '--show-toplevel'])).trim());
+  const base = await git(top, ['rev-parse', '--verify', '--quiet', 'HEAD']).then(() => 'HEAD', () => EMPTY_TREE);
+  return { top, base };
+}
+
+// Fichiers modifiés dans le worktree de la case, par rapport au dernier commit (indexés ou non, et non suivis).
+async function changes(cwd) {
+  if (!isDir(cwd)) return { error: t('git.notRepo') };
+  try {
+    const { top, base } = await workTree(cwd);
+    const branch = (await git(top, ['branch', '--show-current'])).trim();
+    const files = parseStatus(await git(top, ['-c', 'core.quotepath=false', 'status', '--porcelain=v1', '-z', '--untracked-files=all']));
+    const stats = parseNumstat(await git(top, ['-c', 'core.quotepath=false', 'diff', '--numstat', '-z', base]));
+    for (const file of files) {
+      if (file.status === '?') {
+        try {
+          const { buffer } = readHead(path.join(top, file.path));
+          if (buffer.includes(0)) file.binary = true;
+          else file.added = buffer.toString('utf8').split('\n').filter((l, i, all) => l || i < all.length - 1).length;
+        } catch {}
+      } else {
+        Object.assign(file, stats.get(file.path));
+      }
+    }
+    return { root: top, branch, files };
+  } catch (error) {
+    return { error: error.code === 'ENOENT' ? t('git.noGit') : t('git.notRepo') };
+  }
+}
+
+// Diff d'un fichier de la liste (jamais un chemin choisi par l'interface sans être dans « status »).
+async function diff(cwd, filePath) {
+  const list = await changes(cwd);
+  if (list.error) return list;
+  const file = list.files.find((f) => f.path === filePath);
+  if (!file) return { error: t('git.fileUnchanged') };
+  try {
+    if (file.status === '?') {
+      const { buffer, truncated } = readHead(path.join(list.root, file.path));
+      if (buffer.includes(0)) return { binary: true };
+      const lines = buffer.toString('utf8').split(/\r?\n/);
+      if (lines.at(-1) === '') lines.pop();
+      return { diff: [`@@ ${t('git.newFile')} @@`, ...lines.map((l) => `+${l}`)].join('\n'), truncated };
+    }
+    const { base } = await workTree(cwd);
+    const paths = file.from ? [file.from, file.path] : [file.path];
+    const output = await git(list.root, ['-c', 'core.quotepath=false', 'diff', '-M', base, '--', ...paths]);
+    if (/^Binary files /m.test(output)) return { binary: true };
+    // En-tête (diff --git, index, ---, +++) retiré : la fenêtre montre déjà le fichier.
+    return { diff: output.replace(/^[\s\S]*?(?=^@@)/m, '').trimEnd() };
+  } catch (error) {
+    return { error: error.stderr?.split(/\r?\n/).filter(Boolean).pop() || t('git.diffFailed') };
+  }
+}
+
+// « Ouvrir dans VS Code » : le fichier choisi (s'il existe encore) ou le dossier, par le lien vscode://.
+async function openInEditor(cwd, filePath) {
+  const list = await changes(cwd);
+  if (list.error) return list;
+  const file = filePath && list.files.find((f) => f.path === filePath);
+  const target = file && fs.existsSync(path.join(list.root, file.path)) ? path.join(list.root, file.path) : list.root;
+  await shell.openExternal(`vscode://file/${target.replace(/\\/g, '/')}`);
+  return {};
+}
+
 function register() {
   ipcMain.handle('git:isRepo', (_e, cwd) => repoRoot(cwd));
   ipcMain.handle('git:listBranches', (_e, cwd, fetch) => listBranches(cwd, Boolean(fetch)));
   ipcMain.handle('git:ensureWorktree', (_e, cwd, branch) => ensureWorktree(cwd, branch));
+  ipcMain.handle('git:changes', (_e, cwd) => changes(cwd));
+  ipcMain.handle('git:diff', (_e, cwd, file) => diff(cwd, file));
+  ipcMain.handle('git:openInEditor', (_e, cwd, file) => openInEditor(cwd, file));
 }
 
 module.exports = { register };

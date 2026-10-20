@@ -9,7 +9,7 @@ const MAX_BODY = 1024 * 1024;
 const token = crypto.randomBytes(16).toString('hex');
 let port = null;
 
-// onHook(id, payload) ; onTool(id, name, args, signal) -> Promise<{ text, isError }>.
+// onHook(id, payload) -> réponse au hook (ou rien = {}) ; onTool(id, name, args, signal) -> Promise<{ text, isError }>.
 function start(onHook, onTool) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -35,9 +35,9 @@ function start(onHook, onTool) {
       const [, kind, id] = match;
 
       if (kind === 'hook') {
-        onHook(id, payload);
-        // Réponse vide et immédiate : Claude attend la fin du hook avant de continuer.
-        res.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+        // Réponse immédiate (l'agent attend la fin du hook avant de continuer) : {} ne décide rien.
+        const response = onHook(id, payload) ?? {};
+        res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(response));
         return;
       }
 

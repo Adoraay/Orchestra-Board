@@ -45,12 +45,13 @@ electron/                 côté Node : système, terminaux, fichiers
   workspaceStore.cjs      workspace.json : tableaux, cases, liens, dessins, notes, vue
   agentsHandlers.cjs      logos des agents ajoutés, bouton « Tester » (where / which)
   fsHandlers.cjs          explorateur : lecture des dossiers, choix d'un dossier, créer / renommer / corbeille (avec garde-fous)
-  git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add)
+  git.cjs                 branches et worktrees Git d'une case (execFile, seulement fetch et worktree add), changements et diff en lecture seule
   linkRelay.cjs           liens en Transmission : réponse de A envoyée dans le terminal de B, file d'attente, limite de tours
   i18n.cjs                textes côté Node en anglais et en français (erreurs, notifications, orchestration)
   usage.cjs               utilisation (quotas) : cache /usage de Claude (+ /usage invisible), rate_limits de Codex
   delegation.cjs          liens en Délégation : outils list_agents, send_to_agent, wait_for_replies
   terminalLink.cjs        liens Terminal : outils list_terminals, run_in_terminal, read_terminal, interrupt_terminal
+  activityLog.cjs         journal des échanges entre agents (en mémoire, 500 entrées)
   mcpServer.cjs           serveur MCP « orchestra » lancé par chaque Claude (stdio), relaie ses appels à l'app
 src/                      interface React
   App.jsx                 chargement, onglets de tableaux, map (React Flow)
@@ -93,6 +94,9 @@ Dans l'app : ⚙ → Agents. La section « Autres agents » propose des agents c
 - **Liens qui transmettent** : clic sur un lien = panneau (consigne avec `{reponse}`, limite de tours, actif). Quand Claude (A) termine, sa dernière réponse part dans le terminal de B avec la consigne ; B attend s'il travaille encore.
 - **Orchestration** : un lien en Délégation laisse un Claude ou un Codex parler lui-même aux agents reliés (Claude Code ou Codex). Il les voit (`list_agents`), leur écrit (`send_to_agent`) et récupère leurs réponses (`wait_for_replies`). Exemple : un Claude principal relié à 3 Claude leur demande un poème chacun et choisit le meilleur. Le type de lien se choisit dans son panneau (défaut dans les paramètres), avec inversion et double sens.
 - **Lien Terminal** : relier un Claude ou un Codex à une case Terminal lui permet d'y lancer ses commandes sous tes yeux (après ta permission), d'en lire la sortie et de les arrêter (Ctrl+C).
+- **Journal** : languette « Journal » sur le bord droit de la map (Ctrl+Maj+J) : tout ce que les agents se transmettent (messages, réponses, commandes du terminal, refus), un clic sur un nom centre la map sur la case.
+- **Rôle par case** : bouton masque dans la barre de titre d'un Claude ou d'un Codex : un rôle durable donné à l'agent au début de chaque session (« tu es le relecteur… »).
+- **Changements** : bouton diff dans la barre de titre d'une case dans un dépôt Git : fichiers modifiés depuis le dernier commit et leur diff, ouverture dans VS Code.
 - **Explorateur** : clic droit sur un dossier ou un fichier pour créer un dossier, renommer (F2), supprimer vers la corbeille (Suppr, avec confirmation), copier le chemin, ouvrir dans l'Explorateur Windows ou lancer un agent dans ce dossier. Les dossiers utilisés par les agents de la map sont protégés.
 - **Raccourcis clavier** : changer de tableau (Ctrl+Tab, Ctrl+1…9), paramètres (Ctrl+,), F2 pour renommer une case, Suppr pour supprimer la sélection (avec confirmation), copier / coller dans les terminaux ; liste complète dans Paramètres › Raccourcis.
 - **Écran de démarrage** animé, `launcher.exe` pour lancer sans terminal.

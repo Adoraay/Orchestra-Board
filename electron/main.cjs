@@ -16,6 +16,7 @@ const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
 const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
+const activityLog = require('./activityLog.cjs');
 const usage = require('./usage.cjs');
 const { t } = require('./i18n.cjs');
 
@@ -122,7 +123,13 @@ function notifyFinished(id, info) {
 }
 
 agentStatus.init(sendStatus, notifyFinished);
+activityLog.init({
+  nameOf: (id) => agentStatus.info(id)?.name || id,
+  emit: (entry) => send('log:entry', entry),
+});
+
 linkRelay.init({
+  log: activityLog.add,
   write: ptyManager.write,
   status: (id) => agentStatus.info(id)?.status ?? null,
   arm: agentStatus.arm,
@@ -130,12 +137,14 @@ linkRelay.init({
 });
 
 delegation.init({
+  log: activityLog.add,
   info: agentStatus.info,
   agent: (agentId) => settingsStore.load().agents.find((a) => a.id === agentId) ?? { name: t('agent.missing'), hooks: null },
   emit: (linkId, event) => send('link:event', linkId, event),
 });
 
 terminalLink.init({
+  log: activityLog.add,
   write: ptyManager.write,
   buffer: ptyManager.buffer,
   info: agentStatus.info,
@@ -150,10 +159,18 @@ function callTool(caller, name, args, signal) {
   return terminalLink.callTool(caller, name, args, signal);
 }
 
-// Événements des hooks de Claude Code : statut de la case, et transmission par ses liens quand il a fini
-// (Transmission automatique, ou réponse attendue par un agent qui lui a délégué un message).
+// Rôle de chaque case (PLAN.md §3.19), mis à jour à chaque sauvegarde de workspace.json.
+let roles = new Map();
+
+// Événements des hooks de Claude Code et Codex : statut de la case, et transmission par ses liens quand il a
+// fini (Transmission automatique, ou réponse attendue par un agent qui lui a délégué un message).
+// Début de session : la réponse au hook donne son rôle à l'agent (même format pour Claude Code et Codex).
 function onHook(id, payload) {
   agentStatus.onHook(id, payload);
+  if (payload.hook_event_name === 'SessionStart' && roles.has(id)) {
+    const additionalContext = t('role.context', { role: roles.get(id) });
+    return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } };
+  }
   if (payload.hook_event_name !== 'Stop') return;
   linkRelay.onStop(id, payload);
   delegation.onStop(id, payload);
@@ -267,10 +284,12 @@ workspaceStore.register((workspace) => {
   );
   linkRelay.setLinks(workspace);
   delegation.setWorkspace(workspace);
+  roles = new Map(workspace.boards.flatMap((b) => b.nodes.filter((n) => n.data.role).map((n) => [n.id, n.data.role])));
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
 });
 gitHandlers.register();
 usage.register();
+activityLog.register();
 
 // Pas de barre de menu File / Edit / View.
 Menu.setApplicationMenu(null);
