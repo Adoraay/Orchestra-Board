@@ -1,31 +1,90 @@
-// Orchestra — site : langue, animations, vidéos, dernière version sur GitHub. Aucun serveur.
+// Orchestra — site : langue, menu, animations, vidéos, dernière version sur GitHub. Aucun serveur.
 (() => {
   const REPO = 'Adoraay/Orchestra-Board';
+  const MIN_STARS = 50; // en dessous, le compteur d'étoiles reste caché
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // --- Langue (anglais par défaut, choix gardé dans le navigateur) ---
+  // --- Langue : choix gardé dans le navigateur, sinon celle du navigateur (fr* → français), sinon anglais ---
   const store = {
     get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
     set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
   };
-  function applyLang(lang) {
-    const dict = window.I18N[lang] ?? window.I18N.en;
+  let dict = window.I18N.en;
+  const t = (key) => dict[key] ?? window.I18N.en[key] ?? '';
+  let onLang = () => {}; // remplacé plus bas par le tableau du haut, en mouvement réduit (lignes fixes à retraduire)
+  function applyLang(lang, save) {
+    dict = window.I18N[lang] ?? window.I18N.en;
     document.documentElement.lang = lang;
     $$('[data-i18n]').forEach((el) => { if (dict[el.dataset.i18n]) el.textContent = dict[el.dataset.i18n]; });
     $$('[data-i18n-html]').forEach((el) => { if (dict[el.dataset.i18nHtml]) el.innerHTML = dict[el.dataset.i18nHtml]; });
-    store.set('orchestra-lang', lang);
+    $$('[data-i18n-aria]').forEach((el) => { if (dict[el.dataset.i18nAria]) el.setAttribute('aria-label', dict[el.dataset.i18nAria]); });
+    $$('[data-i18n-alt]').forEach((el) => { if (dict[el.dataset.i18nAlt]) el.alt = dict[el.dataset.i18nAlt]; });
+    document.title = t('meta.title');
+    $('meta[name="description"]').setAttribute('content', t('meta.description'));
+    renderRelease();
+    onLang();
+    if (save) store.set('orchestra-lang', lang);
   }
-  applyLang(store.get('orchestra-lang') === 'fr' ? 'fr' : 'en');
-  $('#lang').addEventListener('click', () => applyLang(document.documentElement.lang === 'fr' ? 'en' : 'fr'));
+  const saved = store.get('orchestra-lang');
+  const browserLang = /^fr/i.test(navigator.language || '') ? 'fr' : 'en';
 
   // --- Barre du haut opaque après le haut de page ---
   const nav = $('#nav');
   const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 20);
   onScroll();
   window.addEventListener('scroll', onScroll, { passive: true });
+
+  // --- Menu des petits écrans : bouton + panneau, fermé par Échap, un lien ou le retour en grand écran ---
+  const menuBtn = $('#menu-btn');
+  const panel = $('#nav-panel');
+  function setMenu(open, focusBack = false) {
+    menuBtn.setAttribute('aria-expanded', String(open));
+    panel.hidden = !open;
+    nav.classList.toggle('open', open);
+    if (open) $('a', panel).focus();
+    else if (focusBack) menuBtn.focus();
+  }
+  menuBtn.addEventListener('click', () => setMenu(panel.hidden));
+  panel.addEventListener('click', (e) => { if (e.target.closest('a')) setMenu(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) setMenu(false, true); });
+  window.matchMedia('(min-width: 981px)').addEventListener('change', (e) => { if (e.matches) setMenu(false); });
+
+  // --- Lueurs cuivre qui suivent la souris : fond à points et cartes (souris seulement, jamais en mouvement réduit) ---
+  const mouseFx = !reduced && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  if (mouseFx) {
+    const root = document.documentElement.style;
+    let frame = 0;
+    let x = 0;
+    let y = 0;
+    document.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      x = e.clientX;
+      y = e.clientY;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        root.setProperty('--mx', `${x}px`);
+        root.setProperty('--my', `${y}px`);
+        root.setProperty('--glow', '1');
+      });
+    }, { passive: true });
+    // Souris hors de la fenêtre : la lueur s'estompe.
+    const fade = () => root.setProperty('--glow', '0');
+    document.addEventListener('pointerout', (e) => { if (!e.relatedTarget) fade(); });
+    window.addEventListener('blur', fade);
+  }
+
+  if (mouseFx) {
+    $$('.card').forEach((card) => card.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--cx', `${e.clientX - r.left}px`);
+      card.style.setProperty('--cy', `${e.clientY - r.top}px`);
+    }));
+  }
 
   // --- Apparition au défilement, en cascade entre éléments voisins ---
   $$('.reveal').forEach((el) => {
@@ -53,15 +112,17 @@
   );
   $$('video[data-src]').forEach((v) => player.observe(v));
 
-  // --- Halo qui suit la souris sur les cartes ---
-  $$('.card').forEach((card) => card.addEventListener('pointermove', (e) => {
-    const r = card.getBoundingClientRect();
-    card.style.setProperty('--mx', `${e.clientX - r.left}px`);
-    card.style.setProperty('--my', `${e.clientY - r.top}px`);
-  }));
+  // Logo : immobile par défaut (#mark-static) ; orbites animées (#mark) pour la barre du haut, la scène des agents et
+  // le tableau du haut quand ils sont à l'écran, jamais en mouvement réduit (le CSS n'arrête pas les animations SVG).
+  if (!reduced) {
+    const marks = new IntersectionObserver((entries) => entries.forEach((e) => {
+      $('use', e.target).setAttribute('href', e.isIntersecting ? '#mark' : '#mark-static');
+    }));
+    $$('[data-live-mark]').forEach((m) => marks.observe(m));
+  }
 
-  // --- L'orchestre : chaque agent assis sur un rang en demi-cercle autour du maestro ---
-  // Coordonnées dans une scène de 1000 × 680, maestro en (500, 570) ; r = rang, a = angle en degrés.
+  // --- Agents pris en charge : intégration complète au premier rang, les autres CLI sur les rangs suivants ---
+  // Coordonnées dans une scène de 1000 × 680, Orchestra en (500, 570) ; r = rang, a = angle en degrés.
   const W = 1000;
   const H = 680;
   const CX = 500;
@@ -70,16 +131,17 @@
   const SEATS = [
     { name: 'Claude Code', logo: 'claude-code.svg', r: 0, a: 144, hooks: true },
     { name: 'Codex', logo: 'codex.svg', r: 0, a: 36, hooks: true },
-    { name: 'Antigravity', logo: 'antigravity.svg', r: 1, a: 166 },
-    { name: 'Aider', logo: 'aider.png', r: 1, a: 127 },
-    { name: 'Qwen Code', logo: 'qwen.svg', r: 1, a: 90 },
-    { name: 'OpenCode', logo: 'opencode.svg', r: 1, a: 53 },
-    { name: 'Copilot CLI', logo: 'copilot.svg', r: 1, a: 14 },
+    { name: 'Gemini CLI', logo: 'gemini.svg', r: 1, a: 168 },
+    { name: 'Antigravity', logo: 'antigravity.svg', r: 1, a: 136 },
+    { name: 'Aider', logo: 'aider.png', r: 1, a: 104 },
+    { name: 'Qwen Code', logo: 'qwen.svg', r: 1, a: 76 },
+    { name: 'OpenCode', logo: 'opencode.svg', r: 1, a: 44 },
+    { name: 'Copilot CLI', logo: 'copilot.svg', r: 1, a: 12 },
     { name: 'Cursor CLI', logo: 'cursor.svg', r: 2, a: 170 },
     { name: 'Goose', logo: 'goose.svg', r: 2, a: 140 },
     { name: 'Amp', logo: 'amp.svg', r: 2, a: 108 },
     { name: 'Kimi CLI', logo: 'kimi.svg', r: 2, a: 72 },
-    { name: 'Hermes', logo: 'hermes.svg', r: 2, a: 40 },
+    { name: 'Hermes Agent', logo: 'hermes.svg', r: 2, a: 40 },
     { name: 'Terminal', logo: 'shell.svg', r: 2, a: 10 },
   ];
   const orchestra = $('#orchestra');
@@ -96,6 +158,7 @@
     svg.appendChild(arc);
   }
   orchestra.prepend(svg);
+  // La scène entière est une image (role="img" + aria-label traduit) : les sièges sont décoratifs.
   const seats = SEATS.map((s, i) => {
     const rad = (s.a * Math.PI) / 180;
     const x = CX + RANKS[s.r] * Math.cos(rad);
@@ -112,18 +175,18 @@
     svg.appendChild(line);
     const el = document.createElement('div');
     el.className = `seat ${s.hooks ? 'hooks' : ''}`;
-    el.setAttribute('role', 'listitem');
     el.style.setProperty('--x', `${(x / W) * 100}%`);
     el.style.setProperty('--y', `${(y / H) * 100}%`);
     el.style.setProperty('--d', delay);
     el.innerHTML = `<div class="seat-box"><img src="assets/agents/${s.logo}" alt="" /></div><span class="seat-name">${s.name}</span>`;
-    el.addEventListener('pointerenter', () => line.classList.add('hot'));
-    el.addEventListener('pointerleave', () => line.classList.remove('hot'));
+    // Au survol, la ligne s'éclaire en neutre ; le cuivre est réservé à l'impulsion.
+    el.addEventListener('pointerenter', () => line.classList.add('lit'));
+    el.addEventListener('pointerleave', () => line.classList.remove('lit'));
     orchestra.appendChild(el);
     return { el, line, x, y, hooks: s.hooks };
   });
 
-  // Le maestro donne le départ : une impulsion part vers un agent au hasard, qui s'allume à son arrivée.
+  // Orchestra donne le départ : une impulsion part vers un agent au hasard, qui s'allume à son arrivée.
   if (!reduced) {
     const dot = document.createElement('span');
     dot.className = 'orch-pulse';
@@ -159,31 +222,46 @@
     cue();
   }
 
-  // --- Onglets des liens : chaque vidéo passe à la suivante, jusqu'à un clic ---
+  // --- Onglets des liens : chaque vidéo passe à la suivante, jusqu'à un clic ; flèches, Début et Fin au clavier ---
   const tabs = $$('#link-tabs [data-tab]');
   const linkVideo = $('#link-video');
   let auto = true;
   linkVideo.loop = false;
   function showTab(name) {
-    tabs.forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === name)));
+    tabs.forEach((tab) => {
+      const on = tab.dataset.tab === name;
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+    });
     $$('[data-panel]').forEach((p) => (p.hidden = p.dataset.panel !== name));
     linkVideo.classList.add('switching');
     setTimeout(() => {
       linkVideo.poster = `assets/clips/${name}.jpg`;
       linkVideo.src = `assets/clips/${name}.mp4`;
       linkVideo.dataset.src = linkVideo.src;
-      linkVideo.play().catch(() => {});
+      if (!reduced) linkVideo.play().catch(() => {});
       linkVideo.classList.remove('switching');
     }, 200);
   }
-  tabs.forEach((t) => t.addEventListener('click', () => { auto = false; linkVideo.loop = true; showTab(t.dataset.tab); }));
+  const pick = (tab) => { auto = false; linkVideo.loop = true; showTab(tab.dataset.tab); };
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => pick(tab));
+    tab.addEventListener('keydown', (e) => {
+      const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      const target = tabs[(next + tabs.length) % tabs.length];
+      target.focus();
+      pick(target);
+    });
+  });
   linkVideo.addEventListener('ended', () => {
     if (!auto) return;
-    const i = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+    const i = tabs.findIndex((tab) => tab.getAttribute('aria-selected') === 'true');
     showTab(tabs[(i + 1) % tabs.length].dataset.tab);
   });
 
-  // --- Vidéo de présentation ---
+  // --- Vidéo de présentation (lancée par un clic : le son est permis) ---
   const promo = $('#promo');
   const play = $('#play');
   play.addEventListener('click', () => {
@@ -192,25 +270,55 @@
   });
   promo.addEventListener('play', () => play.classList.add('hidden'));
 
-  // --- Dernière version publiée : lien direct vers l'installateur, numéro de version, étoiles ---
+  // --- Visiteurs hors Windows : le bouton reste, avec une ligne qui le dit ---
+  const platform = navigator.userAgentData?.platform || navigator.userAgent || '';
+  if (!/win/i.test(platform)) $('#os-note').hidden = false;
+
+  // --- Dernière version publiée : lien direct vers l'installateur, version, taille, date, empreinte ---
+  let release = null;
+  function renderRelease() {
+    const info = $('#dl-info');
+    if (!release || !info) return;
+    const { exe, date, sha } = release;
+    const parts = [];
+    if (exe?.size) parts.push(`${Math.round(exe.size / 1e6)} ${t('dl.mb')}`); // espace insécable entre nombre et unité
+    if (date) parts.push(`${t('dl.released')} ${new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: 'medium' }).format(date)}`);
+    info.textContent = parts.map((p) => ` · ${p}`).join('');
+    if (sha) {
+      $('#sha').textContent = sha;
+      const hint = $('#verify-hint');
+      hint.innerHTML = t('dl.verifyHint').replace('{file}', '<span></span>');
+      $('span', hint).textContent = exe.name;
+      $('#verify').hidden = false;
+    }
+  }
   fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
     .then((r) => (r.ok ? r.json() : null))
-    .then((release) => {
-      if (!release) return;
-      const exe = release.assets?.find((a) => /\.exe$/i.test(a.name));
+    .then((data) => {
+      if (!data) return;
+      const exe = data.assets?.find((a) => /\.exe$/i.test(a.name));
+      // digest = « sha256:… » quand GitHub l'a calculé
+      const sha = /^sha256:[0-9a-f]{64}$/i.test(exe?.digest ?? '') ? exe.digest.slice(7) : '';
+      release = { exe, sha, date: data.published_at ? new Date(data.published_at) : null };
       if (exe) $$('.download-link').forEach((a) => (a.href = exe.browser_download_url));
-      if (release.tag_name) $$('.version').forEach((el) => (el.textContent = release.tag_name.replace(/^v?/, 'v')));
+      if (data.tag_name) $$('.version').forEach((el) => (el.textContent = data.tag_name.replace(/^v?/, 'v')));
+      if (data.html_url) $('.eyebrow').href = data.html_url;
+      renderRelease();
     })
     .catch(() => {});
   fetch(`https://api.github.com/repos/${REPO}`)
     .then((r) => (r.ok ? r.json() : null))
     .then((repo) => {
-      if (!repo || !repo.stargazers_count) return;
+      if (!repo || !(repo.stargazers_count >= MIN_STARS)) return;
       const stars = $('#stars');
       stars.textContent = `★ ${repo.stargazers_count}`;
       stars.hidden = false;
     })
     .catch(() => {});
+
+  // Langue appliquée maintenant que tout ce qu'elle met à jour existe.
+  applyLang(saved === 'fr' || saved === 'en' ? saved : browserLang, false);
+  $('#lang').addEventListener('click', () => applyLang(document.documentElement.lang === 'fr' ? 'en' : 'fr', true));
 
   // --- Tableau animé du hero : le Lead délègue à Codex et au Reviewer, qui répondent ---
   const mock = $('#mock');
@@ -218,6 +326,12 @@
   const tile = (id) => $(`#${id}`, mock);
   const term = (id) => $('[data-term]', tile(id));
   const paths = { l1: $('#l1', mock), l2: $('#l2', mock) };
+  let visible = true;
+  // Attente qui se prolonge tant que le tableau est hors de l'écran : une scène commencée s'y met en pause.
+  const pause = async (ms) => {
+    await wait(ms);
+    while (!visible) await wait(300);
+  };
 
   function addLine(id, html, cls = '') {
     const line = document.createElement('div');
@@ -231,7 +345,7 @@
     const caret = '<span class="caret"></span>';
     for (let i = 1; i <= text.length; i++) {
       line.innerHTML = `<span class="prompt">${text.slice(0, i)}</span>${caret}`;
-      await wait(speed + Math.random() * speed * 0.5);
+      await pause(speed + Math.random() * speed * 0.5);
     }
     line.innerHTML = `<span class="prompt">${text}</span>`;
   }
@@ -259,65 +373,75 @@
     });
   }
 
+  // Textes lus à chaque scène dans la langue en cours ; les sorties des CLI restent en anglais, comme dans l'app.
   async function scene() {
     ['t-lead', 't-codex', 't-review'].forEach((id) => { term(id).innerHTML = ''; state(id, ''); });
     addLine('t-lead', '<span class="muted">Claude Code · Sonnet</span>');
     addLine('t-codex', '<span class="muted">&gt;_ OpenAI Codex</span>');
     addLine('t-review', '<span class="muted">Claude Code · Sonnet</span>');
-    await wait(900);
-    await typeLine('t-lead', 'Fix the °F bug, then get it reviewed.');
+    await pause(900);
+    await typeLine('t-lead', t('mock.prompt'));
     state('t-lead', 'working');
-    await wait(600);
+    await pause(600);
     addLine('t-lead', '<span class="acc">●</span> orchestra · send_to_agent(<b>Codex</b>)');
     await pulse($('#p1'), paths.l1);
     state('t-codex', 'working');
-    addLine('t-codex', '<span class="muted">› Message from "Lead" (via Orchestra)</span>');
-    addLine('t-codex', 'Fix celsiusToFahrenheit in src/units.js');
+    addLine('t-codex', `<span class="muted">› ${t('mock.from')}</span>`);
+    addLine('t-codex', t('mock.toCodex'));
     addLine('t-lead', '<span class="acc">●</span> orchestra · send_to_agent(<b>Reviewer</b>)');
     await pulse($('#p2'), paths.l2);
     state('t-review', 'working');
-    addLine('t-review', '<span class="muted">› Message from "Lead" (via Orchestra)</span>');
-    addLine('t-review', 'Review the °F fix once Codex is done');
-    addLine('t-lead', '<span class="muted">✻ Waiting for replies…</span>');
-    await wait(900);
-    addLine('t-codex', '• Edited src/units.js <span class="ok">+1</span> <span class="acc">−1</span>');
-    await wait(500);
-    addLine('t-codex', '<span class="acc">- return celsius * 9 / 5 + 23;</span>');
+    addLine('t-review', `<span class="muted">› ${t('mock.from')}</span>`);
+    addLine('t-review', t('mock.toReview'));
+    addLine('t-lead', `<span class="muted">✻ ${t('mock.waiting')}</span>`);
+    await pause(900);
+    addLine('t-codex', '• Edited src/units.js <span class="ok">+1</span> <span class="del">−1</span>');
+    await pause(500);
+    addLine('t-codex', '<span class="del">- return celsius * 9 / 5 + 23;</span>');
     addLine('t-codex', '<span class="ok">+ return celsius * 9 / 5 + 32;</span>');
-    await wait(700);
+    await pause(700);
     addLine('t-codex', '• Ran npm test · <span class="ok">2 passed</span>');
     addLine('t-review', '• Read src/units.js');
-    await wait(500);
+    await pause(500);
     state('t-codex', 'done bubbled');
     await pulse($('#p3'), paths.l1, true, 900);
-    addLine('t-lead', '<span class="ok">↩</span> Codex: fixed, tests pass');
-    await wait(700);
+    addLine('t-lead', `<span class="ok">↩</span> ${t('mock.codexReply')}`);
+    await pause(700);
     addLine('t-review', '• 0°C → 32°F, 100°C → 212°F');
-    await wait(500);
+    await pause(500);
     addLine('t-review', '• Verdict: <span class="ok">SHIP</span>');
     state('t-review', 'done bubbled');
     await pulse($('#p4'), paths.l2, true, 900);
-    addLine('t-lead', '<span class="ok">↩</span> Reviewer: SHIP');
-    await wait(600);
-    addLine('t-lead', '<span class="ok">✻ Done.</span> Bug fixed and reviewed.');
+    addLine('t-lead', `<span class="ok">↩</span> ${t('mock.reviewReply')}`);
+    await pause(600);
+    addLine('t-lead', `<span class="ok">✻ ${t('mock.done')}</span> ${t('mock.doneText')}`);
     state('t-lead', 'done bubbled');
     state('t-codex', 'done');
     state('t-review', 'done');
-    await wait(3600);
+    await pause(3600);
   }
 
   if (reduced) {
-    addLine('t-lead', '<span class="prompt">Fix the °F bug, then get it reviewed.</span>');
-    addLine('t-lead', '<span class="ok">✻ Done.</span> Bug fixed and reviewed.');
-    addLine('t-codex', '<span class="ok">+ return celsius * 9 / 5 + 32;</span>');
-    addLine('t-review', '• Verdict: <span class="ok">SHIP</span>');
+    // Tableau fixe, refait à chaque changement de langue.
+    onLang = () => {
+      ['t-lead', 't-codex', 't-review'].forEach((id) => (term(id).innerHTML = ''));
+      addLine('t-lead', `<span class="prompt">${t('mock.prompt')}</span>`);
+      addLine('t-lead', `<span class="ok">✻ ${t('mock.done')}</span> ${t('mock.doneText')}`);
+      addLine('t-codex', '<span class="ok">+ return celsius * 9 / 5 + 32;</span>');
+      addLine('t-review', '• Verdict: <span class="ok">SHIP</span>');
+    };
+    onLang();
   } else {
-    // L'animation ne tourne que quand le tableau est à l'écran.
-    let visible = true;
-    new IntersectionObserver(([e]) => (visible = e.isIntersecting)).observe(map);
+    // L'animation ne tourne que quand le tableau est à l'écran (il est masqué sous 1100px) ; hors écran, ses boucles
+    // CSS (liens en pointillés, curseur, statuts) s'arrêtent aussi.
+    mock.classList.add('paused');
+    new IntersectionObserver(([e]) => {
+      visible = e.isIntersecting;
+      mock.classList.toggle('paused', !visible);
+    }).observe(map);
     (async function loop() {
       for (;;) {
-        if (visible) await scene();
+        if (visible && mock.offsetParent) await scene();
         else await wait(500);
       }
     })();
