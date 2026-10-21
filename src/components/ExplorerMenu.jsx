@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ClipboardCopy, FolderOpen, FolderPlus, Pencil, Play, Trash2 } from 'lucide-react';
 import AgentLogo from './AgentLogo.jsx';
 import useT from '../hooks/useT.js';
+import { isMac } from '../lib/platform.js';
 
 const MARGIN = 8; // px : le menu reste dans la fenêtre
 
@@ -63,7 +64,7 @@ export default function ExplorerMenu({ x, y, entry, isRoot, agents, onAction, on
       {entry.isDir && <div className="menu-separator" />}
       {item('rename', Pencil, t('common.rename'), { shortcut: 'F2', disabled: isRoot })}
       {item('copyPath', ClipboardCopy, t('menu.copyPath'))}
-      {item('reveal', FolderOpen, t(entry.isDir ? 'menu.openInExplorer' : 'menu.revealInExplorer'))}
+      {item('reveal', FolderOpen, t(`${entry.isDir ? 'menu.openIn' : 'menu.revealIn'}${isMac ? 'Finder' : 'Explorer'}`))}
       {entry.isDir && agents.length > 0 && (
         <>
           <div className="menu-separator" />

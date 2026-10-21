@@ -18,6 +18,7 @@ const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const activityLog = require('./activityLog.cjs');
 const usage = require('./usage.cjs');
+const shellEnv = require('./shellEnv.cjs');
 const { t } = require('./i18n.cjs');
 
 let win;
@@ -25,6 +26,7 @@ let quitConfirmed = false;
 
 // Couleurs de la zone des boutons Windows (réduire, agrandir, fermer) = fond et texte de la barre du haut.
 const TITLE_BAR_HEIGHT = 40;
+const isMac = process.platform === 'darwin';
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 // Le projet s'appelait « agent-board » : on reprend une fois ses paramètres, agents et tableaux.
@@ -47,9 +49,12 @@ function createWindow() {
     icon: path.join(__dirname, '..', 'build', 'icon.ico'), // barre des tâches (généré par npm run build:icon)
     backgroundColor: '#262624', // = fond de l'écran de démarrage (splash.css) : aucun flash au lancement
     show: false, // affichée quand la page est prête, pour ne jamais montrer une fenêtre vide
-    // Une seule barre en haut : celle de l'app, avec les boutons Windows dessinés par-dessus à droite.
+    // Une seule barre en haut : celle de l'app, avec les boutons Windows dessinés par-dessus à droite,
+    // ou les feux tricolores de macOS centrés dans la barre, à gauche (place réservée dans styles.css).
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#262624', symbolColor: '#ece9e2', height: TITLE_BAR_HEIGHT },
+    ...(isMac
+      ? { trafficLightPosition: { x: 14, y: 14 } }
+      : { titleBarOverlay: { color: '#262624', symbolColor: '#ece9e2', height: TITLE_BAR_HEIGHT } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -139,7 +144,7 @@ linkRelay.init({
 delegation.init({
   log: activityLog.add,
   info: agentStatus.info,
-  agent: (agentId) => settingsStore.load().agents.find((a) => a.id === agentId) ?? { name: t('agent.missing'), hooks: null },
+  agent: (agentId) => settingsStore.findAgent(settingsStore.load(), agentId) ?? { name: t('agent.missing'), hooks: null },
   emit: (linkId, event) => send('link:event', linkId, event),
 });
 
@@ -197,7 +202,7 @@ function buildCommand(id, agent, resume) {
 // autre tableau qu'on rouvre), status = statut actuel de la case.
 ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume }) => {
   const settings = settingsStore.load();
-  const agent = settings.agents.find((a) => a.id === agentId);
+  const agent = settingsStore.findAgent(settings, agentId);
   if (typeof id !== 'string' || !agent) return null;
 
   const existing = agentStatus.info(id);
@@ -276,7 +281,7 @@ ipcMain.on('app:quit', () => {
 });
 // Thème changé : la zone des boutons Windows reprend les couleurs de la barre du haut.
 ipcMain.on('window:titleBarColors', (_e, color, symbolColor) => {
-  if (!win || win.isDestroyed() || !HEX_COLOR.test(color) || !HEX_COLOR.test(symbolColor)) return;
+  if (isMac || !win || win.isDestroyed() || !HEX_COLOR.test(color) || !HEX_COLOR.test(symbolColor)) return;
   win.setTitleBarOverlay({ color, symbolColor, height: TITLE_BAR_HEIGHT });
 });
 
@@ -303,8 +308,9 @@ gitHandlers.register();
 usage.register();
 activityLog.register();
 
-// Pas de barre de menu File / Edit / View.
-Menu.setApplicationMenu(null);
+// Pas de barre de menu File / Edit / View. macOS garde toujours un menu : le strict nécessaire, dont Édition
+// pour Cmd+C / Cmd+V / Cmd+A dans les champs et les terminaux, et Cmd+Q / Cmd+H.
+Menu.setApplicationMenu(isMac ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null);
 // Identité propre dans la barre des tâches (sinon Windows regroupe la fenêtre sous « Electron »).
 app.setAppUserModelId('com.orchestraboard.orchestra');
 
@@ -322,14 +328,16 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!isFirstInstance) return;
   migrateOldUserData();
+  await shellEnv.loadLoginPath();
   claudeHooks.clearAll();
   await hookServer.start(onHook, callTool);
   codexProfile.ensure();
   createWindow();
 });
 
-// Pas de processus orphelins : on tue tous les agents en quittant.
-app.on('before-quit', () => {
+// Pas de processus orphelins : on tue tous les agents en quittant. will-quit et pas before-quit : Cmd+Q sur
+// Mac passe par before-quit avant la fenêtre « Quitter Orchestra ? », qui peut encore tout annuler.
+app.on('will-quit', () => {
   ptyManager.killAll();
   usage.stop();
 });

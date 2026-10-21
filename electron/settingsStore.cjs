@@ -31,7 +31,7 @@ const CATALOG_AGENTS = [
 
 const DEFAULTS = {
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots' },
-  general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true },
+  general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true, codexOrchestration: true },
 };
 
 const THEMES = ['standard', 'light', 'chatgpt', 'gemini', 'vscode', 'github', 'dracula', 'nord'];
@@ -116,6 +116,7 @@ function sanitize(input) {
       notifyDesktop: g.notifyDesktop !== false,
       linkMode: pick(g.linkMode, LINK_MODES, DEFAULTS.general.linkMode),
       trustFolders: g.trustFolders !== false,
+      codexOrchestration: g.codexOrchestration !== false,
       // Tutoriel du premier lancement (PLAN.md §3.21) : un settings.json d'avant le tutoriel = déjà fait.
       tutorialDone: typeof g.tutorialDone === 'boolean' ? g.tutorialDone : input != null,
     },
@@ -140,10 +141,19 @@ function save(settings) {
   return clean;
 }
 
+// Orchestration Codex désactivée : Codex est lancé sans profil (`codex` tout court), comme un agent sans hooks.
+// Le profil force Codex en mode intégré, sans le serveur partagé ni son « Agent command center » (flèche ←).
+// Même règle côté interface dans SettingsContext.
+function findAgent(settings, id) {
+  const agent = settings.agents.find((a) => a.id === id);
+  if (agent?.hooks === 'codex' && !settings.general.codexOrchestration) return { ...agent, hooks: null };
+  return agent;
+}
+
 function register() {
   ipcMain.handle('settings:get', () => load());
   ipcMain.handle('settings:set', (_e, settings) => save(settings));
   ipcMain.handle('agents:catalog', () => CATALOG_AGENTS);
 }
 
-module.exports = { register, load, logosDir, CUSTOM_ID, LOGO_FILE };
+module.exports = { register, load, findAgent, logosDir, CUSTOM_ID, LOGO_FILE };

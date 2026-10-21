@@ -50,7 +50,7 @@ export default function RoleEditor({ role, running, onSave, onRelaunch, onClose 
             placeholder={t('role.placeholder')}
             autoFocus
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && e.ctrlKey && save()}
+            onKeyDown={(e) => e.key === 'Enter' && (e.ctrlKey || e.metaKey) && save()}
           />
           <p className="hint">{t('role.hint')}</p>
           <div className="role-editor-actions">

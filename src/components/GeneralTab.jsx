@@ -5,16 +5,20 @@ import { LINK_MODES } from '../lib/links.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
 import { LANGUAGES } from '../lib/i18n.js';
+import { isMac } from '../lib/platform.js';
 import useT from '../hooks/useT.js';
 
 // Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
-const SHELLS = [
-  { id: 'default' },
-  { id: 'powershell', name: 'Windows PowerShell' },
-  { id: 'pwsh', name: 'PowerShell 7 (pwsh)' },
-  { id: 'cmd' },
-  { id: 'bash', name: 'Git Bash' },
-];
+// Sur Mac, le shell par défaut est celui de l'utilisateur (zsh en général).
+const SHELLS = isMac
+  ? [{ id: 'default', label: 'shell.defaultMac' }, { id: 'bash', name: 'Bash' }, { id: 'pwsh', name: 'PowerShell (pwsh)' }]
+  : [
+      { id: 'default' },
+      { id: 'powershell', name: 'Windows PowerShell' },
+      { id: 'pwsh', name: 'PowerShell 7 (pwsh)' },
+      { id: 'cmd' },
+      { id: 'bash', name: 'Git Bash' },
+    ];
 
 export default function GeneralTab({ onStartTutorial }) {
   const { settings, updateSettings } = useSettings();
@@ -50,7 +54,7 @@ export default function GeneralTab({ onStartTutorial }) {
       <label className="field">
         <span className="field-label">{t('general.shell')}</span>
         <select value={general.shell} onChange={(e) => update({ shell: e.target.value })}>
-          {SHELLS.map((s) => <option key={s.id} value={s.id}>{s.name ?? t(`shell.${s.id}`)}</option>)}
+          {SHELLS.map((s) => <option key={s.id} value={s.id}>{s.name ?? t(s.label ?? `shell.${s.id}`)}</option>)}
         </select>
         <span className="hint">{t('general.shellHint')}</span>
       </label>
@@ -81,13 +85,18 @@ export default function GeneralTab({ onStartTutorial }) {
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.notifyDesktop} onChange={(e) => update({ notifyDesktop: e.target.checked })} />
-          {t('general.notifyDesktop')}
+          {t(isMac ? 'general.notifyDesktopMac' : 'general.notifyDesktop')}
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.trustFolders} onChange={(e) => update({ trustFolders: e.target.checked })} />
           {t('general.trustFolders')}
         </label>
         <span className="hint">{t('general.trustHint')}</span>
+        <label className="checkbox">
+          <input type="checkbox" checked={general.codexOrchestration} onChange={(e) => update({ codexOrchestration: e.target.checked })} />
+          {t('general.codexOrchestration')}
+        </label>
+        <span className="hint">{t('general.codexOrchestrationHint')}</span>
       </div>
 
       <div className="field">

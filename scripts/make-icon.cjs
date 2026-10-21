@@ -1,10 +1,12 @@
-// Génère build/icon.ico et build/icon.png à partir de src/assets/orchestra-logo-small.svg.
+// Génère build/icon.ico et build/icon.png (1024 px, converti en .icns pour macOS par electron-builder) à partir de
+// src/assets/orchestra-logo-small.svg.
 // Lancé par Electron (npm run build:icon) : il sait dessiner un SVG, sans dépendance en plus.
 const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow } = require('electron');
 
 const SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256];
+const PNG_SIZE = 1024; // macOS demande au moins 512 px
 const root = path.join(__dirname, '..');
 const source = path.join(root, 'src', 'assets', 'orchestra-logo-small.svg');
 const outDir = path.join(root, 'build');
@@ -56,7 +58,7 @@ app.whenReady().then(async () => {
 
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, 'icon.ico'), buildIco(images));
-  fs.writeFileSync(path.join(outDir, 'icon.png'), images[images.length - 1].png);
-  console.log(`build/icon.ico (${SIZES.join(', ')} px) et build/icon.png générés`);
+  fs.writeFileSync(path.join(outDir, 'icon.png'), await renderPng(win, svgDataUrl, PNG_SIZE));
+  console.log(`build/icon.ico (${SIZES.join(', ')} px) et build/icon.png (${PNG_SIZE} px) générés`);
   app.quit();
 });

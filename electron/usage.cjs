@@ -4,6 +4,7 @@ const path = require('path');
 const pty = require('node-pty');
 const { app, ipcMain } = require('electron');
 const claudeTrust = require('./claudeTrust.cjs');
+const { resolveShell } = require('./ptyManager.cjs');
 const { t } = require('./i18n.cjs');
 
 // Utilisation des agents (quotas), lue dans les fichiers locaux des CLI :
@@ -112,8 +113,8 @@ function probeClaude() {
     claudeTrust.trustFolder(dir);
 
     const started = Date.now();
-    const win = process.platform === 'win32';
-    const term = pty.spawn(win ? 'powershell.exe' : process.env.SHELL || '/bin/bash', [], {
+    const { file, args } = resolveShell('default');
+    const term = pty.spawn(file, args, {
       name: 'xterm-256color',
       cols: 120,
       rows: 40,

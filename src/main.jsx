@@ -10,6 +10,9 @@ import SplashScreen from './components/SplashScreen.jsx';
 import { SettingsProvider } from './context/SettingsContext.jsx';
 import { WorkspaceProvider } from './context/WorkspaceContext.jsx';
 
+// Styles propres à macOS (styles.css) : :root[data-platform='darwin'].
+document.documentElement.dataset.platform = window.appWindow.platform;
+
 // L'écran de démarrage passe par-dessus pendant que l'app se charge derrière (design/README.md).
 createRoot(document.getElementById('root')).render(
   <>

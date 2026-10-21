@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { hasModifier } from '../lib/platform.js';
 
 // Raccourcis valables partout, même le curseur dans un terminal (src/lib/shortcuts.js, groupe « Partout »).
 // Écoutés en capture : le terminal ne les reçoit pas. Une fenêtre de choix ouverte (quitter, reprendre)
@@ -9,7 +10,9 @@ export default function useAppShortcuts(actions) {
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (!event.ctrlKey || event.altKey || event.metaKey) return;
+      // Cmd sur Mac, Ctrl ailleurs ; Ctrl+Tab partout (Cmd+Tab appartient à macOS).
+      const tab = event.key === 'Tab' && event.ctrlKey && !event.metaKey;
+      if ((!hasModifier(event) && !tab) || event.altKey) return;
       const a = latest.current;
       const key = event.key.toLowerCase();
       const run = (fn) => {
@@ -18,10 +21,13 @@ export default function useAppShortcuts(actions) {
         fn();
       };
 
+      if (tab) {
+        if (!document.querySelector('.dialog')) run(() => a.cycleBoard(event.shiftKey ? -1 : 1));
+        return;
+      }
       if (key === ',' && !event.shiftKey) return run(a.toggleSettings);
       if (document.querySelector('.dialog')) return;
 
-      if (key === 'tab') return run(() => a.cycleBoard(event.shiftKey ? -1 : 1));
       // Touche physique : en AZERTY, la touche 1 sans Maj donne « & », pas « 1 ».
       const digit = event.code.match(/^(?:Digit|Numpad)([1-9])$/)?.[1];
       if (!event.shiftKey && digit) return run(() => a.goToBoard(Number(digit)));

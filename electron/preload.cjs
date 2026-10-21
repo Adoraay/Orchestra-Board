@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('about', {
 });
 
 contextBridge.exposeInMainWorld('appWindow', {
+  platform: process.platform, // 'win32', 'darwin'… : touches et barre de titre propres à macOS
   onConfirmQuit: (cb) => {
     const listener = (_e, agents) => cb(agents);
     ipcRenderer.on('app:confirmQuit', listener);

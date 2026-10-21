@@ -9,21 +9,24 @@ const pty = require('node-pty');
 const terminals = new Map(); // id -> { term, buffer }
 const MAX_BUFFER = 256 * 1024; // caractères
 
-// Shell choisi dans les paramètres (Général).
+// Shell choisi dans les paramètres (Général) : { file, args }.
 function resolveShell(name) {
-  const win = process.platform === 'win32';
+  if (process.platform !== 'win32') {
+    // macOS / Linux : shell de connexion, comme Terminal.app (profil chargé : PATH de Homebrew, nvm…).
+    // PowerShell Windows et cmd n'existent pas ici : shell par défaut de l'utilisateur.
+    const file = { pwsh: 'pwsh', bash: '/bin/bash' }[name] ?? (process.env.SHELL || '/bin/bash');
+    return { file, args: ['-l'] };
+  }
   switch (name) {
-    case 'powershell': return 'powershell.exe';
-    case 'pwsh': return win ? 'pwsh.exe' : 'pwsh';
-    case 'cmd': return 'cmd.exe';
+    case 'pwsh': return { file: 'pwsh.exe', args: [] };
+    case 'cmd': return { file: 'cmd.exe', args: [] };
     case 'bash': {
-      // Sous Windows on préfère Git Bash : « bash.exe » tout court lance souvent WSL.
+      // On préfère Git Bash : « bash.exe » tout court lance souvent WSL.
       const gitBash = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe');
-      if (win) return fs.existsSync(gitBash) ? gitBash : 'bash.exe';
-      return '/bin/bash';
+      return { file: fs.existsSync(gitBash) ? gitBash : 'bash.exe', args: [] };
     }
     default:
-      return win ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
+      return { file: 'powershell.exe', args: [] };
   }
 }
 
@@ -42,7 +45,8 @@ function create({ id, command, shell, cwd, env, cols = 100, rows = 30 }, onData,
   // Déjà lancé (case d'un tableau qu'on rouvre, ou React StrictMode qui monte deux fois).
   if (terminals.has(id)) return { buffer: terminals.get(id).buffer };
 
-  const term = pty.spawn(resolveShell(shell), [], {
+  const { file, args } = resolveShell(shell);
+  const term = pty.spawn(file, args, {
     name: 'xterm-256color',
     cols,
     rows,
@@ -91,4 +95,4 @@ function killAll() {
   for (const id of [...terminals.keys()]) kill(id);
 }
 
-module.exports = { create, write, buffer, resize, kill, killAll };
+module.exports = { create, write, buffer, resize, kill, killAll, resolveShell };

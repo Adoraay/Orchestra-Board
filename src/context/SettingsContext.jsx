@@ -58,7 +58,10 @@ export function SettingsProvider({ children }) {
 
   const value = useMemo(() => {
     if (!settings) return null;
-    const agents = settings.agents.map((agent) => decorateAgent(agent, customLogos));
+    // Orchestration Codex désactivée : Codex sans hooks (même règle que findAgent dans settingsStore.cjs).
+    const agents = settings.agents.map((agent) =>
+      decorateAgent(agent.hooks === 'codex' && !settings.general.codexOrchestration ? { ...agent, hooks: null } : agent, customLogos),
+    );
     return {
       settings,
       agents,

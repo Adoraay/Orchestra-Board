@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { File, Folder, Trash2 } from 'lucide-react';
 import useT from '../hooks/useT.js';
+import { isMac } from '../lib/platform.js';
 
 const UNITS = ['KB', 'MB', 'GB'];
 
@@ -54,7 +55,7 @@ export default function TrashDialog({ entry, summary, onCancel, onConfirm }) {
           </span>
         </div>
 
-        <p id="trash-text" className="dialog-text">{t('trash.text', { content })}</p>
+        <p id="trash-text" className="dialog-text">{t(isMac ? 'trash.textMac' : 'trash.text', { content })}</p>
 
         <div className="dialog-actions">
           <button className="text-button" onClick={onCancel}>

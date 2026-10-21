@@ -1,0 +1,31 @@
+# Build macOS d'Orchestra : .dmg Apple Silicon (arm64) et Intel (x64), en artefact téléchargeable du run.
+# Lancement : à chaque push sur la branche macbook, ou à la main (Actions › Build macOS › Run workflow).
+name: Build macOS
+
+on:
+  push:
+    branches: [macbook]
+  workflow_dispatch:
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci # postinstall : spawn-helper de node-pty rendu exécutable
+
+      - run: npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false # pas de certificat Apple : signature ad hoc (identity "-")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Orchestra-macOS
+          path: release/*.dmg
+          if-no-files-found: error

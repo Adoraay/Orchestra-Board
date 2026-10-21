@@ -15,6 +15,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import useFloatingDrag from '../hooks/useFloatingDrag.js';
 import useResizeMode from '../hooks/useResizeMode.js';
 import useT from '../hooks/useT.js';
+import { isMac } from '../lib/platform.js';
 import { terminalFont, terminalTheme } from '../lib/terminalTheme.js';
 
 // Un nœud de la map = une fenêtre avec un vrai terminal dedans.
@@ -66,9 +67,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
 
     // Copier / coller comme dans le Terminal Windows : Ctrl+C copie s'il y a une sélection (sinon il
     // interrompt), Ctrl+Maj+C copie, Ctrl+V et Ctrl+Maj+V laissent le navigateur coller (collage entre
-    // crochets géré par xterm).
+    // crochets géré par xterm). Sur Mac, Cmd+C / Cmd+V passent par le menu Édition et Ctrl reste au terminal.
     term.attachCustomKeyEventHandler((event) => {
-      if (event.type !== 'keydown' || !event.ctrlKey || event.altKey || event.metaKey) return true;
+      if (isMac || event.type !== 'keydown' || !event.ctrlKey || event.altKey || event.metaKey) return true;
       const key = event.key.toLowerCase();
       if (key === 'c' && (event.shiftKey || term.hasSelection())) {
         if (term.hasSelection()) navigator.clipboard.writeText(term.getSelection()).catch(() => {});

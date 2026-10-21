@@ -93,6 +93,8 @@ button { font: inherit; color: inherit; }
      (en JS, la largeur de la fenêtre pouvait être encore l'ancienne et écraser la barre). 140 px sans l'API. */
   padding-right: max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 140px))));
 }
+/* macOS : feux tricolores à gauche (trafficLightPosition dans main.cjs), rien à droite. */
+:root[data-platform='darwin'] .topbar { padding-left: 84px; padding-right: 14px; }
 .topbar-lockup { display: block; height: 20px; width: auto; flex-shrink: 0; }
 .topbar-separator { width: 1px; height: 20px; flex-shrink: 0; background: var(--border); }
 .no-drag, .topbar button, .topbar input, .board-tab { -webkit-app-region: no-drag; }
