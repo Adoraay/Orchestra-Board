@@ -377,6 +377,8 @@ button { font: inherit; color: inherit; }
 /* Cases qui flottent puis se fixent (PLAN.md §4.4) */
 .terminal-node.lifted {
   transform: scale(1.03) rotate(var(--tilt));
+  will-change: transform; /* couche à part pendant le glisser : la case n'est pas redessinée à chaque image */
+  backface-visibility: hidden;
   box-shadow: 0 24px 48px var(--shadow-lifted);
   border-color: var(--accent);
   transition: transform 160ms ease-out, box-shadow 120ms ease-out, border-color 120ms;
