@@ -32,8 +32,10 @@ Le site est publié sur **https://adoraay.github.io/Orchestra-Board/**, par le d
   aux liens animés et au logo ; mise en page, animations (boucles seulement dans le tableau du haut et la scène des
   agents, arrêtées hors écran et en mouvement réduit).
 - `main.js` : langue, apparitions au défilement, boucles vidéo jouées seulement à l'écran, onglets des liens,
-  tableau animé du haut, dernière version et étoiles lues sur l'API GitHub (lien direct vers l'installateur `.exe`
-  de la dernière release, sinon page des releases ; taille, date et empreinte SHA-256 sous le bouton).
+  tableau animé du haut, dernière version et étoiles lues sur l'API GitHub. Le système du visiteur est détecté :
+  le bouton télécharge le `.exe` (Windows) ou le `.dmg` (macOS, arm64 par défaut, Intel si Chrome ou Edge le
+  disent) de la dernière release, sinon la page des releases ; « Aussi disponible pour » donne les autres
+  fichiers ; taille, date et empreinte SHA-256 du fichier proposé sous le bouton.
 - `assets/brand/` : logos SVG ; `favicon-32.png` et `apple-touch-icon.png` (180 px, fond plein) sont des rendus de
   `orchestra-logo-small.svg`, à refaire si le logo change (par exemple avec Edge sans interface :
   `msedge --headless --screenshot=… --window-size=32,32 page.html`).

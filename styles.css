@@ -173,6 +173,10 @@ html[lang='en'] .lang [data-lang='en'], html[lang='fr'] .lang [data-lang='fr'] {
 .meta a:hover { color: var(--text); }
 .os-note { color: var(--text); }
 .os-note[hidden] { display: none; }
+/* Bouton de téléchargement : logo du système détecté (data-os sur <html>, posé par main.js) */
+html[data-os="mac"] .os-win, html:not([data-os="mac"]) .os-mac { display: none; }
+.also[hidden] { display: none; }
+.final .also { margin-top: 16px; text-align: center; }
 .version { color: var(--accent-light); font-weight: 600; }
 /* Empreinte de l'installateur, dépliable et sélectionnable */
 .verify[hidden] { display: none; }

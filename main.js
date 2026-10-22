@@ -270,37 +270,87 @@
   });
   promo.addEventListener('play', () => play.classList.add('hidden'));
 
-  // --- Visiteurs hors Windows : le bouton reste, avec une ligne qui le dit ---
-  const platform = navigator.userAgentData?.platform || navigator.userAgent || '';
-  if (!/win/i.test(platform)) $('#os-note').hidden = false;
+  // --- Système du visiteur : Windows, macOS, ou autre (Linux, téléphone, tablette) ---
+  // Le gros bouton télécharge l'installateur de ce système ; la ligne « Aussi disponible pour » donne les autres.
+  // Mac : Apple Silicon par défaut (tous les Mac depuis fin 2020) ; Chrome et Edge peuvent dire Intel, Safari non.
+  const ua = navigator.userAgent || '';
+  const platform = navigator.userAgentData?.platform || navigator.platform || ua;
+  const mobile = navigator.userAgentData?.mobile || /android|iphone|ipad|ipod/i.test(ua) || (/mac/i.test(platform) && navigator.maxTouchPoints > 1);
+  const os = mobile ? 'other' : /win/i.test(platform) ? 'windows' : /mac/i.test(platform) ? 'mac' : 'other';
+  let macArch = 'arm';
+  document.documentElement.dataset.os = os;
+  $$('[data-i18n="cta.download"]').forEach((el) => {
+    if (os !== 'windows') el.dataset.i18n = `cta.download.${os}`;
+  });
+  if (os === 'mac') $('[data-i18n="hero.unsigned"]').dataset.i18n = 'hero.unsigned.mac';
+  if (os === 'other') $('#os-note').hidden = false;
+  navigator.userAgentData?.getHighEntropyValues?.(['architecture'])
+    .then(({ architecture }) => {
+      if (os !== 'mac' || architecture !== 'x86') return;
+      macArch = 'x86';
+      renderRelease();
+    })
+    .catch(() => {});
 
   // --- Dernière version publiée : lien direct vers l'installateur, version, taille, date, empreinte ---
+  // Fichiers de la release : .exe (Windows), .dmg arm64 (Apple Silicon), autre .dmg (Intel).
   let release = null;
+  const ASSETS = ['win', 'macArm', 'macIntel'];
+  const primaryKey = () => (os === 'windows' ? 'win' : os === 'mac' ? (macArch === 'x86' ? 'macIntel' : 'macArm') : null);
+
+  function renderAlso(primary) {
+    const order = os === 'mac' ? ['macArm', 'macIntel', 'win'] : ASSETS; // sur Mac, l'autre Mac d'abord
+    const others = order.filter((key) => key !== primary && release.assets[key]);
+    $$('[data-also]').forEach((line) => {
+      line.hidden = !others.length;
+      line.textContent = `${t(primary ? 'also.prefix' : 'also.all')} `;
+      others.forEach((key, i) => {
+        if (i) line.append(' · ');
+        const link = document.createElement('a');
+        link.href = release.assets[key].browser_download_url;
+        link.textContent = t(`also.${key}`);
+        line.append(link);
+      });
+    });
+  }
+
   function renderRelease() {
     const info = $('#dl-info');
     if (!release || !info) return;
-    const { exe, date, sha } = release;
+    const key = primaryKey();
+    const file = key ? release.assets[key] : null;
+    $$('.download-link').forEach((a) => (a.href = file?.browser_download_url ?? release.page));
+    renderAlso(file ? key : null);
+
     const parts = [];
-    if (exe?.size) parts.push(`${Math.round(exe.size / 1e6)} ${t('dl.mb')}`); // espace insécable entre nombre et unité
-    if (date) parts.push(`${t('dl.released')} ${new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: 'medium' }).format(date)}`);
+    if (file?.size) parts.push(`${Math.round(file.size / 1e6)} ${t('dl.mb')}`); // espace insécable entre nombre et unité
+    if (release.date) parts.push(`${t('dl.released')} ${new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: 'medium' }).format(release.date)}`);
     info.textContent = parts.map((p) => ` · ${p}`).join('');
+    // digest = « sha256:… » quand GitHub l'a calculé
+    const sha = /^sha256:[0-9a-f]{64}$/i.test(file?.digest ?? '') ? file.digest.slice(7) : '';
+    $('#verify').hidden = !sha;
     if (sha) {
       $('#sha').textContent = sha;
       const hint = $('#verify-hint');
-      hint.innerHTML = t('dl.verifyHint').replace('{file}', '<span></span>');
-      $('span', hint).textContent = exe.name;
-      $('#verify').hidden = false;
+      hint.innerHTML = t(os === 'mac' ? 'dl.verifyHint.mac' : 'dl.verifyHint').replace('{file}', '<span></span>');
+      $('span', hint).textContent = file.name;
     }
   }
   fetch(`https://api.github.com/repos/${REPO}/releases/latest`)
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (!data) return;
-      const exe = data.assets?.find((a) => /\.exe$/i.test(a.name));
-      // digest = « sha256:… » quand GitHub l'a calculé
-      const sha = /^sha256:[0-9a-f]{64}$/i.test(exe?.digest ?? '') ? exe.digest.slice(7) : '';
-      release = { exe, sha, date: data.published_at ? new Date(data.published_at) : null };
-      if (exe) $$('.download-link').forEach((a) => (a.href = exe.browser_download_url));
+      const list = data.assets ?? [];
+      const dmgs = list.filter((a) => /\.dmg$/i.test(a.name));
+      release = {
+        assets: {
+          win: list.find((a) => /\.exe$/i.test(a.name)),
+          macArm: dmgs.find((a) => /arm64/i.test(a.name)),
+          macIntel: dmgs.find((a) => !/arm64/i.test(a.name)),
+        },
+        page: data.html_url ?? `https://github.com/${REPO}/releases/latest`,
+        date: data.published_at ? new Date(data.published_at) : null,
+      };
       if (data.tag_name) $$('.version').forEach((el) => (el.textContent = data.tag_name.replace(/^v?/, 'v')));
       if (data.html_url) $('.eyebrow').href = data.html_url;
       renderRelease();
