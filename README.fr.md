@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="../../releases/latest"><img alt="Télécharger pour Windows" src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-Windows-d97757?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="../../releases/latest"><img alt="Télécharger pour Windows et macOS" src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-Windows%20%26%20macOS-d97757?style=for-the-badge&logoColor=white"></a>
   <img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848f?style=for-the-badge&logo=electron&logoColor=white">
   <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-3c3a36?style=for-the-badge"></a>
 </p>
@@ -48,7 +48,7 @@ Tout reste sur ta machine. Orchestra lance seulement les CLI que tu utilises dé
 | 📜 **Journal des échanges** | Tous les messages, réponses, commandes et refus passés par un lien. |
 | 🔍 **Changements** | Les fichiers modifiés par un agent, avec un diff coloré, à ouvrir dans VS Code. |
 | 🌿 **Branches Git** | Glisse le carré *Branche* sur une case pour passer son agent sur une autre branche, dans son propre `git worktree`. |
-| 🟢 **Statuts et notifications** | Travaille / attend une permission / a fini, avec une lueur verte, un son et une notification Windows quand un agent termine. |
+| 🟢 **Statuts et notifications** | Travaille / attend une permission / a fini, avec une lueur verte, un son et une notification du système quand un agent termine. |
 | 🎨 **Thèmes** | Standard, Clair, ChatGPT, Gemini, VS Code, GitHub, Dracula et Nord, et ta couleur d'accent. Anglais et français. |
 | 🧭 **Visite guidée** | Un tutoriel d'une minute au premier lancement, à refaire dans les paramètres. |
 
@@ -56,10 +56,12 @@ Tout reste sur ta machine. Orchestra lance seulement les CLI que tu utilises dé
 
 ### 1. Installer
 
-1. Télécharge **`Orchestra-Setup-<version>.exe`** depuis la [dernière version](../../releases/latest) et lance-le.
-2. Windows peut afficher « Windows a protégé votre ordinateur » (l'app n'est pas encore signée) : clique sur **Informations complémentaires → Exécuter quand même**.
+Télécharge l'installateur de ton système depuis la [dernière version](../../releases/latest) :
 
-**Prérequis :** Windows 10 ou 11, et les CLI d'agents que tu veux utiliser, installés et connectés : [`claude`](https://docs.anthropic.com/en/docs/claude-code) et/ou [`codex`](https://github.com/openai/codex) doivent marcher dans un terminal normal.
+- **Windows :** lance **`Orchestra-Setup-<version>.exe`**. Windows peut afficher « Windows a protégé votre ordinateur » (l'app n'est pas encore signée) : clique sur **Informations complémentaires → Exécuter quand même**.
+- **macOS :** ouvre le **`.dmg`** (`arm64` pour Apple Silicon, `x64` pour Intel) et glisse Orchestra dans Applications. L'app n'est pas encore signée par Apple : la première fois, fais un clic droit sur Orchestra dans Applications et choisis **Ouvrir**.
+
+**Prérequis :** Windows 10 ou 11 (64 bits) ou macOS (Apple Silicon ou Intel), et les CLI d'agents que tu veux utiliser, installés et connectés : [`claude`](https://docs.anthropic.com/en/docs/claude-code) et/ou [`codex`](https://github.com/openai/codex) doivent marcher dans un terminal normal.
 
 ### 2. Faire la visite
 
@@ -153,7 +155,7 @@ Dans un terminal, `Ctrl+C` copie quand du texte est sélectionné (sinon il inte
 - **Ce qu'il écrit hors de son dossier :**
   - `~/.claude.json` : marque un dossier comme « de confiance » avant d'y lancer Claude Code (désactivable dans *Paramètres › Général*) ;
   - `~/.codex/orchestra.config.toml` (un profil Orchestra avec son serveur MCP, utilisé par `codex -p orchestra`) et les entrées d'Orchestra dans `~/.codex/hooks.json`. Elles ne font rien quand Codex tourne hors d'Orchestra.
-- Les données de l'app (paramètres, tableaux) sont dans `%APPDATA%\Orchestra`. Le journal des échanges reste en mémoire seulement.
+- Les données de l'app (paramètres, tableaux) sont dans `%APPDATA%\Orchestra` (macOS : `~/Library/Application Support/Orchestra`). Le journal des échanges reste en mémoire seulement.
 
 ## FAQ
 
@@ -178,7 +180,7 @@ Oui : **Paramètres › Agents**. Choisis un agent connu (Google Antigravity, Ai
 <details>
 <summary><b>macOS / Linux ?</b></summary>
 
-Windows d'abord. Le code est multiplateforme et devrait tourner depuis les sources ailleurs, mais ce n'est ni testé ni empaqueté pour l'instant.
+Orchestra tourne sur Windows et macOS (Apple Silicon et Intel), avec un installateur pour chacun dans chaque version publiée. Linux n'est ni testé ni empaqueté pour l'instant.
 </details>
 
 ## Compiler depuis les sources
@@ -190,6 +192,8 @@ npm install      # node-pty arrive avec ses binaires précompilés : ni Visual S
 npm run dev      # Vite + Electron avec rechargement à chaud
 npm run dist     # installateur Windows dans release/Orchestra-Setup-<version>.exe
 ```
+
+La version macOS est sur la branche `macbook` : `npm run dist:mac` y fabrique les `.dmg` (sur un Mac), et chaque push sur cette branche les fabrique sur GitHub Actions.
 
 `launcher.exe` à la racine reconstruit l'interface et ouvre l'app sans fenêtre de terminal (`npm run build:launcher` pour le recompiler).
 

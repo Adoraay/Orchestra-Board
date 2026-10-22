@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="../../releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows-d97757?style=for-the-badge&logo=windows&logoColor=white"></a>
+  <a href="../../releases/latest"><img alt="Download for Windows and macOS" src="https://img.shields.io/badge/Download-Windows%20%26%20macOS-d97757?style=for-the-badge&logoColor=white"></a>
   <img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848f?style=for-the-badge&logo=electron&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-3c3a36?style=for-the-badge"></a>
 </p>
@@ -48,7 +48,7 @@ Everything stays on your machine. Orchestra only starts the CLIs you already use
 | 📜 **Exchange log** | See every message, reply, command and refusal that went through a link. |
 | 🔍 **Changes** | Review the files an agent changed, with a colored diff, and open them in VS Code. |
 | 🌿 **Git branches** | Drop the *Branch* square on a tile to move its agent to another branch, in its own `git worktree`. |
-| 🟢 **Status & notifications** | Working / waiting for permission / done, with a green glow, a sound and a Windows notification when an agent finishes. |
+| 🟢 **Status & notifications** | Working / waiting for permission / done, with a green glow, a sound and a system notification when an agent finishes. |
 | 🎨 **Themes** | Standard, Light, ChatGPT, Gemini, VS Code, GitHub, Dracula and Nord, plus your own accent color. English and French. |
 | 🧭 **Guided tour** | A one-minute tutorial on first launch, available again in the settings. |
 
@@ -56,10 +56,12 @@ Everything stays on your machine. Orchestra only starts the CLIs you already use
 
 ### 1. Install
 
-1. Download **`Orchestra-Setup-<version>.exe`** from the [latest release](../../releases/latest) and run it.
-2. Windows may say *“Windows protected your PC”* (the app is not code-signed yet): click **More info → Run anyway**.
+Download the installer for your system from the [latest release](../../releases/latest):
 
-**Requirements:** Windows 10 or 11, and the agent CLIs you want to use, installed and logged in: [`claude`](https://docs.anthropic.com/en/docs/claude-code) and/or [`codex`](https://github.com/openai/codex) must work in a normal terminal.
+- **Windows:** run **`Orchestra-Setup-<version>.exe`**. Windows may say *“Windows protected your PC”* (the app is not code-signed yet): click **More info → Run anyway**.
+- **macOS:** open the **`.dmg`** (`arm64` for Apple Silicon, `x64` for Intel) and drag Orchestra to Applications. The app is not signed by Apple yet: the first time, right-click Orchestra in Applications and choose **Open**.
+
+**Requirements:** Windows 10 or 11 (64-bit) or macOS (Apple Silicon or Intel), and the agent CLIs you want to use, installed and logged in: [`claude`](https://docs.anthropic.com/en/docs/claude-code) and/or [`codex`](https://github.com/openai/codex) must work in a normal terminal.
 
 ### 2. Take the tour
 
@@ -153,7 +155,7 @@ In a terminal, `Ctrl+C` copies when text is selected (otherwise it interrupts) a
 - **What it writes outside its folder:**
   - `~/.claude.json`: marks a folder as trusted before launching Claude Code in it (can be turned off in *Settings › General*);
   - `~/.codex/orchestra.config.toml` (an Orchestra profile with its MCP server, used as `codex -p orchestra`) and Orchestra's own entries in `~/.codex/hooks.json`. They do nothing when Codex runs outside Orchestra.
-- App data (settings, boards) lives in `%APPDATA%\Orchestra`. The exchange log stays in memory only.
+- App data (settings, boards) lives in `%APPDATA%\Orchestra` (macOS: `~/Library/Application Support/Orchestra`). The exchange log stays in memory only.
 
 ## FAQ
 
@@ -178,7 +180,7 @@ Yes: **Settings › Agents**. Pick a known agent (Google Antigravity, Aider, Qwe
 <details>
 <summary><b>macOS / Linux?</b></summary>
 
-Windows comes first. The code is cross-platform and should run from source elsewhere, but it is not tested or packaged yet.
+Orchestra runs on Windows and macOS (Apple Silicon and Intel), with an installer for each in every release. Linux is not tested or packaged yet.
 </details>
 
 ## Build from source
@@ -190,6 +192,8 @@ npm install      # node-pty ships prebuilt binaries: no Visual Studio or Python 
 npm run dev      # Vite + Electron with hot reload
 npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 ```
+
+The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds the `.dmg` files (on a Mac), and every push to that branch builds them on GitHub Actions.
 
 `launcher.exe` at the root rebuilds the interface and opens the app without a terminal window (`npm run build:launcher` to recompile it).
 
