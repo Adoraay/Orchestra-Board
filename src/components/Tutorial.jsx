@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Compass, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import useT from '../hooks/useT.js';
 
 const GAP = 14; // px entre l'élément montré et la bulle
@@ -44,11 +44,10 @@ function placeBubble(rect, bubble) {
   return { left: clampX(rect.left + rect.width / 2 - bubble.width / 2), top: clampY(rect.bottom + GAP) };
 }
 
-// Tutoriel : fenêtre de bienvenue (premier lancement), puis visite guidée en bulles posées sur l'interface.
-// welcome : commencer par la fenêtre de bienvenue (sinon la visite démarre tout de suite, depuis les paramètres).
-export default function Tutorial({ board, welcome, onFinish }) {
+// Visite guidée en bulles posées sur l'interface (après l'assistant SetupWizard au premier lancement).
+export default function Tutorial({ board, onFinish }) {
   const t = useT();
-  const [index, setIndex] = useState(welcome ? -1 : 0);
+  const [index, setIndex] = useState(0);
   const [rect, setRect] = useState(null);
   const [position, setPosition] = useState(null);
   const bubbleRef = useRef(null);
@@ -79,25 +78,6 @@ export default function Tutorial({ board, welcome, onFinish }) {
   useEffect(() => {
     if (step?.done?.(board)) setIndex((i) => i + 1);
   }, [board, step]);
-
-  if (index === -1) {
-    return createPortal(
-      <div className="modal-backdrop">
-        <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
-          <header className="dialog-header">
-            <span className="dialog-icon"><Compass size={18} /></span>
-            <h1 id="tutorial-title">{t('tutorial.welcomeTitle')}</h1>
-          </header>
-          <p className="dialog-text">{t('tutorial.welcomeText')}</p>
-          <div className="dialog-actions">
-            <button className="text-button" onClick={onFinish}>{t('tutorial.skip')}</button>
-            <button className="text-button primary" onClick={() => setIndex(0)} autoFocus>{t('tutorial.start')}</button>
-          </div>
-        </div>
-      </div>,
-      document.body,
-    );
-  }
 
   return createPortal(
     <>

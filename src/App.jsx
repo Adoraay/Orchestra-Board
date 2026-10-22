@@ -22,10 +22,12 @@ import FloatingEdge from './components/FloatingEdge.jsx';
 import LinkPanel from './components/LinkPanel.jsx';
 import LogPanel from './components/LogPanel.jsx';
 import MiniMapNode from './components/MiniMapNode.jsx';
+import NodeMenu from './components/NodeMenu.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import QuitDialog from './components/QuitDialog.jsx';
 import ResumeDialog from './components/ResumeDialog.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
+import SetupWizard from './components/SetupWizard.jsx';
 import TerminalNode from './components/TerminalNode.jsx';
 import UsagePanel from './components/UsagePanel.jsx';
 import TextNode from './components/TextNode.jsx';
@@ -38,6 +40,7 @@ import { useWorkspace } from './context/WorkspaceContext.jsx';
 import useBoardHistory from './hooks/useBoardHistory.js';
 import useBoardShortcuts from './hooks/useBoardShortcuts.js';
 import useBoxSelection from './hooks/useBoxSelection.js';
+import useGridGlow from './hooks/useGridGlow.js';
 import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useAppShortcuts from './hooks/useAppShortcuts.js';
@@ -46,7 +49,8 @@ import useT from './hooks/useT.js';
 import { DEFAULT_LINK } from './lib/links.js';
 
 const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode };
-const NOTE_SIZE = { width: 180, height: 180 };
+const DUPLICATE_OFFSET = 40; // px : une copie apparaît en décalé de l'original
+const NOTE_SIZE = { width: 270, height: 180 }; // plus large que haut : les lignes écrites par un agent restent lisibles
 const edgeTypes = { floating: FloatingEdge };
 const BOARD_HINTS = ['pen', 'note', 'text', 'link']; // outils avec un bandeau d'aide (board.hint.<outil>)
 const NODE_SIZE = { width: 640, height: 400 };
@@ -79,6 +83,17 @@ function Workspace({ saved }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
+  // Post-it d'un autre tableau réécrit par un agent (lien Note) ; le tableau ouvert s'en charge lui-même.
+  useEffect(
+    () =>
+      window.notes.onWrite((id, text) => {
+        for (const [boardId, state] of Object.entries(content)) {
+          if (boardId === activeId || !state.nodes.some((n) => n.id === id)) continue;
+          updateContent(boardId, { ...state, nodes: state.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, text } } : n)) });
+        }
+      }),
+    [content, activeId, updateContent],
+  );
   const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
   const [agentsBarOpen, setAgentsBarOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
@@ -98,8 +113,9 @@ function Workspace({ saved }) {
   const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
   const clearLaunch = useCallback(() => setLaunchRequest(null), []);
   const { settings, agentById, updateSettings } = useSettings();
-  // Tutoriel (PLAN.md §3.21) : 'welcome' au premier lancement, 'tour' relancé depuis les paramètres.
-  const [tutorial, setTutorial] = useState(() => (settings.general.tutorialDone ? null : 'welcome'));
+  // Tutoriel (PLAN.md §3.21) : 'setup' (assistant de personnalisation) puis 'tour' au premier lancement,
+  // 'tour' seul relancé depuis les paramètres.
+  const [tutorial, setTutorial] = useState(() => (settings.general.tutorialDone ? null : 'setup'));
   const finishTutorial = useCallback(() => {
     setTutorial(null);
     updateSettings('general', { tutorialDone: true });
@@ -198,7 +214,11 @@ function Workspace({ saved }) {
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} />}
       {tutorial && resumeChoice !== 'pending' && (
-        <Tutorial key={tutorial} board={content[activeId]} welcome={tutorial === 'welcome'} onFinish={finishTutorial} />
+        tutorial === 'setup' ? (
+          <SetupWizard onFinish={() => setTutorial('tour')} />
+        ) : (
+          <Tutorial board={content[activeId]} onFinish={finishTutorial} />
+        )
       )}
       {resumeChoice === 'pending' && (
         <ResumeDialog
@@ -235,6 +255,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const { settings, agentById } = useSettings();
   const t = useT();
   const grid = settings.appearance.grid;
+  const glow = settings.appearance.glow;
+  const light = settings.appearance.theme === 'light';
 
   // Barre d'outils (PLAN.md §3.8)
   const [tool, setTool] = useState('select');
@@ -245,9 +267,10 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [branchPicker, setBranchPicker] = useState(null); // case dont la barre des branches est ouverte
   const [linkEvents, setLinkEvents] = useState({}); // id du lien -> dernier état de transmission
   const [renameRequest, setRenameRequest] = useState(null); // F2 : { id, at } de la case à renommer
+  const [editRequest, setEditRequest] = useState(null); // « Modifier le texte » d'un post-it ou d'un texte : { id, at }
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, resumeChoice, renameRequest }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, resumeChoice, renameRequest],
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, resumeChoice, renameRequest, editRequest }),
+    [tool, linkSource, branchTarget, branchPicker, linkEvents, resumeChoice, renameRequest, editRequest],
   );
 
   // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
@@ -314,9 +337,12 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     setSelectedStroke((current) => (current === id ? null : current));
   }, []);
 
-  // Outil Lien : les terminaux ne doivent plus recevoir le clavier.
+  // Outil Lien : les terminaux ne doivent plus recevoir le clavier. « Relier à… » du menu d'une case passe
+  // en mode Lien avec cette case déjà choisie comme source.
+  const pendingLinkSource = useRef(null);
   useEffect(() => {
-    setLinkSource(null);
+    setLinkSource(pendingLinkSource.current);
+    pendingLinkSource.current = null;
     if (tool === 'link' && document.activeElement?.closest('.terminal-node')) document.activeElement.blur();
   }, [tool]);
 
@@ -324,21 +350,43 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const onNodeClick = useCallback(
     (_event, node) => {
       setSelectedStroke(null);
-      if (tool !== 'link' || node.type !== 'terminal') return;
+      if (tool !== 'link' || (node.type !== 'terminal' && node.type !== 'note')) return;
       if (!linkSource || linkSource === node.id) {
         setLinkSource(linkSource ? null : node.id);
         return;
       }
+      const sourceNode = nodes.find((n) => n.id === linkSource);
+      // Un agent relié à un post-it : lien Note, toujours de l'agent vers le post-it. Pas de lien entre deux
+      // post-it, ni avec une case Terminal (elle n'a pas d'outils).
+      const isNote = (n) => n?.type === 'note';
+      if (isNote(sourceNode) || isNote(node)) {
+        const [agentNode, noteNode] = isNote(node) ? [sourceNode, node] : [node, sourceNode];
+        setLinkSource(null);
+        if (isNote(agentNode) || agentNode?.data.agentId === 'shell') return;
+        if (!noteNode.data.label) {
+          setNodes((nds) => nds.map((n) => (n.id === noteNode.id ? { ...n, data: { ...n.data, label: numberedName(t('note.defaultName'), nds) } } : n)));
+        }
+        setEdges((eds) => addEdge({ source: agentNode.id, target: noteNode.id, type: 'floating', data: { ...DEFAULT_LINK, mode: 'note' } }, eds));
+        return;
+      }
       // Un agent relié à une case Terminal : lien Terminal, toujours de l'agent vers le terminal (PLAN.md §3.17).
       const isShell = (n) => n?.data.agentId === 'shell';
-      const sourceNode = nodes.find((n) => n.id === linkSource);
       const terminal = isShell(sourceNode) !== isShell(node);
       const [source, target] = terminal && isShell(sourceNode) ? [node.id, linkSource] : [linkSource, node.id];
       const mode = terminal ? 'terminal' : settings.general.linkMode;
       setEdges((eds) => addEdge({ source, target, type: 'floating', data: { ...DEFAULT_LINK, mode } }, eds));
       setLinkSource(null);
     },
-    [tool, linkSource, nodes, setEdges, settings.general.linkMode],
+    [tool, linkSource, nodes, setNodes, setEdges, settings.general.linkMode, t],
+  );
+
+  // Post-it de ce tableau réécrit par un agent (lien Note).
+  useEffect(
+    () =>
+      window.notes.onWrite((id, text) =>
+        setNodes((nds) => (nds.some((n) => n.id === id) ? nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, text } } : n)) : nds)),
+      ),
+    [setNodes],
   );
 
   // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).
@@ -363,27 +411,35 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   }, [nodes, edges, strokes, viewport, onChange]);
 
   // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
+  // only : un seul élément, depuis son menu du clic droit (la sélection n'est alors pas touchée).
   const [deleteRequest, setDeleteRequest] = useState(null);
-  const requestDelete = () => {
-    const chosen = nodes.filter((n) => n.selected);
+  const requestDelete = (only) => {
+    const chosen = only ? [only] : nodes.filter((n) => n.selected);
+    const chosenEdges = only ? [] : selectedEdges;
+    const stroke = only ? null : selectedStroke;
     const terminals = chosen
       .filter((n) => n.type === 'terminal')
       .map((n) => ({ id: n.id, name: n.data.label || agentById(n.data.agentId).name, agent: agentById(n.data.agentId), status: running[n.id]?.status }));
     const selection = {
       terminals,
-      links: selectedEdges.length,
+      links: chosenEdges.length,
       notes: chosen.filter((n) => n.type === 'note').length,
       texts: chosen.filter((n) => n.type === 'text').length,
-      strokes: selectedStroke ? 1 : 0,
+      strokes: stroke ? 1 : 0,
+      nodeIds: chosen.map((n) => n.id),
+      edgeIds: chosenEdges.map((e) => e.id),
+      stroke,
     };
     if (terminals.length || selection.links || selection.notes || selection.texts || selection.strokes) setDeleteRequest(selection);
   };
   const confirmDelete = () => {
     for (const t of deleteRequest.terminals) window.pty.kill(t.id);
     // deleteElements retire aussi les liens attachés aux cases supprimées.
-    deleteElements({ nodes: nodes.filter((n) => n.selected), edges: selectedEdges });
-    setStrokes((all) => all.filter((s) => s.id !== selectedStroke));
-    setSelectedStroke(null);
+    deleteElements({ nodes: deleteRequest.nodeIds.map((id) => ({ id })), edges: deleteRequest.edgeIds.map((id) => ({ id })) });
+    if (deleteRequest.stroke) {
+      setStrokes((all) => all.filter((s) => s.id !== deleteRequest.stroke));
+      setSelectedStroke(null);
+    }
     setDeleteRequest(null);
   };
   const cancelDelete = useCallback(() => setDeleteRequest(null), []);
@@ -398,8 +454,65 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       setTool('select');
       setSelectedStroke(null);
     },
-    onDelete: requestDelete,
+    onDelete: () => requestDelete(),
   });
+
+  // Clic droit sur un post-it, un texte, ou la barre de titre d'une case (le terminal garde son propre clic droit).
+  const [nodeMenu, setNodeMenu] = useState(null); // { x, y, id, type }
+  const closeNodeMenu = useCallback(() => setNodeMenu(null), []);
+  const onNodeContextMenu = useCallback(
+    (event, node) => {
+      if (tool !== 'select') return;
+      if (node.type === 'terminal' && !event.target.closest('.terminal-header')) return;
+      event.preventDefault();
+      setNodeMenu({ x: event.clientX, y: event.clientY, id: node.id, type: node.type });
+    },
+    [tool],
+  );
+
+  // Copie décalée : une case copiée lance un nouvel agent (même agent, dossier, branche, rôle et modèle).
+  const duplicate = (node) =>
+    setNodes((nds) => {
+      const { label, restored, autoEdit, ...data } = node.data;
+      if (node.type === 'terminal') data.label = numberedName(agentById(node.data.agentId).name, nds);
+      if (node.type === 'note') data.label = numberedName(t('note.defaultName'), nds);
+      return nds
+        .map((n) => (n.selected ? { ...n, selected: false } : n))
+        .concat({
+          ...(node.dragHandle && { dragHandle: node.dragHandle }),
+          id: crypto.randomUUID(),
+          type: node.type,
+          position: { x: node.position.x + DUPLICATE_OFFSET, y: node.position.y + DUPLICATE_OFFSET },
+          style: { ...node.style },
+          selected: true,
+          data,
+        });
+    });
+
+  const onNodeAction = (action) => {
+    const node = nodes.find((n) => n.id === nodeMenu.id);
+    setNodeMenu(null);
+    if (!node) return;
+    switch (action) {
+      case 'rename':
+        // Un ancien post-it sans nom en reçoit un, puis passe en modification.
+        if (node.type === 'note' && !node.data.label) {
+          setNodes((nds) => nds.map((n) => (n.id === node.id ? { ...n, data: { ...n.data, label: numberedName(t('note.defaultName'), nds) } } : n)));
+        }
+        return setRenameRequest({ id: node.id, at: Date.now() });
+      case 'edit':
+        return setEditRequest({ id: node.id, at: Date.now() });
+      case 'duplicate':
+        return duplicate(node);
+      case 'focus':
+        return fitView({ nodes: [{ id: node.id }], duration: 400, padding: 0.3, maxZoom: 1 });
+      case 'link':
+        pendingLinkSource.current = node.id;
+        return setTool('link');
+      case 'delete':
+        return requestDelete(node);
+    }
+  };
 
   // Outils Post-it et Texte : un clic sur la map pose l'élément, puis on repasse en Sélection.
   const onPaneClick = useCallback(
@@ -419,12 +532,12 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             position: note ? { x: p.x - NOTE_SIZE.width / 2, y: p.y - NOTE_SIZE.height / 2 } : { x: p.x, y: p.y - 14 },
             style: note ? { ...NOTE_SIZE } : undefined,
             selected: true,
-            data: { text: '', autoEdit: true },
+            data: { text: '', autoEdit: true, ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
           }),
       );
       setTool('select');
     },
-    [tool, screenToFlowPosition, setNodes],
+    [tool, screenToFlowPosition, setNodes, t],
   );
 
   // getData n'est pas lisible pendant dragover : on garde l'agent glissé ici.
@@ -489,14 +602,15 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           position: { x: center.x - NODE_SIZE.width / 2, y: center.y - NODE_SIZE.height / 2 },
           dragHandle: '.drag-handle',
           style: { ...NODE_SIZE },
-          data: { agentId, cwd, label: numberedName(agentById(agentId).name, nds) },
+          data: { agentId, cwd, label: numberedName(agentById(agentId).name, nds), ...(settings.models[agentId] && { model: settings.models[agentId] }) },
         }),
       ),
-    [setNodes, agentById],
+    [setNodes, agentById, settings.models],
   );
 
   // « Lancer un agent ici » (clic droit dans l'explorateur) : nouvelle case au centre de la vue.
   const boardRef = useRef(null);
+  useGridGlow(boardRef, glow && Boolean(GRID_VARIANTS[grid]), settings.appearance.glowSize);
   useEffect(() => {
     if (!launchRequest || !boardRef.current) return;
     const rect = boardRef.current.getBoundingClientRect();
@@ -555,6 +669,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             onEdgesChange={onEdgesChange}
             onPaneClick={onPaneClick}
             onNodeClick={onNodeClick}
+            onNodeContextMenu={onNodeContextMenu}
             onEdgeClick={() => setSelectedStroke(null)}
             onEdgeContextMenu={(event, edge) => {
               // Outil Lien : clic droit sur un lien = le supprimer (comme les traits du stylo).
@@ -574,7 +689,20 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             proOptions={{ hideAttribution: true }}
             colorMode={settings.appearance.theme === 'light' ? 'light' : 'dark'}
           >
-            {GRID_VARIANTS[grid] && <Background variant={GRID_VARIANTS[grid]} gap={24} />}
+            {/* Thème Clair : points un peu plus gros, sinon peu visibles sur le fond clair */}
+            {GRID_VARIANTS[grid] && <Background variant={GRID_VARIANTS[grid]} gap={24} size={grid === 'dots' && light ? 1.8 : undefined} />}
+            {GRID_VARIANTS[grid] && glow && (
+              <Background
+                id="glow"
+                className="grid-glow"
+                variant={GRID_VARIANTS[grid]}
+                gap={24}
+                size={grid === 'dots' ? (light ? 2.8 : 2.2) : undefined}
+                lineWidth={1.5}
+                color={settings.appearance.glowColor ?? 'var(--accent)'}
+                bgColor="transparent"
+              />
+            )}
             <Controls position="bottom-left" />
             <MiniMap position="bottom-right" pannable zoomable nodeComponent={MiniMapNode} />
             <DrawingLayer
@@ -615,6 +743,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           <DropPreview agent={agentById(draggedAgentId)} position={previewPos} size={NODE_SIZE} />
         )}
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
+        {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} onAction={onNodeAction} onClose={closeNodeMenu} />}
         {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
       </main>
     </>

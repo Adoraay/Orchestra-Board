@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('agents', {
   deleteLogo: (file) => ipcRenderer.invoke('agents:deleteLogo', file),
   testCommand: (command) => ipcRenderer.invoke('agents:testCommand', command),
   catalog: () => ipcRenderer.invoke('agents:catalog'),
+  models: (agentId) => ipcRenderer.invoke('agents:models', agentId),
 });
 
 contextBridge.exposeInMainWorld('workspace', {
@@ -52,6 +53,15 @@ contextBridge.exposeInMainWorld('links', {
     const listener = (_e, linkId, event) => cb(linkId, event);
     ipcRenderer.on('link:event', listener);
     return () => ipcRenderer.removeListener('link:event', listener);
+  },
+});
+
+// Post-it réécrit par un agent relié (lien Note).
+contextBridge.exposeInMainWorld('notes', {
+  onWrite: (cb) => {
+    const listener = (_e, id, text) => cb(id, text);
+    ipcRenderer.on('note:write', listener);
+    return () => ipcRenderer.removeListener('note:write', listener);
   },
 });
 

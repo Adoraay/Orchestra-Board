@@ -14,12 +14,14 @@ import { useBoard } from '../context/BoardContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useFloatingDrag from '../hooks/useFloatingDrag.js';
 import useResizeMode from '../hooks/useResizeMode.js';
+import useTerminalZoomFix from '../hooks/useTerminalZoomFix.js';
 import useT from '../hooks/useT.js';
 import { terminalFont, terminalTheme } from '../lib/terminalTheme.js';
 
 // Un nœud de la map = une fenêtre avec un vrai terminal dedans.
 export default function TerminalNode({ id, data, selected, dragging, positionAbsoluteX }) {
   const containerRef = useRef(null);
+  useTerminalZoomFix(containerRef);
   const termRef = useRef(null);
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
@@ -100,7 +102,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     termRef.current = term;
     fitRef.current = fit;
     if (!askResumeAtMount.current) {
-      window.pty.create({ id, agentId: data.agentId, cwd: runDirRef.current, label: nameRef.current, cols: term.cols, rows: term.rows }).then((result) => {
+      window.pty.create({ id, agentId: data.agentId, cwd: runDirRef.current, label: nameRef.current, cols: term.cols, rows: term.rows, model: data.model }).then((result) => {
         if (disposed) return;
         if (result?.buffer) term.write(result.buffer);
         applyStatus(result?.status);
@@ -157,7 +159,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     const term = termRef.current;
     if (!term) return;
     updateNodeData(id, { restored: false });
-    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume });
+    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
     term.focus();
   };
 
@@ -172,7 +174,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     if (!term) return;
     setExited(false);
     term.write('\r\n');
-    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows });
+    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, model: data.model });
     term.focus();
   };
 
@@ -186,7 +188,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     setFinished(false);
     setConfirmingClose(false);
     term.reset();
-    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume });
+    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
     term.focus();
   };
 
@@ -308,6 +310,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
             onEditStart={stopResizing}
             editRequest={renameRequest?.id === id ? renameRequest.at : null}
           />
+          {data.model && <span className="model-tag" title={t('model.tile', { model: data.model })}>{data.model}</span>}
           {exited ? <span className="badge">{t('terminal.exited')}</span> : <StatusDot status={status} />}
           <span className="header-actions">
             {exited && (

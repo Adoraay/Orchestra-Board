@@ -8,6 +8,10 @@ const path = require('path');
 // elle suit les messages d'agent en agent et chaque lien ne peut y servir que maxTurns fois.
 const READ_DELAY = 400; // ms : au moment du hook Stop, le transcript n'est pas toujours fini d'écrire
 const ENTER_DELAY = 250; // ms entre le collage et Entrée, sinon Entrée peut finir dans le collage
+// Codex sous Windows reçoit le collage comme une rafale de touches : s'il la lit encore quand Entrée
+// arrive, Entrée devient un saut de ligne. Sans passage à « travaille », on renvoie Entrée.
+const ENTER_RETRY_DELAY = 1500; // ms
+const ENTER_RETRIES = 3;
 const TRANSCRIPT_TAIL = 2 * 1024 * 1024; // octets lus en fin de transcript
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
@@ -107,8 +111,21 @@ function deliver(target, item) {
     deps.arm(target);
     deps.write(target, '\r');
     item.onDelivered?.();
+    confirmSubmit(target, ENTER_RETRIES);
   }, ENTER_DELAY);
   deps.emit(item.id, { state: 'sent', to: target, turns: item.turns, maxTurns: item.maxTurns });
+}
+
+// Une Entrée en trop sur une invite vide ne fait rien, dans Claude Code comme dans Codex.
+function confirmSubmit(target, retries) {
+  if (!retries) return;
+  setTimeout(() => {
+    const status = deps.status(target);
+    if (!status || status === 'working' || status === 'waiting') return;
+    deps.arm(target);
+    deps.write(target, '\r');
+    confirmSubmit(target, retries - 1);
+  }, ENTER_RETRY_DELAY);
 }
 
 // Message pour une case (Transmission, ou Délégation via delegation.cjs) : envoyé dès qu'elle est libre.

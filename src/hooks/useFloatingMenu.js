@@ -1,0 +1,41 @@
+import { useEffect, useLayoutEffect, useState } from 'react';
+
+const MARGIN = 8; // px : le menu reste dans la fenêtre
+
+// Menu de clic droit posé en (x, y) : gardé dans la fenêtre, fermé par Échap, un clic ou la molette ailleurs
+// (la molette dans un long sous-menu le fait défiler), ou quand la fenêtre perd le focus.
+export default function useFloatingMenu(ref, x, y, onClose) {
+  const [position, setPosition] = useState({ left: x, top: y });
+
+  useLayoutEffect(() => {
+    const { width, height } = ref.current.getBoundingClientRect();
+    setPosition({
+      left: Math.max(MARGIN, Math.min(x, window.innerWidth - width - MARGIN)),
+      top: Math.max(MARGIN, Math.min(y, window.innerHeight - height - MARGIN)),
+    });
+  }, [ref, x, y]);
+
+  useEffect(() => {
+    const onPointerDown = (event) => {
+      if (!ref.current?.contains(event.target)) onClose();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('blur', onClose);
+    window.addEventListener('wheel', onPointerDown, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('blur', onClose);
+      window.removeEventListener('wheel', onPointerDown, true);
+    };
+  }, [ref, onClose]);
+
+  return position;
+}

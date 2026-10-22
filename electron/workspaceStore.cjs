@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { app, ipcMain } = require('electron');
 const { t } = require('./i18n.cjs');
+const { MODEL } = require('./settingsStore.cjs');
 
 // Tableaux et disposition de chaque map (PLAN.md §3.4), dans userData/workspace.json.
 const ID = /^[\w-]{1,128}$/;
@@ -35,10 +36,13 @@ function sanitizeData(type, data = {}) {
         ...(label && { label }), // nom choisi par double-clic sur le titre
         ...(branch && worktree && { branch, worktree }), // branche Git choisie et dossier où l'agent tourne
         ...(role && { role }), // rôle donné à l'agent (PLAN.md §3.19)
+        ...(MODEL.test(data.model ?? '') && { model: data.model }), // modèle choisi dans le dock au dépôt
       };
     }
-    case 'note':
-      return { text: text(data.text) };
+    case 'note': {
+      const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
+      return { text: text(data.text), ...(label && { label }) }; // label : nom donné aux agents par le lien Note
+    }
     default:
       return { text: text(data.text), fontSize: Math.round(clamp(data.fontSize, 8, 160, 18)), rotation: clamp(data.rotation, -180, 180, 0) };
   }
@@ -61,11 +65,11 @@ function sanitizeNode(n) {
   };
 }
 
-// Réglages d'un lien (PLAN.md §3.5, §3.11, §3.17) : type (Transmission, Délégation ou Terminal), consigne avec {reponse}, limite de tours, actif ou non,
+// Réglages d'un lien (PLAN.md §3.5, §3.11, §3.17) : type (Transmission, Délégation, Terminal ou Note), consigne avec {reponse}, limite de tours, actif ou non,
 // dans les deux sens ou non.
 function sanitizeLink(data = {}) {
   return {
-    mode: ['delegate', 'terminal'].includes(data.mode) ? data.mode : 'relay',
+    mode: ['delegate', 'terminal', 'note'].includes(data.mode) ? data.mode : 'relay',
     bidirectional: data.bidirectional === true,
     prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '', // vide = pas encore configuré
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),

@@ -16,6 +16,7 @@ const gitHandlers = require('./git.cjs');
 const linkRelay = require('./linkRelay.cjs');
 const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
+const noteLink = require('./noteLink.cjs');
 const activityLog = require('./activityLog.cjs');
 const usage = require('./usage.cjs');
 const { t } = require('./i18n.cjs');
@@ -28,15 +29,21 @@ const TITLE_BAR_HEIGHT = 40;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 // Le projet s'appelait « agent-board » : on reprend une fois ses paramètres, agents et tableaux.
+// Une seule fois (fichier témoin) : sans settings.json plus tard (fichier supprimé ou renommé), Orchestra
+// repart à neuf au lieu de réimporter les anciennes données.
 function migrateOldUserData() {
   const current = app.getPath('userData');
   const old = path.join(app.getPath('appData'), 'agent-board');
-  if (fs.existsSync(path.join(current, 'settings.json')) || !fs.existsSync(old)) return;
+  const marker = path.join(current, 'agent-board-imported');
+  if (fs.existsSync(marker)) return;
   fs.mkdirSync(current, { recursive: true });
-  for (const name of ['settings.json', 'workspace.json', 'logos']) {
-    const from = path.join(old, name);
-    if (fs.existsSync(from)) fs.cpSync(from, path.join(current, name), { recursive: true });
+  if (!fs.existsSync(path.join(current, 'settings.json')) && fs.existsSync(old)) {
+    for (const name of ['settings.json', 'workspace.json', 'logos']) {
+      const from = path.join(old, name);
+      if (fs.existsSync(from)) fs.cpSync(from, path.join(current, name), { recursive: true });
+    }
   }
+  fs.writeFileSync(marker, '');
 }
 
 function createWindow() {
@@ -124,7 +131,7 @@ function notifyFinished(id, info) {
 
 agentStatus.init(sendStatus, notifyFinished);
 activityLog.init({
-  nameOf: (id) => agentStatus.info(id)?.name || id,
+  nameOf: (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id,
   emit: (entry) => send('log:entry', entry),
 });
 
@@ -152,8 +159,15 @@ terminalLink.init({
   emit: (linkId, event) => send('link:event', linkId, event),
 });
 
-// Outils du serveur MCP d'une case : lien Terminal ou Délégation.
+noteLink.init({
+  log: activityLog.add,
+  write: (id, text) => send('note:write', id, text),
+  emit: (linkId, event) => send('link:event', linkId, event),
+});
+
+// Outils du serveur MCP d'une case : lien Note, lien Terminal ou Délégation.
 function callTool(caller, name, args, signal) {
+  if (noteLink.isTool(name)) return noteLink.callTool(caller, name, args);
   if (!terminalLink.isTool(name)) return delegation.callTool(caller, name, args, signal);
   if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
   return terminalLink.callTool(caller, name, args, signal);
@@ -162,14 +176,31 @@ function callTool(caller, name, args, signal) {
 // Rôle de chaque case (PLAN.md §3.19), mis à jour à chaque sauvegarde de workspace.json.
 let roles = new Map();
 
+// Conversation de chaque case où l'utilisateur a déjà écrit, pendant ce lancement de l'app : une relance
+// (après un rôle) reprend celle-ci, pas la dernière du dossier (--continue), et rien si elle est encore vide.
+const sessions = new Map(); // case -> session_id
+const launched = new Set(); // cases déjà lancées depuis le démarrage de l'app
+const SESSION_ID = /^[0-9a-f-]{8,64}$/i;
+
+function trackSession(id, payload) {
+  const session = SESSION_ID.test(payload.session_id ?? '') ? payload.session_id : null;
+  if (payload.hook_event_name === 'UserPromptSubmit' && session) sessions.set(id, session);
+  if (payload.hook_event_name !== 'SessionStart') return;
+  if (payload.source === 'resume' && session) sessions.set(id, session);
+  else if (payload.source === 'startup' || payload.source === 'clear') sessions.delete(id);
+}
+
 // Événements des hooks de Claude Code et Codex : statut de la case, et transmission par ses liens quand il a
 // fini (Transmission automatique, ou réponse attendue par un agent qui lui a délégué un message).
-// Début de session : la réponse au hook donne son rôle à l'agent (même format pour Claude Code et Codex).
+// Début de session : la réponse au hook dit à l'agent qu'il tourne dans Orchestra et lui donne son rôle
+// (même format pour Claude Code et Codex). Ce contexte n'est pas affiché dans le terminal.
 function onHook(id, payload) {
   agentStatus.onHook(id, payload);
-  if (payload.hook_event_name === 'SessionStart' && roles.has(id)) {
-    const additionalContext = t('role.context', { role: roles.get(id) });
-    return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } };
+  trackSession(id, payload);
+  if (payload.hook_event_name === 'SessionStart') {
+    const parts = [t('orchestra.context')];
+    if (roles.has(id)) parts.push(t('role.context', { role: roles.get(id) }));
+    return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: parts.join('\n\n') } };
   }
   if (payload.hook_event_name !== 'Stop') return;
   linkRelay.onStop(id, payload);
@@ -179,13 +210,29 @@ function onHook(id, payload) {
 // Nom d'une case choisi dans l'interface (double-clic sur son titre).
 const cleanName = (name) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : null);
 
-// Commande à taper dans le shell : celle de l'agent, + profil Orchestra pour Codex, + reprise de conversation,
+// Reprise : la conversation de la case si on la connaît, sinon la dernière du dossier, mais seulement
+// au premier lancement de la case (redémarrage de l'app) : une case relancée sans conversation repart à neuf.
+function resumeArgs(id, agent, resume) {
+  if (!resume) return '';
+  const session = sessions.get(id);
+  if (session && agent.hooks === 'claude') return ` --resume ${session}`;
+  if (session && agent.hooks === 'codex') return ` resume ${session}`;
+  if (launched.has(id) || !agent.resumeArgs) return '';
+  return ` ${agent.resumeArgs}`;
+}
+
+// Commande à taper dans le shell : celle de l'agent, + profil Orchestra pour Codex, + reprise de conversation, + modèle choisi,
 // + hooks et serveur MCP pour Claude Code.
-function buildCommand(id, agent, resume) {
+function buildCommand(id, agent, resume, model) {
   if (!agent.command) return null;
   let command = agent.command;
   if (agent.hooks === 'codex') command += ` -p ${codexProfile.PROFILE}`;
-  if (resume && agent.resumeArgs) command += ` ${agent.resumeArgs}`;
+  command += resumeArgs(id, agent, resume);
+  // Après la reprise : « codex resume » prend aussi -m.
+  if (typeof model === 'string' && settingsStore.MODEL.test(model)) {
+    if (agent.hooks === 'claude') command += ` --model ${model}`;
+    if (agent.hooks === 'codex') command += ` -m ${model}`;
+  }
   if (agent.hooks === 'claude') {
     command += ` --settings "${claudeHooks.writeSettings(id)}" --mcp-config "${claudeHooks.writeMcpConfig(id)}"`;
   }
@@ -195,7 +242,7 @@ function buildCommand(id, agent, resume) {
 // L'interface envoie seulement l'id de l'agent : la commande à lancer vient des paramètres.
 // Renvoie { buffer, status } : buffer = dernières sorties si le terminal tournait déjà (case d'un
 // autre tableau qu'on rouvre), status = statut actuel de la case.
-ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume }) => {
+ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume, model }) => {
   const settings = settingsStore.load();
   const agent = settings.agents.find((a) => a.id === agentId);
   if (typeof id !== 'string' || !agent) return null;
@@ -209,7 +256,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
   const result = ptyManager.create(
     {
       id,
-      command: existing ? null : buildCommand(id, agent, resume),
+      command: existing ? null : buildCommand(id, agent, resume, model),
       shell: settings.general.shell,
       cwd,
       env: agent.hooks === 'codex' ? codexProfile.env(id) : null,
@@ -229,6 +276,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume 
       relayStatus(id, null);
     },
   );
+  launched.add(id);
   return { ...result, status: agentStatus.info(id) };
 });
 ipcMain.on('pty:write', (_e, id, data) => {
@@ -298,6 +346,7 @@ workspaceStore.register((workspace) => {
   delegation.setWorkspace(workspace);
   roles = new Map(workspace.boards.flatMap((b) => b.nodes.filter((n) => n.data.role).map((n) => [n.id, n.data.role])));
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
+  noteLink.setWorkspace(workspace);
 });
 gitHandlers.register();
 usage.register();

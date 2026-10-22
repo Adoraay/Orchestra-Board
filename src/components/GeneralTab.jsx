@@ -1,10 +1,10 @@
 import { Compass, FolderInput, Home } from 'lucide-react';
 import AboutSection from './AboutSection.jsx';
+import LanguageField from './LanguageField.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { LINK_MODES } from '../lib/links.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
-import { LANGUAGES } from '../lib/i18n.js';
 import useT from '../hooks/useT.js';
 
 // Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
@@ -25,12 +25,7 @@ export default function GeneralTab({ onStartTutorial }) {
 
   return (
     <div className="settings-form">
-      <label className="field">
-        <span className="field-label">{t('general.language')}</span>
-        <select value={general.language} onChange={(e) => update({ language: e.target.value })}>
-          {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
-      </label>
+      <LanguageField />
 
       <div className="field">
         <span className="field-label">{t('general.root')}</span>
