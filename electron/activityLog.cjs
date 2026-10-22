@@ -4,7 +4,7 @@ const { ipcMain } = require('electron');
 // lien Terminal, refus. Gardé en mémoire seulement : aucune conversation n'est écrite sur le disque.
 const MAX_ENTRIES = 500;
 const MAX_TEXT = 4000;
-const KINDS = ['relay', 'delegate', 'reply', 'command', 'output', 'interrupt', 'refused'];
+const KINDS = ['relay', 'delegate', 'reply', 'command', 'output', 'interrupt', 'refused', 'note'];
 
 let entries = [];
 let nextId = 1;

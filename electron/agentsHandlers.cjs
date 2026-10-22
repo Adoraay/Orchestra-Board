@@ -1,9 +1,11 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { dialog, ipcMain } = require('electron');
 const { t } = require('./i18n.cjs');
-const { logosDir, CUSTOM_ID, LOGO_FILE } = require('./settingsStore.cjs');
+const settingsStore = require('./settingsStore.cjs');
+const { logosDir, CUSTOM_ID, LOGO_FILE, MODEL } = settingsStore;
 
 const MAX_LOGO_SIZE = 1024 * 1024; // 1 Mo
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', svg: 'image/svg+xml', webp: 'image/webp', gif: 'image/gif' };
@@ -79,11 +81,36 @@ function testCommand(command) {
   });
 }
 
+// Modèles proposés dans le dock. Claude Code : ses alias (toujours le dernier modèle de chaque famille).
+// Codex : la liste qu'il garde en cache (~/.codex/models_cache.json), dans son ordre, sans les modèles cachés.
+const CLAUDE_MODELS = ['fable', 'opus', 'sonnet', 'haiku'];
+
+function codexModels() {
+  const file = path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'models_cache.json');
+  try {
+    const { models } = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return models
+      .filter((m) => m?.visibility === 'list' && typeof m.slug === 'string' && MODEL.test(m.slug))
+      .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+      .map((m) => ({ id: m.slug, name: typeof m.display_name === 'string' ? m.display_name : m.slug }));
+  } catch {
+    return []; // Codex pas encore lancé, ou format inconnu
+  }
+}
+
+function listModels(agentId) {
+  const agent = settingsStore.load().agents.find((a) => a.id === agentId);
+  if (agent?.hooks === 'claude') return CLAUDE_MODELS.map((id) => ({ id, name: id[0].toUpperCase() + id.slice(1) }));
+  if (agent?.hooks === 'codex') return codexModels();
+  return [];
+}
+
 function register(getWindow) {
   ipcMain.handle('agents:logos', () => readLogos());
   ipcMain.handle('agents:pickLogo', (_e, agentId) => pickLogo(getWindow(), agentId));
   ipcMain.handle('agents:deleteLogo', (_e, file) => deleteLogo(file));
   ipcMain.handle('agents:testCommand', (_e, command) => testCommand(command));
+  ipcMain.handle('agents:models', (_e, agentId) => listModels(agentId));
 }
 
 module.exports = { register };

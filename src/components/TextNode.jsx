@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { RotateCw, Trash2 } from 'lucide-react';
+import { useBoard } from '../context/BoardContext.jsx';
 import useEditableText from '../hooks/useEditableText.js';
 import useT from '../hooks/useT.js';
 
@@ -47,10 +48,12 @@ export default function TextNode({ id, data, selected }) {
   const rotation = data.rotation ?? 0;
 
   const remove = () => deleteElements({ nodes: [{ id }] });
+  const { editRequest } = useBoard();
   const { editing, startEditing, inputProps } = useEditableText(id, data, {
     onFinish: (text) => {
       if (!text.trim()) remove();
     },
+    request: editRequest?.id === id ? editRequest.at : null,
   });
 
   // Centre du texte à l'écran : le centre de la boîte englobante ne bouge pas quand on tourne.

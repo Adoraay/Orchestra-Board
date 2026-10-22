@@ -4,6 +4,7 @@ import LinkLabel from './LinkLabel.jsx';
 import { useBoard } from '../context/BoardContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK } from '../lib/links.js';
+import useT from '../hooks/useT.js';
 
 const PULSE_DURATION = 1200; // ms : un point lumineux parcourt le lien à chaque transmission
 const SENDING_FOR = 2000; // ms pendant lesquels le lien reste « en cours de transfert » après un envoi
@@ -54,9 +55,9 @@ function arrowPath(tip, side) {
 }
 
 // État affiché : réglages du lien d'abord (pause, Transmission sans consigne), puis dernier événement.
-// Au repos, une Délégation est « delegate », un lien Terminal « terminal », une Transmission configurée « ready ».
+// Au repos, une Délégation est « delegate », un lien Terminal « terminal », un lien Note « note », une Transmission configurée « ready ».
 function linkState(link, event) {
-  if (link.mode === 'terminal') return event?.state === 'sent' && Date.now() - event.at < SENDING_FOR ? 'sending' : 'terminal';
+  if (link.mode === 'terminal' || link.mode === 'note') return event?.state === 'sent' && Date.now() - event.at < SENDING_FOR ? 'sending' : link.mode;
   if (!link.enabled) return 'disabled';
   if (link.mode === 'relay' && !link.prompt.trim()) return 'unconfigured';
   const rest = link.mode === 'delegate' ? 'delegate' : 'ready';
@@ -71,6 +72,7 @@ export default function FloatingEdge({ id, source, target, data, style }) {
   const targetNode = useInternalNode(target);
   const event = useBoard().linkEvents[id];
   const { agentById } = useSettings();
+  const t = useT();
   const { setEdges, setNodes } = useReactFlow();
   const [, rerender] = useReducer((n) => n + 1, 0);
 
@@ -103,7 +105,7 @@ export default function FloatingEdge({ id, source, target, data, style }) {
   const turns = event && typeof event.turns === 'number' ? event.turns : 0;
   // Dans un lien à double sens, le message peut aller vers la source : event.to dit vers qui.
   const toNode = event?.to === source ? sourceNode : targetNode;
-  const targetName = toNode.data?.label || agentById(toNode.data?.agentId).name;
+  const targetName = toNode.data?.label || (toNode.type === 'note' ? t('note.defaultName') : agentById(toNode.data?.agentId).name);
 
   // Clic sur l'étiquette = ce lien seul choisi, son panneau s'ouvre.
   const open = () => {
@@ -136,7 +138,7 @@ export default function FloatingEdge({ id, source, target, data, style }) {
           prompt={link.prompt}
           targetName={targetName}
           turns={turns}
-          maxTurns={link.mode === 'terminal' ? null : link.maxTurns}
+          maxTurns={link.mode === 'terminal' || link.mode === 'note' ? null : link.maxTurns}
           message={event?.message}
           onOpen={open}
         />

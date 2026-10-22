@@ -99,6 +99,38 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'list_notes',
+    description:
+      'Lists the Orchestra sticky notes linked to your tile by a Note link on the map. Use them when the user asks you to ' +
+      'note, track or show something there (a plan, phases and their status, a checklist, findings).',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'read_note',
+    description: 'Returns the current text of a linked sticky note. The user may have edited it: read it before rewriting it.',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'Name of the note, as given by list_notes (e.g. "Note 1").' } },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'write_note',
+    description:
+      'Replaces the whole text of a linked sticky note; the user sees it at once on the map. Keep it short. ' +
+      'Status lines are shown with icons: "- [x] Done", "- [~] In progress", "- [ ] To do". Other lines are plain text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the note.' },
+        text: { type: 'string', description: 'The complete new text of the note.' },
+      },
+      required: ['name', 'text'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 function callOrchestra(name, args) {

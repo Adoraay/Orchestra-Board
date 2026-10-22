@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowRight, Ban, CornerDownLeft, Network, ScrollText, Send, SquareTerminal, Trash2, TextQuote, OctagonX } from 'lucide-react';
+import { ArrowRight, Ban, CornerDownLeft, Network, OctagonX, ScrollText, Send, SquareTerminal, StickyNote, TextQuote, Trash2 } from 'lucide-react';
 import useAutoClose from '../hooks/useAutoClose.js';
 import useT from '../hooks/useT.js';
 
 const MAX_ENTRIES = 500; // comme electron/activityLog.cjs
-const KIND_ICONS = { relay: Send, delegate: Network, reply: CornerDownLeft, command: SquareTerminal, output: TextQuote, interrupt: OctagonX, refused: Ban };
+const KIND_ICONS = { relay: Send, delegate: Network, reply: CornerDownLeft, command: SquareTerminal, output: TextQuote, interrupt: OctagonX, refused: Ban, note: StickyNote };
 
 // Languette « Journal » sur le bord droit de la map (PLAN.md §3.18) : messages passés par les liens.
 // Toujours abonnée, même repliée : un point signale les nouvelles entrées.

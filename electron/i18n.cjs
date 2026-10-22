@@ -51,6 +51,21 @@ const DICTIONARIES = {
     'link.targetNotRunning': 'The target agent is not running',
     'link.noReply': 'Reply not found in the transcript',
     'link.limitReached': 'Turn limit reached ({max})',
+    'orchestra.context':
+      'You run in Orchestra, an app where several AI agents work side by side and can be linked to each other. ' +
+      'When the user mentions another agent by its name (e.g. "Codex 2", "Claude Code 3") or asks you to have another agent do something, ' +
+      'call the list_agents tool of the orchestra MCP server, then send_to_agent, instead of doing the task yourself. ' +
+      'When the user asks you to note or track something in a note or sticky note, use list_notes, read_note and write_note.',
+    'note.defaultName': "Note",
+    'note.none': "No linked note: the user must draw a link from your tile to a sticky note on the Orchestra map.",
+    'note.list': "Sticky notes you can write with write_note:",
+    'note.unknown': "No linked note is called \"{name}\". Linked notes: {names}.",
+    'note.lines': "{n} lines",
+    'note.empty': "empty",
+    'note.format': "Status lines are shown with icons: \"- [x] Done\", \"- [~] In progress\", \"- [ ] To do\".",
+    'note.noText': "The text of the note is missing.",
+    'note.tooLong': "Text too long (more than {max} characters).",
+    'note.written': "{name} updated.",
     'role.context': 'Role given to you by the user in Orchestra, the app where you run (follow it for the whole session):\n\n{role}',
 
     'usage.session': 'Session (5 h)',
@@ -161,6 +176,21 @@ const DICTIONARIES = {
     'link.targetNotRunning': "L'agent cible n'est pas lancé",
     'link.noReply': 'Réponse introuvable dans le transcript',
     'link.limitReached': 'Limite de tours atteinte ({max})',
+    'orchestra.context':
+      'Tu tournes dans Orchestra, une app où plusieurs agents IA travaillent côte à côte et peuvent être reliés entre eux. ' +
+      "Quand l'utilisateur parle d'un autre agent par son nom (par exemple « Codex 2 », « Claude Code 3 ») ou te demande de faire faire quelque chose à un autre agent, " +
+      "appelle l'outil list_agents du serveur MCP orchestra, puis send_to_agent, au lieu de faire la tâche toi-même. " +
+      "Quand l'utilisateur te demande de noter ou suivre quelque chose dans une note ou un post-it, utilise list_notes, read_note et write_note.",
+    'note.defaultName': "Note",
+    'note.none': "Aucune note reliée : l'utilisateur doit tracer un lien de ta case vers un post-it sur la map d'Orchestra.",
+    'note.list': "Post-it que tu peux écrire avec write_note :",
+    'note.unknown': "Aucune note reliée ne s'appelle « {name} ». Notes reliées : {names}.",
+    'note.lines': "{n} lignes",
+    'note.empty': "vide",
+    'note.format': "Les lignes de statut sont affichées avec des icônes : « - [x] Terminé », « - [~] En cours », « - [ ] À venir ».",
+    'note.noText': "Le texte de la note manque.",
+    'note.tooLong': "Texte trop long (plus de {max} caractères).",
+    'note.written': "{name} mis à jour.",
     'role.context': "Rôle que l'utilisateur t'a donné dans Orchestra, l'app où tu tournes (suis-le pendant toute la session) :\n\n{role}",
 
     'usage.session': 'Session (5 h)',

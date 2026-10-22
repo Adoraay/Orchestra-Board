@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ArrowRight, Repeat, SquareTerminal, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK, LINK_MODES, MAX_TURNS } from '../lib/links.js';
 import useT from '../hooks/useT.js';
@@ -23,7 +23,7 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const caseOf = (id) => {
     const node = nodes.find((n) => n.id === id);
     const agent = agentById(node?.data.agentId);
-    return { name: node?.data.label || agent.name, agent };
+    return { name: node?.data.label || (node?.type === 'note' ? t('note.defaultName') : agent.name), agent };
   };
   const source = caseOf(edge.source);
   const target = caseOf(edge.target);
@@ -35,8 +35,10 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const needsHooks = relay ? [source, ...(link.bidirectional ? [target] : [])] : [source, target];
   const notClaude = needsHooks.filter((c) => !c.agent.hooks).map((c) => c.name);
 
-  // Lien Terminal (PLAN.md §3.17) : rien à régler, une explication et la suppression.
-  if (link.mode === 'terminal') {
+  // Lien Terminal (PLAN.md §3.17) ou Note : rien à régler, une explication et la suppression.
+  if (link.mode === 'terminal' || link.mode === 'note') {
+    const Icon = link.mode === 'note' ? StickyNote : SquareTerminal;
+    const warning = link.mode === 'note' ? 'link.warnNote' : 'link.warnTerminal';
     return (
       <aside className="link-panel nowheel" aria-label={t('link.panelLabel')}>
         <header className="link-panel-header">
@@ -48,11 +50,11 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
           <button className="icon-button" onClick={onClose} title={t('common.close')}><X size={15} /></button>
         </header>
         <p className="link-terminal-title">
-          <SquareTerminal size={14} />
-          {t('link.mode.terminal')}
+          <Icon size={14} />
+          {t(`link.mode.${link.mode}`)}
         </p>
-        <p className="hint">{t('link.mode.terminal.description')}</p>
-        {!source.agent.hooks && <p className="link-warning">{t('link.warnTerminal', { name: source.name })}</p>}
+        <p className="hint">{t(`link.mode.${link.mode}.description`)}</p>
+        {!source.agent.hooks && <p className="link-warning">{t(warning, { name: source.name })}</p>}
         <button className="text-button danger link-delete" onClick={onDelete}>
           <Trash2 size={14} />
           {t('link.delete')}

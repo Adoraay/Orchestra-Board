@@ -58,42 +58,43 @@
   --note-bg: #efe2a2;
   --note-text: #3b3526;
   --branch-bar-bg: #e8e5de;
+  --grid-dot: #a39d90; /* points de la grille plus foncés que les contours : visibles sur le fond clair */
   --hover-mix: black;
 }
 
-/* ChatGPT : gris bleutés de l'app classique, contours et sélection en blanc, vert ChatGPT */
+/* ChatGPT (sombre) : fond noir, gris neutres de l'app actuelle, contours et sélection en blanc, vert ChatGPT */
 [data-theme='chatgpt'] {
   color-scheme: dark;
-  --bg: #343541;
-  --surface: #202123;
-  --surface-2: #40414f;
-  --border: #565869;
-  --text: #ececf1;
-  --text-muted: #8e8ea0;
+  --bg: #000000;
+  --surface: #212121;
+  --surface-2: #212121;
+  --border: #303030;
+  --text: #ffffff;
+  --text-muted: #cdcdcd;
   --accent: #ececf1;
   --accent-hover: #ffffff;
   --on-accent: #202123;
-  --terminal-bg: #202123;
+  --terminal-bg: #171717;
   --terminal-fg: #ececf1;
   --success: #19c37d;
   --warning: #e9b949;
   --danger: #ef4146;
-  --branch-bar-bg: #2a2b32;
+  --branch-bar-bg: #171717;
   --glow: #ffffff;
   --shadow: rgba(0, 0, 0, 0.45);
   --shadow-lifted: rgba(0, 0, 0, 0.6);
   --hover-mix: white;
 }
 
-/* Gemini : quasi-noir de Google, accent bleu */
+/* Gemini (sombre) : fond noir de Google, surfaces gris foncé, accent bleu */
 [data-theme='gemini'] {
   color-scheme: dark;
-  --bg: #131314;
-  --surface: #1e1f20;
-  --surface-2: #282a2c;
-  --border: #444746;
+  --bg: #000000;
+  --surface: #131314;
+  --surface-2: #1e1f20;
+  --border: #333537;
   --text: #e3e3e3;
-  --text-muted: #9aa0a6;
+  --text-muted: #c4c7c5;
   --accent: #8ab4f8;
   --accent-hover: #a8c7fa;
   --on-accent: #062e6f;
@@ -208,7 +209,7 @@
 /* React Flow lit ses couleurs dans ces variables. */
 .react-flow {
   --xy-background-color: var(--bg);
-  --xy-background-pattern-dots-color: var(--border);
+  --xy-background-pattern-dots-color: var(--grid-dot, var(--border));
   --xy-background-pattern-lines-color: color-mix(in srgb, var(--border) 45%, transparent);
   --xy-edge-stroke: var(--text-muted);
   --xy-edge-stroke-selected: var(--accent);

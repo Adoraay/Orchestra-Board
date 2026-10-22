@@ -71,6 +71,14 @@ export function SettingsProvider({ children }) {
       updateSettings: (section, patch) =>
         commit((current) => ({ ...current, [section]: { ...current[section], ...patch } })),
       setAgents: (list) => commit((current) => ({ ...current, agents: list })),
+      // Modèle des prochaines cases de cet agent (null = celui de sa propre configuration).
+      setModel: (agentId, model) =>
+        commit((current) => {
+          const models = { ...current.models };
+          if (model) models[agentId] = model;
+          else delete models[agentId];
+          return { ...current, models };
+        }),
       addCustomLogo: (file, dataUrl) => setCustomLogos((logos) => ({ ...logos, [file]: dataUrl })),
     };
   }, [settings, customLogos]);

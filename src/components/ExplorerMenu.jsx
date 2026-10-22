@@ -1,48 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { ChevronLeft, ClipboardCopy, FolderOpen, FolderPlus, Pencil, Play, Trash2 } from 'lucide-react';
 import AgentLogo from './AgentLogo.jsx';
+import useFloatingMenu from '../hooks/useFloatingMenu.js';
 import useT from '../hooks/useT.js';
 import { isMac } from '../lib/platform.js';
-
-const MARGIN = 8; // px : le menu reste dans la fenêtre
 
 // Menu du clic droit dans l'explorateur (PLAN.md §3.14). « Lancer un agent ici » ouvre un sous-menu
 // vers la gauche (l'explorateur est collé au bord droit). Échap, clic ailleurs ou défilement le ferment.
 export default function ExplorerMenu({ x, y, entry, isRoot, agents, onAction, onClose }) {
   const t = useT();
   const ref = useRef(null);
-  const [position, setPosition] = useState({ left: x, top: y });
-
-  useLayoutEffect(() => {
-    const { width, height } = ref.current.getBoundingClientRect();
-    setPosition({
-      left: Math.max(MARGIN, Math.min(x, window.innerWidth - width - MARGIN)),
-      top: Math.max(MARGIN, Math.min(y, window.innerHeight - height - MARGIN)),
-    });
-  }, [x, y]);
-
-  useEffect(() => {
-    // Clic ou molette en dehors du menu (la molette dans un long sous-menu le fait défiler).
-    const onPointerDown = (event) => {
-      if (!ref.current?.contains(event.target)) onClose();
-    };
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener('pointerdown', onPointerDown, true);
-    window.addEventListener('keydown', onKeyDown, true);
-    window.addEventListener('blur', onClose);
-    window.addEventListener('wheel', onPointerDown, true);
-    return () => {
-      window.removeEventListener('pointerdown', onPointerDown, true);
-      window.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('blur', onClose);
-      window.removeEventListener('wheel', onPointerDown, true);
-    };
-  }, [onClose]);
+  const position = useFloatingMenu(ref, x, y, onClose);
 
   const item = (action, Icon, label, { shortcut, danger, disabled } = {}) => (
     <button
