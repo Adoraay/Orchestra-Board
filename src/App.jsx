@@ -32,6 +32,7 @@ import TerminalNode from './components/TerminalNode.jsx';
 import UsagePanel from './components/UsagePanel.jsx';
 import TextNode from './components/TextNode.jsx';
 import Tutorial from './components/Tutorial.jsx';
+import UpdateDialog from './components/UpdateDialog.jsx';
 import Toast from './components/Toast.jsx';
 import TopBar from './components/TopBar.jsx';
 import { BoardContext } from './context/BoardContext.jsx';
@@ -156,6 +157,16 @@ function Workspace({ saved }) {
   );
   const [resumeChoice, setResumeChoice] = useState(resumable.length ? 'pending' : 'manual');
 
+  // Nouvelle version (PLAN.md §3.22) : vérifiée pendant l'écran de démarrage (5 s max côté Node), sa fenêtre
+  // passe avant la personnalisation, le tutoriel et « Reprendre ? ». 'checking', null, ou les infos de la version.
+  const [update, setUpdate] = useState('checking');
+  useEffect(() => {
+    const off = window.updates.onAvailable(setUpdate);
+    window.updates.check().then((result) => setUpdate((u) => (u === 'checking' ? (result.available ? result : null) : u)));
+    return off;
+  }, []);
+  const closeUpdate = useCallback(() => setUpdate(null), []);
+
   // Fermeture de la fenêtre pendant que des agents travaillent : Node envoie la liste, on demande.
   const [quitAgents, setQuitAgents] = useState(null);
   useEffect(() => window.appWindow.onConfirmQuit(setQuitAgents), []);
@@ -213,20 +224,21 @@ function Workspace({ saved }) {
         />
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} />}
-      {tutorial && resumeChoice !== 'pending' && (
+      {tutorial && resumeChoice !== 'pending' && !update && (
         tutorial === 'setup' ? (
           <SetupWizard onFinish={() => setTutorial('tour')} />
         ) : (
           <Tutorial board={content[activeId]} onFinish={finishTutorial} />
         )
       )}
-      {resumeChoice === 'pending' && (
+      {resumeChoice === 'pending' && !update && (
         <ResumeDialog
           agents={resumable}
           boardCount={new Set(resumable.map((a) => a.boardId)).size}
           onChoose={setResumeChoice}
         />
       )}
+      {update && update !== 'checking' && <UpdateDialog info={update} onClose={closeUpdate} />}
       {quitList && <QuitDialog agents={quitList} onCancel={closeQuit} onQuit={() => window.appWindow.quit()} />}
     </div>
   );

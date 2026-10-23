@@ -18,6 +18,7 @@ const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
 const activityLog = require('./activityLog.cjs');
+const updates = require('./updates.cjs');
 const usage = require('./usage.cjs');
 const shellEnv = require('./shellEnv.cjs');
 const { t } = require('./i18n.cjs');
@@ -363,6 +364,7 @@ workspaceStore.register((workspace) => {
 });
 gitHandlers.register();
 usage.register();
+updates.register(() => win);
 activityLog.register();
 
 // Pas de barre de menu File / Edit / View. macOS garde toujours un menu : le strict nécessaire, dont Édition

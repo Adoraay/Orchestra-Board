@@ -97,6 +97,24 @@ contextBridge.exposeInMainWorld('about', {
   open: (key) => ipcRenderer.send('about:open', key),
 });
 
+// Mises à jour : dernière release GitHub, téléchargement vérifié du fichier d'installation.
+contextBridge.exposeInMainWorld('updates', {
+  check: (force) => ipcRenderer.invoke('update:check', force === true),
+  download: () => ipcRenderer.invoke('update:download'),
+  install: () => ipcRenderer.invoke('update:install'),
+  openRelease: () => ipcRenderer.send('update:openRelease'),
+  onProgress: (cb) => {
+    const listener = (_e, progress) => cb(progress);
+    ipcRenderer.on('update:progress', listener);
+    return () => ipcRenderer.removeListener('update:progress', listener);
+  },
+  onAvailable: (cb) => {
+    const listener = (_e, info) => cb(info);
+    ipcRenderer.on('update:available', listener);
+    return () => ipcRenderer.removeListener('update:available', listener);
+  },
+});
+
 contextBridge.exposeInMainWorld('appWindow', {
   platform: process.platform, // 'win32', 'darwin'… : touches et barre de titre propres à macOS
   onConfirmQuit: (cb) => {

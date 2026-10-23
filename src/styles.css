@@ -800,6 +800,34 @@ button { font: inherit; color: inherit; }
   font-size: 12px;
 }
 .dialog-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Mise à jour disponible (PLAN.md §3.22) */
+.dialog.update-dialog { width: 520px; }
+.update-notes {
+  max-height: 200px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.update-progress {
+  position: relative;
+  height: 26px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.update-progress-bar { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--accent) 35%, transparent); transition: width 120ms linear; }
+.update-progress span { position: relative; display: block; padding: 0 10px; font-size: 12px; line-height: 24px; }
+.update-error { color: var(--danger); }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .text-button.danger-fill { background: var(--danger); border-color: var(--danger); color: var(--on-accent); }
 .text-button.danger-fill:hover { background: color-mix(in srgb, var(--danger) 85%, var(--hover-mix)); border-color: var(--danger); }

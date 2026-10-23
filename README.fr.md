@@ -149,7 +149,7 @@ Dans un terminal, `Ctrl+C` copie quand du texte est sélectionné (sinon il inte
 
 ## Confidentialité et sécurité
 
-- **Tout en local.** Orchestra parle aux agents par un petit serveur limité à `127.0.0.1`, protégé par un jeton secret qui change à chaque lancement. Orchestra n'envoie rien nulle part.
+- **Tout en local.** Orchestra parle aux agents par un petit serveur limité à `127.0.0.1`, protégé par un jeton secret qui change à chaque lancement. Orchestra n'envoie rien nulle part. Son seul accès réseau : au démarrage, il demande à GitHub la dernière release pour te prévenir des mises à jour (désactivable dans Paramètres › Général).
 - **Tes permissions restent les tiennes.** Orchestra n'approuve jamais une demande de permission à la place d'un agent. Ses propres outils sont autorisés d'office, sauf `run_in_terminal`, qui demande toujours.
 - **Git presque en lecture seule.** Orchestra ne lance que `git fetch` et `git worktree add` (quand tu choisis une branche) et des commandes de lecture. Jamais de commit ni de push.
 - **Ce qu'il écrit hors de son dossier :**
