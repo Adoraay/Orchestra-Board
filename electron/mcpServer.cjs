@@ -8,9 +8,11 @@ const http = require('http');
 const ORCHESTRA_URL = process.env.ORCHESTRA_URL;
 const PROTOCOL_VERSION = '2025-06-18';
 
+// annotations : ce que fait vraiment le handler côté Orchestra (delegation, terminalLink, noteLink), pas son nom.
 const TOOLS = [
   {
     name: 'list_agents',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     description:
       'Lists the Orchestra agents you can reach: those linked to your tile by a Delegation link on the map. ' +
       'Gives the name, agent type, folder, Git branch and status of each one.',
@@ -18,6 +20,7 @@ const TOOLS = [
   },
   {
     name: 'send_to_agent',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     description:
       'Sends a message to a reachable agent (see list_agents), as if the user typed it in its terminal. ' +
       'Does not block: the agent works in parallel, you can write to several agents in a row. ' +
@@ -35,6 +38,7 @@ const TOOLS = [
   },
   {
     name: 'wait_for_replies',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     description:
       'Waits for the final reply of the agents you sent a message to, and returns it. ' +
       'Without "names", waits for all agents with a message in progress. ' +
@@ -51,6 +55,7 @@ const TOOLS = [
   },
   {
     name: 'list_terminals',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     description:
       'Lists the Orchestra terminals linked to your tile by a Terminal link on the map: name, folder, and whether a command ' +
       'you started is still being watched. Use these visible terminals (run_in_terminal) for commands the user should see, ' +
@@ -59,6 +64,7 @@ const TOOLS = [
   },
   {
     name: 'run_in_terminal',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     description:
       'Types a command in a linked terminal (see list_terminals) and presses Enter, in its current shell and folder. ' +
       'Waits until the shell prompt comes back, or at most wait_seconds (30 by default, 300 at most), then returns ' +
@@ -78,6 +84,7 @@ const TOOLS = [
   },
   {
     name: 'read_terminal',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     description: 'Returns the last lines shown in a linked terminal (ANSI codes removed).',
     inputSchema: {
       type: 'object',
@@ -91,6 +98,7 @@ const TOOLS = [
   },
   {
     name: 'interrupt_terminal',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     description: 'Sends Ctrl+C to a linked terminal, to stop the command running in it.',
     inputSchema: {
       type: 'object',
@@ -101,6 +109,7 @@ const TOOLS = [
   },
   {
     name: 'list_notes',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     description:
       'Lists the Orchestra sticky notes linked to your tile by a Note link on the map. Use them when the user asks you to ' +
       'note, track or show something there (a plan, phases and their status, a checklist, findings).',
@@ -108,6 +117,7 @@ const TOOLS = [
   },
   {
     name: 'read_note',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     description: 'Returns the current text of a linked sticky note. The user may have edited it: read it before rewriting it.',
     inputSchema: {
       type: 'object',
@@ -118,6 +128,7 @@ const TOOLS = [
   },
   {
     name: 'write_note',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     description:
       'Replaces the whole text of a linked sticky note; the user sees it at once on the map. Keep it short. ' +
       'Status lines are shown with icons: "- [x] Done", "- [~] In progress", "- [ ] To do". Other lines are plain text.',

@@ -66,7 +66,15 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
+  });
+
+  // L'interface ne s'ouvre jamais ailleurs : pas de nouvelle fenêtre, pas de navigation hors de l'app
+  // (un lien externe passe par shell.openExternal côté Node).
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url !== win.webContents.getURL()) event.preventDefault();
   });
 
   // Avec titleBarOverlay, ready-to-show n'arrive pas toujours (fenêtre jamais affichée) : on montre aussi la
