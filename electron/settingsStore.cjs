@@ -137,6 +137,8 @@ function sanitize(input) {
       trustFolders: g.trustFolders !== false,
       // Tutoriel du premier lancement (PLAN.md §3.21) : un settings.json d'avant le tutoriel = déjà fait.
       tutorialDone: typeof g.tutorialDone === 'boolean' ? g.tutorialDone : input != null,
+      // Mises à jour (PLAN.md §3.22) : oui par défaut.
+      checkUpdates: g.checkUpdates !== false,
     },
   };
 }
