@@ -1,7 +1,7 @@
 {
   "name": "orchestra",
   "productName": "Orchestra",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "license": "MIT",
   "description": "Une grande map où l'on glisse des agents IA (Claude Code, Codex...) qui tournent chacun dans un vrai terminal.",
