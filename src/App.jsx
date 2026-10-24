@@ -35,6 +35,8 @@ import Tutorial from './components/Tutorial.jsx';
 import UpdateDialog from './components/UpdateDialog.jsx';
 import Toast from './components/Toast.jsx';
 import WorkspaceRecovery from './components/WorkspaceRecovery.jsx';
+import TeamTemplates from './components/TeamTemplates.jsx';
+import BlockersInbox from './components/BlockersInbox.jsx';
 import TopBar from './components/TopBar.jsx';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
@@ -91,6 +93,16 @@ function Workspace({ saved }) {
   const boards = useBoards(saved);
   const { activeId, content, updateContent } = boards;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [teamsOpen, setTeamsOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [blockers, setBlockers] = useState([]);
+  useEffect(() => {
+    let changed = false;
+    let disposed = false;
+    const off = window.blockers.onChange((entries) => { changed = true; setBlockers(entries); });
+    window.blockers.get().then((entries) => { if (!disposed && !changed) setBlockers(entries); });
+    return () => { disposed = true; off(); };
+  }, []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
   // Post-it d'un autre tableau réécrit par un agent (lien Note) ; le tableau ouvert s'en charge lui-même.
@@ -211,6 +223,9 @@ function Workspace({ saved }) {
         boardsWithNews={boardsWithNews}
         renameRequest={renameRequest}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenTeams={() => setTeamsOpen(true)}
+        onOpenInbox={() => setInboxOpen(true)}
+        blockerCount={blockers.filter((entry) => !entry.resolved).length}
       />
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
@@ -234,6 +249,8 @@ function Workspace({ saved }) {
         />
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} />}
+      {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
+      {inboxOpen && <BlockersInbox entries={blockers} onFocus={focusAgent} onClose={() => setInboxOpen(false)} />}
       {tutorial && resumeChoice !== 'pending' && !update && (
         tutorial === 'setup' ? (
           <SetupWizard onFinish={() => setTutorial('tour')} />

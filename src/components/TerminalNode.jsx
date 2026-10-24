@@ -37,6 +37,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const [showingChanges, setShowingChanges] = useState(false);
   const [resumeError, setResumeError] = useState('');
   const launching = useRef(false);
+  const [roleState, setRoleState] = useState(null);
   const { deleteElements, updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
@@ -50,6 +51,14 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const runDir = data.worktree ?? data.cwd;
   const runDirRef = useRef(runDir);
   runDirRef.current = runDir;
+
+  useEffect(() => {
+    let disposed = false;
+    let changed = false;
+    const off = window.roles.onChange(id, (state) => { changed = true; setRoleState(state); });
+    window.roles.get(id).then((state) => { if (!disposed && !changed) setRoleState(state); });
+    return () => { disposed = true; off(); };
+  }, [id]);
 
   // Case restaurée au démarrage d'un agent qui sait reprendre (Claude Code) : rien n'est lancé avant le choix
   // fait au démarrage (ResumeDialog), ou celui fait dans la case avec « Voir le tableau ».
@@ -260,21 +269,27 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
           )}
           {agent.hooks && (
             <button
-              className={`case-tab ${data.role ? 'active' : ''}`}
+              className={`case-tab ${data.role ? 'active' : ''} ${roleState?.pending ? 'role-pending' : ''}`}
               onClick={() => setEditingRole((o) => !o)}
-              title={data.role ? t('role.current', { role: data.role }) : t('role.add')}
+              title={roleState?.pending ? t('role.pending') : data.role ? t('role.current', { role: data.role }) : t('role.add')}
             >
               <Drama size={14} />
             </button>
           )}
         </div>
       )}
-      {showingChanges && <ChangesDialog dir={runDir} name={name} onClose={() => setShowingChanges(false)} />}
+      {showingChanges && <ChangesDialog id={id} dir={runDir} name={name} onClose={() => setShowingChanges(false)} />}
       {editingRole && (
         <RoleEditor
           role={data.role}
-          running={!exited && !askResume}
-          onSave={(role) => updateNodeData(id, { role: role || undefined })}
+          state={roleState}
+          running={roleState?.running ?? (!exited && !askResume)}
+          onSave={async (role) => {
+            const result = await window.roles.set(id, role);
+            if (result.error) throw new Error(result.error);
+            updateNodeData(id, { role: role || undefined });
+            setRoleState(result.value);
+          }}
           onRelaunch={() => respawn(runDir, true)}
           onClose={() => setEditingRole(false)}
         />

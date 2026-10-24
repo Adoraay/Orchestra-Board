@@ -14,7 +14,7 @@ npm run test:ui
 
 - `npm test` couvre les sessions par case, les délégations concurrentes, la récupération des tableaux et les liens Note dans l'historique.
 - `npm run test:ui` ouvre l'application avec des données temporaires isolées et une fenêtre cachée. Il vérifie la version affichée, la restauration depuis les paramètres, la récupération d'un workspace corrompu en français et le redémarrage sans sauvegarde disponible. Il démarre un vrai terminal cmd dans le premier scénario et vérifie sa fermeture lors de la restauration. Aucun agent IA n'est lancé ; les profils Codex du test sont isolés.
-- Les captures des écrans sont dans `out/phase1`. Les données temporaires sont supprimées après succès et conservées avec leur chemin en cas d'échec.
+- Les captures des écrans sont dans `out/ui-smoke`. Les données temporaires sont supprimées après succès et conservées avec leur chemin en cas d'échec.
 
 ## 1.1 — Version et règles Git
 

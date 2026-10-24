@@ -12,6 +12,7 @@ export default function useAppShortcuts(actions) {
       if (!event.ctrlKey || event.altKey || event.metaKey) return;
       const a = latest.current;
       const key = event.key.toLowerCase();
+      if (document.querySelector('.team-modal, .inbox-modal')) return;
       const run = (fn) => {
         event.preventDefault();
         event.stopPropagation();

@@ -22,9 +22,14 @@ const updates = require('./updates.cjs');
 const usage = require('./usage.cjs');
 const { t } = require('./i18n.cjs');
 const { canResume, sanitizeSession } = require('./sessionState.cjs');
+const teamTemplates = require('./teamTemplates.cjs');
+const { createBlockers } = require('./blockers.cjs');
+const { createRoleState } = require('./roleState.cjs');
 
 let win;
 let quitConfirmed = false;
+const blockers = createBlockers((entries) => send('blockers:change', entries));
+const roleState = createRoleState({ emit: (id, state) => send('roles:change', id, state), running: (id) => Boolean(agentStatus.info(id)) });
 
 // Couleurs de la zone des boutons Windows (réduire, agrandir, fermer) = fond et texte de la barre du haut.
 const TITLE_BAR_HEIGHT = 40;
@@ -109,6 +114,7 @@ function send(channel, ...args) {
 // Statut envoyé à la case (pty:status:<id>) et à l'app entière (agent:status), qui gère le son et les
 // onglets, y compris pour les cases des tableaux fermés.
 function sendStatus(id, info) {
+  blockers.onStatus(id, info);
   send(`pty:status:${id}`, info);
   send('agent:status', id, info);
   relayStatus(id, info);
@@ -143,21 +149,27 @@ agentStatus.init(sendStatus, notifyFinished);
 activityLog.init({
   nameOf: (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id,
   emit: (entry) => send('log:entry', entry),
+  report: blockers.onLog,
 });
+
+function emitLink(linkId, event) {
+  blockers.onLink(linkId, event);
+  send('link:event', linkId, event);
+}
 
 linkRelay.init({
   log: activityLog.add,
   write: ptyManager.write,
   status: (id) => agentStatus.info(id)?.status ?? null,
   arm: agentStatus.arm,
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 delegation.init({
   log: activityLog.add,
   info: agentStatus.info,
   agent: (agentId) => settingsStore.load().agents.find((a) => a.id === agentId) ?? { name: t('agent.missing'), hooks: null },
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 terminalLink.init({
@@ -166,13 +178,13 @@ terminalLink.init({
   buffer: ptyManager.buffer,
   info: agentStatus.info,
   arm: agentStatus.arm,
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 noteLink.init({
   log: activityLog.add,
   write: (id, text) => send('note:write', id, text),
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 // Outils du serveur MCP d'une case : lien Note, lien Terminal ou Délégation.
@@ -182,9 +194,6 @@ function callTool(caller, name, args, signal) {
   if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
   return terminalLink.callTool(caller, name, args, signal);
 }
-
-// Rôle de chaque case (PLAN.md §3.19), mis à jour à chaque sauvegarde de workspace.json.
-let roles = new Map();
 
 const caseAgents = new Map(); // agent lancé dans chaque case ; seuls ses hooks peuvent définir la session
 
@@ -215,7 +224,9 @@ function onHook(id, payload) {
   agentStatus.onHook(id, payload);
   if (payload.hook_event_name === 'SessionStart') {
     const parts = [t('orchestra.context')];
-    if (roles.has(id)) parts.push(t('role.context', { role: roles.get(id) }));
+    if (!agentStatus.info(id)) return {};
+    const role = roleState.start(id);
+    if (role) parts.push(t('role.context', { role }));
     return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: parts.join('\n\n') } };
   }
 }
@@ -288,12 +299,17 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
     },
     (id, code) => {
       agentStatus.unregister(id);
+      caseAgents.delete(id);
+      roleState.clear(id);
+      blockers.onStatus(id, null);
+      blockers.onExit(id, code);
       claudeHooks.removeSettings(id);
       send('agent:status', id, null);
       send(`pty:exit:${id}`, code);
       relayStatus(id, null);
     },
   );
+  blockers.onStatus(id, agentStatus.info(id));
   return { ...result, status: agentStatus.info(id) };
 });
 ipcMain.on('pty:write', (_e, id, data) => {
@@ -316,10 +332,28 @@ ipcMain.on('pty:rename', (_e, id, name) => {
 ipcMain.on('pty:kill', (_e, id) => {
   ptyManager.kill(id);
   agentStatus.unregister(id);
+  caseAgents.delete(id);
+  roleState.clear(id);
+  blockers.onStatus(id, null);
   claudeHooks.removeSettings(id);
   send('agent:status', id, null);
   relayStatus(id, null);
 });
+
+ipcMain.handle('roles:get', (_e, id) => roleState.get(id));
+ipcMain.handle('roles:set', (_e, id, role) => {
+  if (typeof role !== 'string' || role.length > 2000 || typeof id !== 'string' ||
+      !(caseAgents.has(id) || workspaceStore.get().boards.some((board) => board.nodes.some((node) => node.id === id && node.type === 'terminal')))) {
+    return { error: t('role.saveFailed') };
+  }
+  try {
+    workspaceStore.setRole(id, role);
+    roleState.setSaved(id, role);
+    return { value: roleState.get(id) };
+  } catch { return { error: t('role.saveFailed') }; }
+});
+ipcMain.handle('blockers:get', () => blockers.snapshot());
+ipcMain.handle('blockers:clearResolved', () => { blockers.clearResolved(); return blockers.snapshot(); });
 
 // Réponse à app:confirmQuit : « Quitter quand même ».
 // Section « À propos » des paramètres : version de l'app et liens du projet. L'interface envoie un nom de
@@ -361,20 +395,24 @@ workspaceStore.register((workspace) => {
   );
   linkRelay.setLinks(workspace);
   delegation.setWorkspace(workspace);
-  roles = new Map(workspace.boards.flatMap((b) => b.nodes.filter((n) => n.data.role).map((n) => [n.id, n.data.role])));
+  blockers.setWorkspace(workspace);
+  roleState.setWorkspace(workspace);
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
   noteLink.setWorkspace(workspace);
 }, () => {
   for (const id of ptyManager.ids()) {
     ptyManager.kill(id);
     agentStatus.unregister(id);
+    roleState.clear(id);
+    blockers.onStatus(id, null);
     claudeHooks.removeSettings(id);
     relayStatus(id, null);
     send('agent:status', id, null);
   }
   caseAgents.clear();
 });
-gitHandlers.register();
+gitHandlers.register(workspaceStore.get);
+teamTemplates.register();
 usage.register();
 updates.register(() => win);
 activityLog.register();

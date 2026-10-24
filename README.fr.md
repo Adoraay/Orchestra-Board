@@ -128,6 +128,20 @@ Quand une case travaille dans un dépôt Git, une deuxième encoche au-dessus d'
 
 ## Recettes
 
+### Réutilise une équipe
+
+Ouvre **Modèles d’équipes** (icône d’équipe dans la barre du haut). Pars de *Développeur + relecteur*, *Chef + deux agents* ou *Développeur + terminal*, ou enregistre le tableau courant comme modèle personnel. Choisis le dossier du projet et remplace les agents indisponibles par des agents compatibles installés, puis crée un nouveau tableau. Les rôles et liens sont enregistrés avant le lancement de ses agents. Chaque instance reçoit de nouveaux identifiants et sessions ; les anciens dossiers, branches et messages en attente ne sont pas copiés. Les modèles sont dans `team-templates.json`, dans les données de l’app, séparément des sauvegardes de workspace.
+
+### Retrouve les blocages et vérifie le contexte
+
+La **Boîte de réception des blocages** (icône de boîte dans la barre du haut) regroupe permissions ou réponses attendues, échanges refusés, limites de tours et arrêts de terminaux de tous les tableaux. Clique sur un nom de case pour la retrouver. Les événements se résolvent quand le travail reprend, qu’un échange réussit ou qu’un terminal redémarre ; effacer les événements résolus conserve les demandes actives. Cette boîte reste en mémoire pour le lancement courant et ne répond jamais aux permissions à ta place.
+
+**Changements** affiche maintenant la portée de comparaison et la racine du worktree. Les autres cases configurées dans ce même worktree sont listées, y compris depuis un sous-dossier ou un autre tableau ; les worktrees Git distincts restent séparés. Ces changements partagés ne sont pas attribués à un agent précis.
+
+Les dossiers non suivis sont regroupés et leurs fichiers se chargent sur demande. La liste affiche au maximum 500 entrées ; les aperçus de fichiers sont limités, avec un message lorsqu'ils sont tronqués. Utilise **Ouvrir dans VS Code** pour consulter le reste.
+
+L’éditeur de **Rôle** présente le texte transmis à la session courante à côté du rôle enregistré. Les modifications en attente s’appliquent au prochain `SessionStart`, notamment après un `/clear` compatible ou une relance. Le rôle est une consigne, pas une restriction des outils de l’agent.
+
 **Un chef et deux agents** — Place un Claude Code *Lead* au-dessus d'un Codex et d'un Claude Code, reliés en **Délégation**. Demande au chef : « Demande un court poème à chacun de tes agents et dis-moi lequel est le meilleur. » Il écrit aux deux, attend leurs réponses et te répond.
 
 **Dev + relecteur** — Relie un agent *Frontend* à un *Reviewer* par une **Transmission** avec la consigne « Relis ce changement et liste les bugs : {response} ». Donne au relecteur le rôle « Tu ne modifies jamais de fichier. » À chaque fois que l'agent frontend termine, le relecteur vérifie son travail.

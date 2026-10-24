@@ -7,6 +7,8 @@ const { app, BrowserWindow } = require('electron');
 const data = process.env.ORCHESTRA_SMOKE_DATA;
 if (!data || !path.basename(data).startsWith('orchestra-ui-') || path.dirname(data) !== fs.realpathSync(os.tmpdir())) throw new Error('Isolated test data required');
 const mode = process.env.ORCHESTRA_SMOKE_MODE;
+setTimeout(() => { console.error(`Electron UI test timed out: ${mode}`); app.exit(1); }, 60000);
+app.commandLine.appendSwitch('force-prefers-reduced-motion');
 app.setPath('userData', data);
 app.setPath('appData', path.join(data, 'appdata'));
 process.env.CODEX_HOME = path.join(data, 'codex');
@@ -38,6 +40,17 @@ app.on('browser-window-created', (_event, win) => {
       throw new Error(`Timed out: ${expression}; page: ${await evaluate('document.body.textContent.slice(0, 800)')}; errors: ${errors.join('; ')}`);
     };
     try {
+      if (mode === 'changes') {
+        await require('./ui-changes.cjs')({ win, evaluate, until, sleep, data, errors });
+        app.quit();
+        return;
+      }
+      if (mode.startsWith('phase2')) {
+        await require('./ui-phase2.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log(`PASS UI ${mode}: templates, cross-board blockers, Git scope and session roles`);
+        app.quit();
+        return;
+      }
       if (mode === 'normal') {
         await until("!!document.querySelector('.topbar')");
         for (let i = 0; i < 50 && !require('../electron/ptyManager.cjs').ids().length; i++) await sleep(100);
@@ -84,4 +97,14 @@ app.on('browser-window-created', (_event, win) => {
   });
 });
 
-require('../electron/main.cjs');
+// Le rendu hors écran produit des captures à jour sans afficher de fenêtre sur le bureau.
+const Module = require('module');
+const originalLoad = Module._load;
+Module._load = function (request, ...args) {
+  const value = originalLoad.call(this, request, ...args);
+  if (request !== 'electron') return value;
+  return { ...value, BrowserWindow: function (options) {
+    return new BrowserWindow({ ...options, webPreferences: { ...options.webPreferences, offscreen: true, backgroundThrottling: false } });
+  } };
+};
+try { require('../electron/main.cjs'); } finally { Module._load = originalLoad; }

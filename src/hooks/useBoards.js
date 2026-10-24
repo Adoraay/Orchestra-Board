@@ -62,6 +62,25 @@ export default function useBoards(saved) {
     return id;
   };
 
+  const addBoard = async (name, state) => {
+    if (latest.current.boards.length >= 50) return false;
+    const id = 'board-' + crypto.randomUUID();
+    const next = [...latest.current.boards, { id, name: name.slice(0, 40) }];
+    content.current[id] = { ...state, nodes: state.nodes.map((node) => node.type === 'terminal' ? { ...node, dragHandle: '.drag-handle' } : node) };
+    // Enregistrer les rôles et liens côté Node avant le SessionStart des nouveaux agents.
+    clearTimeout(saveTimer.current);
+    try {
+      await window.workspace.set({ activeBoardId: id, boards: next.map((board) => ({ ...board, ...serializeBoard(content.current[board.id]) })) });
+    } catch (error) {
+      delete content.current[id];
+      setSaveError(true);
+      throw error;
+    }
+    setBoards(next);
+    setActiveId(id);
+    return true;
+  };
+
   const renameBoard = (id, name) => setBoards((list) => list.map((b) => (b.id === id ? { ...b, name } : b)));
 
   const agentCount = (id) => content.current[id]?.nodes.filter((n) => n.type === 'terminal').length ?? 0;
@@ -86,6 +105,7 @@ export default function useBoards(saved) {
     content: content.current,
     updateContent,
     createBoard,
+    addBoard,
     renameBoard,
     deleteBoard,
     agentCount,

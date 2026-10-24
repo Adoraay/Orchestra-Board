@@ -128,6 +128,20 @@ When a tile works in a Git repository, a second tab above it opens the **Changes
 
 ## Recipes
 
+### Reuse a team
+
+Open **Team templates** (the team icon in the top bar). Start with *Developer + reviewer*, *Lead + two workers* or *Developer + terminal*, or save the current board as your own template. Choose the project folder and replace any unavailable agent with an installed compatible one, then create a new board. Roles and links are registered before its agents start. Each instance gets fresh tile IDs and sessions; old folders, branches and pending messages are not copied. Saved templates live in `team-templates.json` in the app data folder and are separate from workspace backups.
+
+### Find blockers and check context
+
+The **Blockers inbox** (inbox icon in the top bar) groups waiting permissions or answers, refused exchanges, turn limits and stopped terminal processes across boards. Click a tile name to jump to it. Events resolve when work resumes, an exchange succeeds or a terminal restarts; clearing resolved events keeps active requests. This inbox stays in memory for the current app session and never answers permissions for you.
+
+**Changes** now shows its comparison scope and the worktree root. Other tiles configured in the same worktree are listed, including those using a subfolder or another board; separate Git worktrees are kept distinct. These are shared changes, without attribution to an individual agent.
+
+Untracked folders are grouped and their files load on request. The list shows up to 500 entries; file previews are bounded, with a notice when truncated. Use **Open in VS Code** to inspect the rest.
+
+The **Role** editor shows the text last injected into the current session alongside the saved role. Pending edits apply at the next `SessionStart`, including a supported `/clear` or restart. A role is an instruction, not a restriction on the agent's tools.
+
 **A lead and two workers** — Put a Claude Code *Lead* above a Codex and a Claude Code, linked with **Delegation**. Ask the lead: *“Ask each of your agents for a short poem and tell me which one is best.”* It writes to both, waits for their replies and answers you.
 
 **Dev + reviewer** — Link a *Frontend* agent to a *Reviewer* with a **Relay** and the instruction *“Review this change and list any bug: {response}”*. Give the reviewer the role *“You never edit files.”* Every time the frontend agent finishes, the reviewer checks its work.

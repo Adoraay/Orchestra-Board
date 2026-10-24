@@ -49,9 +49,37 @@ contextBridge.exposeInMainWorld('git', {
   isRepo: (cwd) => ipcRenderer.invoke('git:isRepo', cwd),
   listBranches: (cwd, fetch) => ipcRenderer.invoke('git:listBranches', cwd, fetch),
   ensureWorktree: (cwd, branch) => ipcRenderer.invoke('git:ensureWorktree', cwd, branch),
-  changes: (cwd) => ipcRenderer.invoke('git:changes', cwd),
+  changes: (cwd, caller) => ipcRenderer.invoke('git:changes', cwd, caller),
   diff: (cwd, file) => ipcRenderer.invoke('git:diff', cwd, file),
+  untracked: (cwd, folder, limit) => ipcRenderer.invoke('git:untracked', cwd, folder, limit),
   openInEditor: (cwd, file) => ipcRenderer.invoke('git:openInEditor', cwd, file),
+});
+
+contextBridge.exposeInMainWorld('teams', {
+  list: () => ipcRenderer.invoke('teams:list'),
+  save: (name, board) => ipcRenderer.invoke('teams:save', name, board),
+  remove: (id) => ipcRenderer.invoke('teams:remove', id),
+  create: (id, cwd, replacements) => ipcRenderer.invoke('teams:create', id, cwd, replacements),
+});
+
+contextBridge.exposeInMainWorld('blockers', {
+  get: () => ipcRenderer.invoke('blockers:get'),
+  clearResolved: () => ipcRenderer.invoke('blockers:clearResolved'),
+  onChange: (cb) => {
+    const listener = (_e, entries) => cb(entries);
+    ipcRenderer.on('blockers:change', listener);
+    return () => ipcRenderer.removeListener('blockers:change', listener);
+  },
+});
+
+contextBridge.exposeInMainWorld('roles', {
+  get: (id) => ipcRenderer.invoke('roles:get', id),
+  set: (id, role) => ipcRenderer.invoke('roles:set', id, role),
+  onChange: (id, cb) => {
+    const listener = (_e, changedId, state) => { if (changedId === id) cb(state); };
+    ipcRenderer.on('roles:change', listener);
+    return () => ipcRenderer.removeListener('roles:change', listener);
+  },
 });
 
 // Utilisation (quotas) de Claude Code et Codex. refresh(agentId, force) peut lancer un /usage invisible.

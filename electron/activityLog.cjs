@@ -33,6 +33,7 @@ function add({ kind, linkId = null, taskId = null, from = null, to = null, text 
   };
   entries = [...entries.slice(-(MAX_ENTRIES - 1)), entry];
   deps.emit(entry);
+  deps.report?.(entry);
 }
 
 function register() {

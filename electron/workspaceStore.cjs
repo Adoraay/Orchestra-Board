@@ -22,6 +22,7 @@ let recovery = null;
 let restoring = false;
 let generation = randomUUID();
 const sessions = new Map();
+const roleOverrides = new Map();
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const size = (v) => (isNum(v) && v > 0 && v <= 10000 ? v : undefined);
@@ -147,6 +148,10 @@ function save(workspace) {
   const clean = sanitize(workspace);
   for (const board of clean.boards) for (const node of board.nodes) {
     if (node.type !== 'terminal') continue;
+    if (roleOverrides.has(node.id)) {
+      delete node.data.role;
+      if (roleOverrides.get(node.id)) node.data.role = roleOverrides.get(node.id);
+    }
     // Les hooks font autorité : une sauvegarde React retardée ne rétablit pas une ancienne session.
     if (sessions.has(node.id)) {
       delete node.data.session;
@@ -171,6 +176,12 @@ function setSession(id, value) {
   if (!recovery && current.boards.some((b) => b.nodes.some((n) => n.id === id))) save(current);
 }
 
+function setRole(id, value) {
+  load();
+  roleOverrides.set(id, String(value ?? '').trim().slice(0, MAX_ROLE));
+  if (!recovery && current.boards.some((b) => b.nodes.some((n) => n.id === id))) save(current);
+}
+
 function startup() { restoring = false; return { workspace: load(), recovery, generation }; }
 
 // listener(workspace) : appelé au démarrage puis après chaque sauvegarde (liens pour linkRelay).
@@ -191,6 +202,7 @@ function register(listener, beforeRestore = () => {}) {
       beforeRestore();
       const restored = sanitize(files.restore(id, sanitize(null)));
       sessions.clear();
+      roleOverrides.clear();
       for (const board of restored.boards) for (const node of board.nodes) {
         if (node.type === 'terminal') sessions.set(node.id, node.data.session ?? null);
       }
@@ -213,4 +225,4 @@ function register(listener, beforeRestore = () => {}) {
   });
 }
 
-module.exports = { register, getSession, setSession };
+module.exports = { register, getSession, setSession, setRole, get: load, sanitizeContent };
