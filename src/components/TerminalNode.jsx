@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Handle, NodeResizer, Position, useReactFlow, useStoreApi } from '@xyflow/react';
-import { Drama, FileDiff, GitBranch, History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
+import { Drama, FileDiff, GitBranch, History, Maximize2, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
@@ -26,7 +26,8 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
   const t = useT();
-  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest } = useBoard();
+  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest, maximized, setMaximized, maxSlot } = useBoard();
+  const bodyRef = useRef(null);
   const { theme, accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
   const [status, setStatus] = useState('idle');
@@ -142,6 +143,18 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     };
     // Police et thème sont appliqués en direct par l'effet suivant, sans recréer le terminal.
   }, [id, data.agentId, data.cwd]);
+
+  // Terminal agrandi (PLAN.md §7, 3.3) : le même terminal xterm est déplacé dans le calque au-dessus de la map,
+  // puis remis dans la case. Rien n'est relancé ; position et taille de la case ne changent pas.
+  const enlarged = maximized === id && maxSlot;
+  useEffect(() => {
+    if (!enlarged) return;
+    const mount = containerRef.current;
+    const body = bodyRef.current;
+    maxSlot.appendChild(mount);
+    termRef.current?.focus();
+    return () => body.prepend(mount);
+  }, [enlarged, maxSlot]);
 
   // Bouton « Changements » seulement pour un dossier dans un dépôt Git (PLAN.md §3.20).
   useEffect(() => {
@@ -344,6 +357,11 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
                 {t('common.restart')}
               </button>
             )}
+            {!confirmingClose && (
+              <button className="maximize nodrag" onClick={() => setMaximized(id)} title={t('terminal.maximize')}>
+                <Maximize2 size={13} />
+              </button>
+            )}
             {confirmingClose ? (
               <span className="close-confirm nodrag">
                 {t('terminal.closeConfirm', { name })}
@@ -357,7 +375,8 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
         </header>
 
         {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
-        <div className="terminal-body nodrag nowheel" onPointerDown={stopResizing}>
+        <div className="terminal-body nodrag nowheel" ref={bodyRef} onPointerDown={stopResizing}>
+          {enlarged && <span className="terminal-elsewhere hint">{t('terminal.enlarged')}</span>}
           <div className="terminal-mount" ref={containerRef} />
           {((askResume && resumeChoice === 'manual') || resumeError) && (
             <div className="resume-prompt">

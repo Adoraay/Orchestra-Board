@@ -114,6 +114,11 @@ function sendToAgent(caller, { name, message } = {}) {
   tasks.set(taskId, expect);
   deps.log({ kind: 'delegate', taskId, linkId: link.id, from: caller, to: link.target, text: message.trim() });
   enqueue(link.target, {
+    qid: taskId,
+    kind: 'delegate',
+    taskId,
+    from: caller,
+    preview: message.trim(),
     key: link.key,
     id: link.id,
     // En-tête dans la langue du message lui-même : la cible reçoit un message cohérent.

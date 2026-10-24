@@ -4,13 +4,14 @@ const { ipcMain } = require('electron');
 // lien Terminal, refus. Gardé en mémoire seulement : aucune conversation n'est écrite sur le disque.
 const MAX_ENTRIES = 500;
 const MAX_TEXT = 4000;
-const KINDS = ['relay', 'delegate', 'reply', 'command', 'output', 'interrupt', 'refused', 'note'];
+// draft : message préparé à valider, delivered : collé et envoyé chez la cible, cancelled : annulé avant l'envoi.
+const KINDS = ['relay', 'delegate', 'draft', 'delivered', 'reply', 'cancelled', 'command', 'output', 'interrupt', 'refused', 'note'];
 
 let entries = [];
 let nextId = 1;
-let deps = { nameOf: (id) => id, emit: () => {} };
+let deps = { nameOf: (id) => id, boardOf: () => null, emit: () => {} };
 
-// nameOf(id d'une case) -> nom affiché, emit(entry) : nouvelle entrée pour l'interface.
+// nameOf(id d'une case) -> nom affiché, boardOf(id) -> tableau de la case, emit(entry) : nouvelle entrée pour l'interface.
 function init(d) {
   deps = d;
 }
@@ -29,6 +30,7 @@ function add({ kind, linkId = null, taskId = null, from = null, to = null, text 
     to,
     fromName: from ? deps.nameOf(from) : null,
     toName: to ? deps.nameOf(to) : null,
+    boardId: (from && deps.boardOf(from)) || (to && deps.boardOf(to)) || null,
     text: body.length > MAX_TEXT ? `${body.slice(0, MAX_TEXT)}…` : body,
   };
   entries = [...entries.slice(-(MAX_ENTRIES - 1)), entry];

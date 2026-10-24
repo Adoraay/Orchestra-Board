@@ -18,6 +18,7 @@ const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
 const activityLog = require('./activityLog.cjs');
+const diagnostics = require('./diagnostics.cjs');
 const updates = require('./updates.cjs');
 const usage = require('./usage.cjs');
 const { t } = require('./i18n.cjs');
@@ -146,8 +147,12 @@ function notifyFinished(id, info) {
 }
 
 agentStatus.init(sendStatus, notifyFinished);
+// Tableau de chaque case (filtres du journal), mis à jour à chaque sauvegarde de workspace.json.
+let caseBoards = new Map();
+const caseName = (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id;
 activityLog.init({
-  nameOf: (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id,
+  nameOf: caseName,
+  boardOf: (id) => caseBoards.get(id) ?? null,
   emit: (entry) => send('log:entry', entry),
   report: blockers.onLog,
 });
@@ -159,6 +164,8 @@ function emitLink(linkId, event) {
 
 linkRelay.init({
   log: activityLog.add,
+  nameOf: caseName,
+  pending: (list) => send('relay:pending', list),
   write: ptyManager.write,
   status: (id) => agentStatus.info(id)?.status ?? null,
   arm: agentStatus.arm,
@@ -211,6 +218,7 @@ function trackSession(id, payload) {
 // Début de session : la réponse au hook dit à l'agent qu'il tourne dans Orchestra et lui donne son rôle
 // (même format pour Claude Code et Codex). Ce contexte n'est pas affiché dans le terminal.
 function onHook(id, payload) {
+  diagnostics.onHook(id, payload.hook_event_name);
   try { trackSession(id, payload); }
   catch (error) {
     console.error('Session save failed:', error.message);
@@ -279,6 +287,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
   }
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) {
+    diagnostics.onLaunch(id);
     agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
     send('agent:status', id, agentStatus.info(id)); // la barre des agents actifs le voit tout de suite
   }
@@ -300,6 +309,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
     (id, code) => {
       agentStatus.unregister(id);
       caseAgents.delete(id);
+      diagnostics.forget(id);
       roleState.clear(id);
       blockers.onStatus(id, null);
       blockers.onExit(id, code);
@@ -333,6 +343,7 @@ ipcMain.on('pty:kill', (_e, id) => {
   ptyManager.kill(id);
   agentStatus.unregister(id);
   caseAgents.delete(id);
+  diagnostics.forget(id);
   roleState.clear(id);
   blockers.onStatus(id, null);
   claudeHooks.removeSettings(id);
@@ -351,6 +362,24 @@ ipcMain.handle('roles:set', (_e, id, role) => {
     roleState.setSaved(id, role);
     return { value: roleState.get(id) };
   } catch { return { error: t('role.saveFailed') }; }
+});
+// Messages à valider ou en file (PLAN.md §7, 3.1) : l'interface n'envoie qu'un identifiant et le texte modifié.
+const QID = /^[0-9a-f-]{36}$/;
+ipcMain.handle('relay:pending', () => linkRelay.pendingList());
+ipcMain.handle('relay:approve', (_e, qid, text) => (QID.test(qid) ? linkRelay.approve(qid, text) : { error: t('pending.notFound') }));
+ipcMain.handle('relay:discard', (_e, qid) => (QID.test(qid) ? linkRelay.discard(qid) : { error: t('pending.notFound') }));
+ipcMain.handle('relay:cancel', (_e, qid) => (QID.test(qid) ? linkRelay.cancel(qid) : { error: t('pending.notFound') }));
+// Diagnostic (Paramètres › Diagnostic) : commandes et versions, puis cases lancées et leur dernier hook.
+ipcMain.handle('diag:agents', () => diagnostics.checkAgents(settingsStore.load().agents, agentsHandlers.testCommand));
+ipcMain.handle('diag:tiles', () => {
+  const { agents } = settingsStore.load();
+  return diagnostics.tileStates(
+    workspaceStore.get().boards.flatMap((board) =>
+      board.nodes
+        .filter((n) => n.type === 'terminal' && agentStatus.info(n.id))
+        .map((n) => ({ id: n.id, agentId: n.data.agentId, name: agentStatus.info(n.id).name, hooks: agents.find((a) => a.id === n.data.agentId)?.hooks ?? null, boardName: board.name })),
+    ),
+  );
 });
 ipcMain.handle('blockers:get', () => blockers.snapshot());
 ipcMain.handle('blockers:clearResolved', () => { blockers.clearResolved(); return blockers.snapshot(); });
@@ -388,6 +417,7 @@ fsHandlers.register(() => win, {
 settingsStore.register();
 agentsHandlers.register(() => win);
 workspaceStore.register((workspace) => {
+  caseBoards = new Map(workspace.boards.flatMap((b) => b.nodes.map((n) => [n.id, b.id])));
   usedFolders = workspace.boards.flatMap((b) =>
     b.nodes
       .filter((n) => n.type === 'terminal')
@@ -409,6 +439,7 @@ workspaceStore.register((workspace) => {
     relayStatus(id, null);
     send('agent:status', id, null);
   }
+  for (const id of caseAgents.keys()) diagnostics.forget(id);
   caseAgents.clear();
 });
 gitHandlers.register(workspaceStore.get);

@@ -94,6 +94,10 @@ Pick the **Link tool** (`L`) in the toolbar, click the first tile, then the seco
 
 Relay and Delegation links can be reversed or made two-way, and have a **turn limit** (3 by default). Terminal and Note links point from an agent to their target.
 
+Tick **Review before sending** on a Relay link to stay in control: when the source finishes, the message is prepared but not sent. Edit it, send it or discard it from the link panel or the Log. Queued messages (Relay or Delegation, waiting for a busy target) can be cancelled there too until they are pasted; a cancelled delegation tells its caller instead of leaving it waiting. A message already delivered cannot be recalled.
+
+When the link label is visible, it expands to show a short preview and **Send / Discard** buttons. With several drafts, it presents the oldest first and shows how many remain. Click its heading to open the link panel and edit the full message. If the tiles are too close to display a label, use the link panel or Log.
+
 <p align="center"><img src="docs/images/link-panel.png" alt="The link panel: Relay or Delegation, instruction, turn limit" width="100%"></p>
 
 <!-- GIF à ajouter ici : docs/images/relay.gif (un agent termine, le point lumineux descend le lien, l'autre reçoit le message) -->
@@ -118,6 +122,8 @@ Claude Code and Codex resume the exact session saved for each tile, including wh
 
 Open the **Log** tab on the right edge of the map (`Ctrl+Shift+J`). It lists everything that went through a link: relayed messages, delegated tasks and their replies, terminal commands and their output, and refusals in red (turn limit reached, busy terminal…). Click a name to jump to its tile.
 
+Each message shows the state of its task: *to review*, *waiting*, *sent* (once actually delivered), *reply received*, *cancelled* or *refused*. The **Filters** button narrows the list by board, tile and type; click a task ID (`#1a2b3c4d`) to follow that task only. Filters never delete events. Pin the Log (or Usage, or the active agents bar) to keep it open while you work; the pin is remembered.
+
 <p align="center"><img src="docs/images/log.png" alt="The exchange log next to the board" width="100%"></p>
 
 ### Review the changes
@@ -125,6 +131,12 @@ Open the **Log** tab on the right edge of the map (`Ctrl+Shift+J`). It lists eve
 When a tile works in a Git repository, a second tab above it opens the **Changes** window: every file changed in its worktree since the last commit, with a colored diff and an *Open in VS Code* button. This does not identify which agent made a change when tiles share a folder. Orchestra only reads Git here.
 
 <p align="center"><img src="docs/images/changes.png" alt="The changes window with a diff" width="100%"></p>
+
+### Find, enlarge and check
+
+- **Find a tile** on every board with `Ctrl+Shift+F` (or the magnifier in the top bar): Enter opens its board and centers it.
+- **Enlarge a terminal** with the icon in its title bar or `Ctrl+Shift+M`: same process and conversation, shown over the whole map; the tile keeps its size and place.
+- **Settings › Diagnostics** shows, without contacting any model, where each agent's command was found, its version when it can be read safely, whether it has Orchestra hooks, and the last hook each running tile sent. A missing or old hook is not necessarily a failure.
 
 ## Recipes
 
@@ -157,6 +169,8 @@ The **Role** editor shows the text last injected into the current session alongs
 | `Ctrl+Shift+T` | New board |
 | `Ctrl+,` | Settings |
 | `Ctrl+Shift+E` / `A` / `U` / `J` | Files / active agents / usage / log |
+| `Ctrl+Shift+F` | Find a tile on every board |
+| `Ctrl+Shift+M` | Enlarge or restore the selected terminal |
 
 | On the map | |
 |---|---|
@@ -215,7 +229,7 @@ Use Node.js 22.12+ to develop this version. Install the locked dependencies with
 ```bash
 npm install      # node-pty ships prebuilt binaries: no Visual Studio or Python needed
 npm run dev      # Vite + Electron with hot reload
-npm test         # session, workspace recovery, queue and undo regression tests
+npm test         # session, recovery, queue, review, undo and diagnostics tests
 npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 ```
 

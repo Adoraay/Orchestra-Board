@@ -81,6 +81,7 @@ function sanitizeLink(data = {}) {
     prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '', // vide = pas encore configuré
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),
     enabled: data.enabled !== false,
+    review: data.review === true, // Transmission : message à valider avant l'envoi
   };
 }
 

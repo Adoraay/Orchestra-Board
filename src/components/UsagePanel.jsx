@@ -4,6 +4,7 @@ import AgentLogo from './AgentLogo.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useAutoClose from '../hooks/useAutoClose.js';
 import useT from '../hooks/useT.js';
+import PinButton from './PinButton.jsx';
 
 const USAGE_AGENTS = ['claude-code', 'codex', 'gemini'];
 
@@ -32,7 +33,7 @@ const level = (percent) => (percent >= 90 ? 'danger' : percent >= 70 ? 'warning'
 
 // Onglet replié sur le bord droit de la map : utilisation (quotas) de Claude Code et Codex.
 // Claude trop ancien (> 2 min) : Node lance un /usage invisible, les derniers chiffres restent affichés en attendant.
-export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
+export default function UsagePanel({ open, onToggle, agentId, onSelectAgent, pinned, onPin }) {
   const { settings, agentById } = useSettings();
   const t = useT();
   const wrapRef = useRef(null);
@@ -40,7 +41,7 @@ export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
   const [refreshing, setRefreshing] = useState(false);
   const [, setTick] = useState(0);
   const request = useRef(0);
-  useAutoClose(wrapRef, open, onToggle);
+  useAutoClose(wrapRef, open && !pinned, onToggle);
 
   const agents = USAGE_AGENTS.filter((id) => settings.agents.some((a) => a.id === id)).map(agentById);
 
@@ -73,16 +74,19 @@ export default function UsagePanel({ open, onToggle, agentId, onSelectAgent }) {
           <div className="usage-panel">
             <div className="usage-header">
               <span className="usage-title">{t('usage.title')}</span>
-              {data?.refreshable && (
-                <button
-                  className={`icon-button ${refreshing ? 'spinning' : ''}`}
-                  title={t('usage.refresh')}
-                  disabled={refreshing}
-                  onClick={() => load(true)}
-                >
-                  <RefreshCw size={14} />
-                </button>
-              )}
+              <span className="panel-actions">
+                <PinButton pinned={pinned} onPin={onPin} />
+                {data?.refreshable && (
+                  <button
+                    className={`icon-button ${refreshing ? 'spinning' : ''}`}
+                    title={t('usage.refresh')}
+                    disabled={refreshing}
+                    onClick={() => load(true)}
+                  >
+                    <RefreshCw size={14} />
+                  </button>
+                )}
+              </span>
             </div>
 
             <div className="usage-agents">

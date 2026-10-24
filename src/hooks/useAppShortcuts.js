@@ -32,6 +32,7 @@ export default function useAppShortcuts(actions) {
       if (key === 'a') return run(a.toggleAgentsBar);
       if (key === 'u') return run(a.toggleUsage);
       if (key === 'j') return run(a.toggleLog);
+      if (event.code === 'KeyF') return run(a.toggleSearch);
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);

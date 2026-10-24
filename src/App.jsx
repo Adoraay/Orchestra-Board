@@ -11,7 +11,9 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
+import { Minimize2 } from 'lucide-react';
 import AgentDock from './components/AgentDock.jsx';
+import AgentLogo from './components/AgentLogo.jsx';
 import AgentsBar from './components/AgentsBar.jsx';
 import BoardToolbar from './components/BoardToolbar.jsx';
 import DeleteDialog from './components/DeleteDialog.jsx';
@@ -38,6 +40,8 @@ import WorkspaceRecovery from './components/WorkspaceRecovery.jsx';
 import TeamTemplates from './components/TeamTemplates.jsx';
 import BlockersInbox from './components/BlockersInbox.jsx';
 import TopBar from './components/TopBar.jsx';
+import TileSearch from './components/TileSearch.jsx';
+import usePendingMessages from './hooks/usePendingMessages.js';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
 import { useWorkspace } from './context/WorkspaceContext.jsx';
@@ -95,6 +99,7 @@ function Workspace({ saved }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [blockers, setBlockers] = useState([]);
   useEffect(() => {
     let changed = false;
@@ -117,10 +122,14 @@ function Workspace({ saved }) {
     [content, activeId, updateContent],
   );
   const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
-  const [agentsBarOpen, setAgentsBarOpen] = useState(false);
-  const [usageOpen, setUsageOpen] = useState(false);
+  const { settings, agentById, updateSettings } = useSettings();
+  // Panneaux épinglés (PLAN.md §7, 3.4) : rouverts au lancement ; Journal prioritaire sur Utilisation (même bord).
+  const pinned = settings.general.pinned;
+  const pin = useCallback((panel, value) => updateSettings('general', { pinned: { ...settings.general.pinned, [panel]: value } }), [settings.general.pinned, updateSettings]);
+  const [agentsBarOpen, setAgentsBarOpen] = useState(() => pinned.agentsBar);
+  const [usageOpen, setUsageOpen] = useState(() => pinned.usage && !pinned.log);
   const [usageAgent, setUsageAgent] = useState('claude-code');
-  const [logOpen, setLogOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(() => pinned.log);
   // Utilisation et Journal partagent le bord droit de la map : un seul ouvert à la fois.
   const toggleUsage = useCallback(() => {
     setLogOpen(false);
@@ -134,7 +143,6 @@ function Workspace({ saved }) {
   const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
   const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
   const clearLaunch = useCallback(() => setLaunchRequest(null), []);
-  const { settings, agentById, updateSettings } = useSettings();
   // Tutoriel (PLAN.md §3.21) : 'setup' (assistant de personnalisation) puis 'tour' au premier lancement,
   // 'tour' seul relancé depuis les paramètres.
   const [tutorial, setTutorial] = useState(() => (settings.general.tutorialDone ? null : 'setup'));
@@ -164,6 +172,7 @@ function Workspace({ saved }) {
     toggleAgentsBar: () => setAgentsBarOpen((o) => !o),
     toggleUsage,
     toggleLog,
+    toggleSearch: () => setSearchOpen((o) => !o),
   });
 
   // Démarrage : une seule question pour reprendre (ou non) les conversations de tous les agents restaurés.
@@ -201,8 +210,8 @@ function Workspace({ saved }) {
   // Panneaux posés sur la map : leur état vit ici, car la map est recréée à chaque changement de tableau.
   const overlays = (
     <>
-      <UsagePanel open={usageOpen} onToggle={toggleUsage} agentId={usageAgent} onSelectAgent={setUsageAgent} />
-      <LogPanel open={logOpen} onToggle={toggleLog} onFocus={focusAgent} />
+      <UsagePanel open={usageOpen} onToggle={toggleUsage} agentId={usageAgent} onSelectAgent={setUsageAgent} pinned={pinned.usage} onPin={(v) => pin('usage', v)} />
+      <LogPanel open={logOpen} onToggle={toggleLog} onFocus={focusAgent} boards={boards.boards} pinned={pinned.log} onPin={(v) => pin('log', v)} />
       <AgentsBar
         boards={boards.boards}
         content={content}
@@ -211,6 +220,8 @@ function Workspace({ saved }) {
         open={agentsBarOpen}
         onToggle={() => setAgentsBarOpen((o) => !o)}
         onFocus={focusAgent}
+        pinned={pinned.agentsBar}
+        onPin={(v) => pin('agentsBar', v)}
       />
     </>
   );
@@ -225,6 +236,7 @@ function Workspace({ saved }) {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenTeams={() => setTeamsOpen(true)}
         onOpenInbox={() => setInboxOpen(true)}
+        onOpenSearch={() => setSearchOpen(true)}
         blockerCount={blockers.filter((entry) => !entry.resolved).length}
       />
       <div className="workspace">
@@ -250,6 +262,9 @@ function Workspace({ saved }) {
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} />}
       {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
+      {searchOpen && (
+        <TileSearch boards={boards.boards} content={content} activeId={activeId} onFocus={focusAgent} onClose={() => setSearchOpen(false)} />
+      )}
       {inboxOpen && <BlockersInbox entries={blockers} onFocus={focusAgent} onClose={() => setInboxOpen(false)} />}
       {tutorial && resumeChoice !== 'pending' && !update && (
         tutorial === 'setup' ? (
@@ -307,9 +322,12 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [linkEvents, setLinkEvents] = useState({}); // id du lien -> dernier état de transmission
   const [renameRequest, setRenameRequest] = useState(null); // F2 : { id, at } de la case à renommer
   const [editRequest, setEditRequest] = useState(null); // « Modifier le texte » d'un post-it ou d'un texte : { id, at }
+  const [maximized, setMaximized] = useState(null); // case dont le terminal est affiché en grand (PLAN.md §7, 3.3)
+  const [maxSlot, setMaxSlot] = useState(null);
+  const pendingMessages = usePendingMessages();
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, resumeChoice, renameRequest, editRequest }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, resumeChoice, renameRequest, editRequest],
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot }),
+    [tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot],
   );
 
   // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
@@ -318,6 +336,16 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   nodesRef.current = nodes;
   useEffect(() => {
     const onKeyDown = (event) => {
+      // Ctrl+Maj+M : agrandir ou remettre en place la case choisie (ou celle dont le terminal a le curseur).
+      if (event.ctrlKey && event.shiftKey && !event.altKey && event.code === 'KeyM') {
+        if (document.querySelector('.modal-backdrop, .dialog')) return;
+        const focusedId = document.activeElement?.closest('.react-flow__node-terminal')?.dataset.id;
+        const selected = nodesRef.current.filter((n) => n.selected && n.type === 'terminal');
+        event.preventDefault();
+        event.stopPropagation();
+        setMaximized((current) => (current ? null : focusedId ?? (selected.length === 1 ? selected[0].id : null)));
+        return;
+      }
       if (event.key !== 'F2' || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (document.querySelector('.modal-backdrop')) return;
       const focused = document.activeElement;
@@ -680,6 +708,9 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, activeFolder, homeDir, agentById, t],
   );
 
+  const maximizedNode = maximized && nodes.find((n) => n.id === maximized && n.type === 'terminal');
+  const maximizedName = maximizedNode ? maximizedNode.data.label || agentById(maximizedNode.data.agentId).name : '';
+
   return (
     <>
       <AgentDock
@@ -784,6 +815,20 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
         {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} onAction={onNodeAction} onClose={closeNodeMenu} />}
         {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
+        {maximizedNode && (
+          <section className="terminal-max" aria-label={maximizedName}>
+            <header className="terminal-max-header">
+              <AgentLogo agent={agentById(maximizedNode.data.agentId)} size={18} />
+              <span className="terminal-max-title">{maximizedName}</span>
+              <span className="hint">{t('terminal.restoreHint')}</span>
+              <button className="text-button" onClick={() => setMaximized(null)}>
+                <Minimize2 size={14} />
+                {t('terminal.restore')}
+              </button>
+            </header>
+            <div className="terminal-max-body terminal-body" ref={setMaxSlot} />
+          </section>
+        )}
       </main>
     </>
   );

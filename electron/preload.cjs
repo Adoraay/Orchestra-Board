@@ -97,6 +97,25 @@ contextBridge.exposeInMainWorld('links', {
   },
 });
 
+// Messages des liens à valider (brouillons) ou en file d'attente : envoyer, abandonner, annuler.
+contextBridge.exposeInMainWorld('relay', {
+  pending: () => ipcRenderer.invoke('relay:pending'),
+  approve: (qid, text) => ipcRenderer.invoke('relay:approve', qid, text),
+  discard: (qid) => ipcRenderer.invoke('relay:discard', qid),
+  cancel: (qid) => ipcRenderer.invoke('relay:cancel', qid),
+  onPending: (cb) => {
+    const listener = (_e, list) => cb(list);
+    ipcRenderer.on('relay:pending', listener);
+    return () => ipcRenderer.removeListener('relay:pending', listener);
+  },
+});
+
+// Diagnostic des intégrations : commande trouvée, version, dernier hook de chaque case lancée.
+contextBridge.exposeInMainWorld('diagnostics', {
+  agents: () => ipcRenderer.invoke('diag:agents'),
+  tiles: () => ipcRenderer.invoke('diag:tiles'),
+});
+
 // Post-it réécrit par un agent relié (lien Note).
 contextBridge.exposeInMainWorld('notes', {
   onWrite: (cb) => {

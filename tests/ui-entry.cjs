@@ -45,6 +45,12 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode.startsWith('phase3')) {
+        await require('./ui-phase3.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log(`PASS UI ${mode}: reviewed relay, log filters, pinned log, enlarged terminal, search and diagnostics`);
+        app.quit();
+        return;
+      }
       if (mode.startsWith('phase2')) {
         await require('./ui-phase2.cjs')({ win, evaluate, until, sleep, data, errors });
         console.log(`PASS UI ${mode}: templates, cross-board blockers, Git scope and session roles`);

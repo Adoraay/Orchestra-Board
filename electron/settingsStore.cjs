@@ -33,7 +33,7 @@ const CATALOG_AGENTS = [
 const DEFAULTS = {
   // glow : points de la grille colorés autour de la souris, glowColor null = couleur d'accent, glowSize = rayon en px.
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots', glow: true, glowColor: null, glowSize: 110 },
-  general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true },
+  general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true, pinned: {} },
 };
 
 const THEMES = ['standard', 'light', 'chatgpt', 'gemini', 'vscode', 'github', 'dracula', 'nord'];
@@ -41,6 +41,7 @@ const GRIDS = ['dots', 'lines', 'none'];
 const SHELLS = ['default', 'powershell', 'pwsh', 'cmd', 'bash'];
 const LANGUAGES = ['en', 'fr']; // langue de l'interface (PLAN.md §3.15), anglais par défaut
 const LINK_MODES = ['relay', 'delegate']; // type des nouveaux liens (PLAN.md §3.11)
+const PANELS = ['log', 'usage', 'agentsBar']; // panneaux qui peuvent rester épinglés ouverts
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const CUSTOM_ID = /^custom-[a-z0-9]{4,32}$/;
 const LOGO_FILE = /^custom-[a-z0-9]{4,32}\.(png|jpg|jpeg|svg|webp|gif)$/;
@@ -140,6 +141,7 @@ function sanitize(input) {
       tutorialDone: typeof g.tutorialDone === 'boolean' ? g.tutorialDone : input != null,
       // Mises à jour (PLAN.md §3.22) : oui par défaut.
       checkUpdates: g.checkUpdates !== false,
+      pinned: Object.fromEntries(PANELS.map((panel) => [panel, g.pinned?.[panel] === true])),
     },
   };
 }

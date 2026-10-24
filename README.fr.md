@@ -94,6 +94,10 @@ Prends l'**outil Lien** (`L`) dans la barre d'outils, clique sur la première ca
 
 Les liens Transmission et Délégation peuvent être inversés ou mis dans les deux sens, avec une **limite de tours** (3 par défaut). Les liens Terminal et Note vont de l'agent vers leur cible.
 
+Coche **Valider avant l'envoi** sur une Transmission pour garder la main : quand la source a fini, le message est préparé mais pas envoyé. Modifie-le, envoie-le ou abandonne-le depuis le panneau du lien ou le Journal. Les messages en file (Transmission ou Délégation, en attente d'une cible occupée) s'y annulent aussi tant qu'ils ne sont pas collés ; une délégation annulée prévient son émetteur au lieu de le laisser attendre. Un message déjà remis ne peut pas être rappelé.
+
+Quand la pastille du lien est visible, elle s'agrandit avec un court aperçu et les boutons **Envoyer / Abandonner**. S'il y a plusieurs brouillons, elle présente le plus ancien et indique combien restent à traiter. Clique sur son en-tête pour ouvrir le panneau et modifier le message complet. Si les cases sont trop proches pour afficher la pastille, utilise le panneau du lien ou le Journal.
+
 <p align="center"><img src="docs/images/link-panel.png" alt="Le panneau d'un lien : Transmission ou Délégation, consigne, limite de tours" width="100%"></p>
 
 <!-- GIF à ajouter ici : docs/images/relay.gif (un agent termine, le point lumineux descend le lien, l'autre reçoit le message) -->
@@ -118,6 +122,8 @@ Claude Code et Codex reprennent la session exacte sauvegardée pour chaque case,
 
 Ouvre la languette **Journal** sur le bord droit de la map (`Ctrl+Maj+J`). Elle liste tout ce qui est passé par un lien : messages transmis, tâches déléguées et leurs réponses, commandes du terminal et leur sortie, et les refus en rouge (limite de tours atteinte, terminal occupé…). Clique sur un nom pour aller à sa case.
 
+Chaque message affiche l'état de sa tâche : *à valider*, *en attente*, *envoyé* (une fois réellement remis), *réponse reçue*, *annulé* ou *refusé*. Le bouton **Filtres** restreint la liste par tableau, case et type ; clique sur un identifiant de tâche (`#1a2b3c4d`) pour ne suivre que celle-ci. Les filtres ne suppriment aucun événement. Épingle le Journal (ou l'Utilisation, ou la barre des agents actifs) pour le garder ouvert pendant que tu travailles ; l'épinglage est mémorisé.
+
 <p align="center"><img src="docs/images/log.png" alt="Le journal des échanges à côté du tableau" width="100%"></p>
 
 ### Relis les changements
@@ -125,6 +131,12 @@ Ouvre la languette **Journal** sur le bord droit de la map (`Ctrl+Maj+J`). Elle 
 Quand une case travaille dans un dépôt Git, une deuxième encoche au-dessus d'elle ouvre la fenêtre **Changements** : chaque fichier modifié dans son worktree depuis le dernier commit, avec un diff coloré et un bouton *Ouvrir dans VS Code*. Cela n'identifie pas quel agent a fait chaque modification lorsque des cases partagent le dossier. Ici, Orchestra ne fait que lire Git.
 
 <p align="center"><img src="docs/images/changes.png" alt="La fenêtre des changements avec un diff" width="100%"></p>
+
+### Retrouve, agrandis et vérifie
+
+- **Trouve une case** dans tous les tableaux avec `Ctrl+Maj+F` (ou la loupe de la barre du haut) : Entrée ouvre son tableau et la centre.
+- **Agrandis un terminal** avec l'icône de sa barre de titre ou `Ctrl+Maj+M` : même processus et même conversation, affichés sur toute la map ; la case garde sa taille et sa place.
+- **Paramètres › Diagnostic** montre, sans contacter de modèle, où la commande de chaque agent a été trouvée, sa version quand elle se lit sans risque, s'il a les hooks d'Orchestra, et le dernier hook envoyé par chaque case lancée. Un hook absent ou ancien n'est pas forcément une panne.
 
 ## Recettes
 
@@ -157,6 +169,8 @@ L’éditeur de **Rôle** présente le texte transmis à la session courante à 
 | `Ctrl+Maj+T` | Nouveau tableau |
 | `Ctrl+,` | Paramètres |
 | `Ctrl+Maj+E` / `A` / `U` / `J` | Fichiers / agents actifs / utilisation / journal |
+| `Ctrl+Maj+F` | Trouver une case dans tous les tableaux |
+| `Ctrl+Maj+M` | Agrandir ou remettre en place le terminal choisi |
 
 | Sur la map | |
 |---|---|
@@ -215,7 +229,7 @@ Utilise Node.js 22.12+ pour développer cette version. Installe les dépendances
 ```bash
 npm install      # node-pty arrive avec ses binaires précompilés : ni Visual Studio ni Python
 npm run dev      # Vite + Electron avec rechargement à chaud
-npm test         # régressions : sessions, récupération, files et annulation
+npm test         # sessions, récupération, files, validation, annulation et diagnostic
 npm run dist     # installateur Windows dans release/Orchestra-Setup-<version>.exe
 ```
 
