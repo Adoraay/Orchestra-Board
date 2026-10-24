@@ -2,6 +2,21 @@
 const s = (n) => (n > 1 ? 's' : '');
 
 export default {
+  'backup.title': 'Sauvegardes des tableaux',
+  'backup.recoveryTitle': 'Récupérer tes tableaux',
+  'backup.corrupt': 'Le workspace est illisible. Choisis une sauvegarde ou un nouveau tableau. Le fichier illisible sera conservé avant son remplacement.',
+  'backup.description': 'Jusqu’à 10 anciens workspaces sont conservés localement, au plus une fois par minute pendant les sauvegardes. Restaurer remplace tous les tableaux.',
+  'backup.choose': 'Choisir une sauvegarde',
+  'backup.boards': '{n} tableau(x)',
+  'backup.new': 'Repartir avec un nouveau tableau',
+  'backup.empty': 'Aucune sauvegarde valide disponible pour le moment.',
+  'backup.open': 'Parcourir les sauvegardes',
+  'backup.continue': 'Continuer',
+  'backup.confirm': 'La restauration ferme tous les terminaux et remplace tous les tableaux. Le workspace lisible actuel est sauvegardé ; un fichier illisible est conservé à part. Continuer ?',
+  'backup.restore': 'Restaurer et recharger',
+  'backup.failed': 'Impossible de charger ou restaurer le workspace. Aucun remplacement automatique n’a été effectué. Vérifie l’accès au dossier de données de l’app puis réessaie.',
+  'backup.saveFailed': 'Tes derniers changements n’ont pas pu être sauvegardés. Vérifie le dossier de données. Si workspace.json est illisible, redémarre pour récupérer tes tableaux.',
+  'terminal.launchFailed': 'Impossible de lancer cet agent. Vérifie sa commande et réessaie, ou démarre une nouvelle discussion.',
   // Commun
   'common.cancel': 'Annuler',
   'common.save': 'Enregistrer',
@@ -74,7 +89,7 @@ export default {
   'terminal.exited': 'terminé',
   'terminal.closeConfirm': '{name} travaille encore. Fermer ?',
   'terminal.renameHint': 'Double-clic ou F2 pour renommer',
-  'terminal.resumeQuestion': 'Reprendre la dernière conversation de {name} dans ce dossier ?',
+  'terminal.resumeQuestion': 'Reprendre la conversation sauvegardée de {name} ?',
   'terminal.resume': 'Reprendre la conversation',
   'terminal.newConversation': 'Nouvelle conversation',
   'notify.finished': '{name} a terminé sa tâche',

@@ -5,6 +5,14 @@ const settingsStore = require('./settingsStore.cjs');
 
 const DICTIONARIES = {
   en: {
+    'session.unavailable': 'The exact saved session is missing or unavailable in this folder. Start a new conversation; Orchestra will not resume another tile’s session.',
+    'workspace.recoveryRequired': 'Choose a workspace recovery option before saving.',
+    'workspace.invalidBackup': 'This backup is unavailable.',
+    'delegate.taskId': 'Task ID: {id}.',
+    'delegate.unknownTask': 'Unknown task ID or task owned by another agent.',
+    'delegate.queueFull': 'Too many outstanding tasks. Collect replies before sending more.',
+    'link.cancelled': 'The link was removed or disabled before delivery.',
+    'link.unconfirmed': 'Message submission was not confirmed. Pending messages were stopped; check the target terminal.',
     'agent.missing': 'Deleted agent',
     'board.defaultName': 'Board {n}',
     'notify.finished': '{name} finished its task',
@@ -136,6 +144,14 @@ const DICTIONARIES = {
     'terminal.notFinished': '(the command is still running, its prompt has not come back: read the rest with read_terminal, stop it with interrupt_terminal)',
   },
   fr: {
+    'session.unavailable': 'La session exacte sauvegardée est absente ou inaccessible dans ce dossier. Démarre une nouvelle discussion ; Orchestra ne reprendra pas celle d’une autre case.',
+    'workspace.recoveryRequired': 'Choisis une option de récupération du workspace avant de sauvegarder.',
+    'workspace.invalidBackup': 'Cette sauvegarde est indisponible.',
+    'delegate.taskId': 'Identifiant de tâche : {id}.',
+    'delegate.unknownTask': 'Identifiant de tâche inconnu ou appartenant à un autre agent.',
+    'delegate.queueFull': 'Trop de tâches en attente. Récupère les réponses avant d’en envoyer d’autres.',
+    'link.cancelled': 'Le lien a été supprimé ou désactivé avant la livraison.',
+    'link.unconfirmed': 'L’envoi du message n’a pas été confirmé. Les messages en attente ont été arrêtés ; vérifie le terminal cible.',
     'agent.missing': 'Agent supprimé',
     'board.defaultName': 'Tableau {n}',
     'notify.finished': '{name} a terminé sa tâche',

@@ -16,7 +16,7 @@ function init(d) {
 }
 
 // { kind, linkId, from, to, text } : from et to sont des ids de cases (to facultatif pour un refus).
-function add({ kind, linkId = null, from = null, to = null, text = '' }) {
+function add({ kind, linkId = null, taskId = null, from = null, to = null, text = '' }) {
   if (!KINDS.includes(kind)) return;
   const body = String(text);
   const entry = {
@@ -24,6 +24,7 @@ function add({ kind, linkId = null, from = null, to = null, text = '' }) {
     at: Date.now(),
     kind,
     linkId,
+    taskId,
     from,
     to,
     fromName: from ? deps.nameOf(from) : null,

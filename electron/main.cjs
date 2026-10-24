@@ -21,6 +21,7 @@ const activityLog = require('./activityLog.cjs');
 const updates = require('./updates.cjs');
 const usage = require('./usage.cjs');
 const { t } = require('./i18n.cjs');
+const { canResume, sanitizeSession } = require('./sessionState.cjs');
 
 let win;
 let quitConfirmed = false;
@@ -185,18 +186,15 @@ function callTool(caller, name, args, signal) {
 // Rôle de chaque case (PLAN.md §3.19), mis à jour à chaque sauvegarde de workspace.json.
 let roles = new Map();
 
-// Conversation de chaque case où l'utilisateur a déjà écrit, pendant ce lancement de l'app : une relance
-// (après un rôle) reprend celle-ci, pas la dernière du dossier (--continue), et rien si elle est encore vide.
-const sessions = new Map(); // case -> session_id
-const launched = new Set(); // cases déjà lancées depuis le démarrage de l'app
-const SESSION_ID = /^[0-9a-f-]{8,64}$/i;
+const caseAgents = new Map(); // agent lancé dans chaque case ; seuls ses hooks peuvent définir la session
 
 function trackSession(id, payload) {
-  const session = SESSION_ID.test(payload.session_id ?? '') ? payload.session_id : null;
-  if (payload.hook_event_name === 'UserPromptSubmit' && session) sessions.set(id, session);
-  if (payload.hook_event_name !== 'SessionStart') return;
-  if (payload.source === 'resume' && session) sessions.set(id, session);
-  else if (payload.source === 'startup' || payload.source === 'clear') sessions.delete(id);
+  const agentId = caseAgents.get(id);
+  const info = agentStatus.info(id);
+  if (!agentId || !info) return;
+  const session = sanitizeSession({ id: payload.session_id, transcriptPath: payload.transcript_path, cwd: info.cwd, agentId });
+  if (session) workspaceStore.setSession(id, session);
+  else if (payload.hook_event_name === 'SessionStart' && ['startup', 'clear'].includes(payload.source)) workspaceStore.setSession(id, null);
 }
 
 // Événements des hooks de Claude Code et Codex : statut de la case, et transmission par ses liens quand il a
@@ -204,30 +202,34 @@ function trackSession(id, payload) {
 // Début de session : la réponse au hook dit à l'agent qu'il tourne dans Orchestra et lui donne son rôle
 // (même format pour Claude Code et Codex). Ce contexte n'est pas affiché dans le terminal.
 function onHook(id, payload) {
+  try { trackSession(id, payload); }
+  catch (error) {
+    console.error('Session save failed:', error.message);
+    send('workspace:saveError');
+  }
+  // Capturer la réponse avant que le statut « done » ne puisse libérer le prochain message.
+  if (payload.hook_event_name === 'Stop') {
+    delegation.onStop(id, payload);
+    linkRelay.onStop(id, payload);
+  }
   agentStatus.onHook(id, payload);
-  trackSession(id, payload);
   if (payload.hook_event_name === 'SessionStart') {
     const parts = [t('orchestra.context')];
     if (roles.has(id)) parts.push(t('role.context', { role: roles.get(id) }));
     return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: parts.join('\n\n') } };
   }
-  if (payload.hook_event_name !== 'Stop') return;
-  linkRelay.onStop(id, payload);
-  delegation.onStop(id, payload);
 }
 
 // Nom d'une case choisi dans l'interface (double-clic sur son titre).
 const cleanName = (name) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : null);
 
-// Reprise : la conversation de la case si on la connaît, sinon la dernière du dossier, mais seulement
-// au premier lancement de la case (redémarrage de l'app) : une case relancée sans conversation repart à neuf.
+// Les agents à hooks reprennent exclusivement la session persistée de cette case.
 function resumeArgs(id, agent, resume) {
   if (!resume) return '';
-  const session = sessions.get(id);
-  if (session && agent.hooks === 'claude') return ` --resume ${session}`;
-  if (session && agent.hooks === 'codex') return ` resume ${session}`;
-  if (launched.has(id) || !agent.resumeArgs) return '';
-  return ` ${agent.resumeArgs}`;
+  const session = workspaceStore.getSession(id);
+  if (session && agent.hooks === 'claude') return ` --resume ${session.id}`;
+  if (session && agent.hooks === 'codex') return ` resume ${session.id}`;
+  return agent.hooks || !agent.resumeArgs ? '' : ` ${agent.resumeArgs}`;
 }
 
 // Commande à taper dans le shell : celle de l'agent, + profil Orchestra pour Codex, + reprise de conversation, + modèle choisi,
@@ -257,6 +259,13 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
   if (typeof id !== 'string' || !agent) return null;
 
   const existing = agentStatus.info(id);
+  if (!existing && resume && agent.hooks && !canResume(workspaceStore.getSession(id), agentId, cwd)) {
+    return { error: t('session.unavailable') };
+  }
+  if (!existing) {
+    if (!resume) workspaceStore.setSession(id, null);
+    caseAgents.set(id, agentId);
+  }
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) {
     agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
@@ -285,7 +294,6 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
       relayStatus(id, null);
     },
   );
-  launched.add(id);
   return { ...result, status: agentStatus.info(id) };
 });
 ipcMain.on('pty:write', (_e, id, data) => {
@@ -356,6 +364,15 @@ workspaceStore.register((workspace) => {
   roles = new Map(workspace.boards.flatMap((b) => b.nodes.filter((n) => n.data.role).map((n) => [n.id, n.data.role])));
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
   noteLink.setWorkspace(workspace);
+}, () => {
+  for (const id of ptyManager.ids()) {
+    ptyManager.kill(id);
+    agentStatus.unregister(id);
+    claudeHooks.removeSettings(id);
+    relayStatus(id, null);
+    send('agent:status', id, null);
+  }
+  caseAgents.clear();
 });
 gitHandlers.register();
 usage.register();

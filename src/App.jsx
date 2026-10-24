@@ -34,6 +34,7 @@ import TextNode from './components/TextNode.jsx';
 import Tutorial from './components/Tutorial.jsx';
 import UpdateDialog from './components/UpdateDialog.jsx';
 import Toast from './components/Toast.jsx';
+import WorkspaceRecovery from './components/WorkspaceRecovery.jsx';
 import TopBar from './components/TopBar.jsx';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
@@ -69,11 +70,19 @@ function numberedName(agentName, nodes) {
 // (et pas d'une étape que Ctrl+Z pourrait annuler).
 export default function App() {
   const [saved, setSaved] = useState(null);
+  const [recovery, setRecovery] = useState(false);
+  const [error, setError] = useState(false);
+  const t = useT();
 
   useEffect(() => {
-    window.workspace.get().then(setSaved);
+    window.workspace.startup().then((result) => {
+      if (result.recovery) setRecovery(true);
+      else setSaved(result.workspace);
+    }).catch(() => setError(true));
   }, []);
 
+  if (error) return <p role="alert">{t('backup.failed')}</p>;
+  if (recovery) return <WorkspaceRecovery recovery />;
   return saved ? <Workspace saved={saved} /> : null;
 }
 
@@ -196,6 +205,7 @@ function Workspace({ saved }) {
 
   return (
     <div className="app">
+      {boards.saveError && <div className="toast" role="alert">{t('backup.saveFailed')}</div>}
       <TopBar
         boards={boards}
         boardsWithNews={boardsWithNews}

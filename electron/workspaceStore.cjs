@@ -1,8 +1,9 @@
-const fs = require('fs');
-const path = require('path');
 const { app, ipcMain } = require('electron');
 const { t } = require('./i18n.cjs');
 const { MODEL } = require('./settingsStore.cjs');
+const { createWorkspaceFiles } = require('./workspaceFiles.cjs');
+const { sanitizeSession } = require('./sessionState.cjs');
+const { randomUUID } = require('crypto');
 
 // Tableaux et disposition de chaque map (PLAN.md §3.4), dans userData/workspace.json.
 const ID = /^[\w-]{1,128}$/;
@@ -13,10 +14,14 @@ const MAX_BOARDS = 50;
 const MAX_NAME = 40;
 const MAX_ROLE = 2000;
 
-const filePath = () => path.join(app.getPath('userData'), 'workspace.json');
-
 const MAX_TURNS = 20;
 let onSaved = () => {};
+let files;
+let current;
+let recovery = null;
+let restoring = false;
+let generation = randomUUID();
+const sessions = new Map();
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const size = (v) => (isNum(v) && v > 0 && v <= 10000 ? v : undefined);
@@ -37,6 +42,7 @@ function sanitizeData(type, data = {}) {
         ...(branch && worktree && { branch, worktree }), // branche Git choisie et dossier où l'agent tourne
         ...(role && { role }), // rôle donné à l'agent (PLAN.md §3.19)
         ...(MODEL.test(data.model ?? '') && { model: data.model }), // modèle choisi dans le dock au dépôt
+        ...(sanitizeSession(data.session) && { session: sanitizeSession(data.session) }),
       };
     }
     case 'note': {
@@ -121,37 +127,90 @@ function sanitize(input) {
 }
 
 function load() {
-  try {
-    return sanitize(JSON.parse(fs.readFileSync(filePath(), 'utf8')));
-  } catch {
-    return sanitize(null); // première ouverture, ou fichier illisible
+  if (!current) {
+    files = createWorkspaceFiles(app.getPath('userData'));
+    const loaded = files.read();
+    current = sanitize(loaded.workspace);
+    recovery = loaded.recovery;
+    for (const board of current.boards) for (const node of board.nodes) {
+      if (node.type === 'terminal') sessions.set(node.id, node.data.session ?? null);
+    }
   }
+  return current;
 }
 
 // Écriture dans un fichier temporaire puis renommage : jamais de workspace.json à moitié écrit.
 function save(workspace) {
-  const tmp = filePath() + '.tmp';
+  load();
+  if (restoring) return; // beforeunload de l'ancienne interface après restauration
+  if (recovery) throw new Error(t('workspace.recoveryRequired'));
   const clean = sanitize(workspace);
-  fs.mkdirSync(path.dirname(tmp), { recursive: true });
-  fs.writeFileSync(tmp, JSON.stringify(clean));
-  fs.renameSync(tmp, filePath());
+  for (const board of clean.boards) for (const node of board.nodes) {
+    if (node.type !== 'terminal') continue;
+    // Les hooks font autorité : une sauvegarde React retardée ne rétablit pas une ancienne session.
+    if (sessions.has(node.id)) {
+      delete node.data.session;
+      if (sessions.get(node.id)) node.data.session = sessions.get(node.id);
+    } else {
+      sessions.set(node.id, null);
+      delete node.data.session;
+    }
+  }
+  files.write(clean);
+  current = clean;
   onSaved(clean);
 }
 
+function getSession(id) { load(); return sessions.get(id) ?? null; }
+
+function setSession(id, value) {
+  load();
+  const session = sanitizeSession(value);
+  if (JSON.stringify(sessions.get(id)) === JSON.stringify(session)) return;
+  sessions.set(id, session);
+  if (!recovery && current.boards.some((b) => b.nodes.some((n) => n.id === id))) save(current);
+}
+
+function startup() { restoring = false; return { workspace: load(), recovery, generation }; }
+
 // listener(workspace) : appelé au démarrage puis après chaque sauvegarde (liens pour linkRelay).
-function register(listener) {
+function register(listener, beforeRestore = () => {}) {
   onSaved = listener;
   onSaved(load());
   ipcMain.handle('workspace:get', () => load());
-  ipcMain.handle('workspace:set', (_e, workspace) => save(workspace));
-  // Version synchrone pour la fermeture de la fenêtre : une sauvegarde asynchrone n'aurait pas le temps de finir.
-  ipcMain.on('workspace:saveSync', (event, workspace) => {
+  ipcMain.handle('workspace:startup', startup);
+  ipcMain.handle('workspace:backups', () => { load(); return files.list(); });
+  ipcMain.handle('workspace:restore', (_e, id) => {
+    load();
+    const previousGeneration = generation;
     try {
-      save(workspace);
+      // Vérifier le choix avant de fermer les agents.
+      if (id !== null && !files.list().some((entry) => entry.id === id)) throw new Error(t('workspace.invalidBackup'));
+      restoring = true;
+      generation = randomUUID();
+      beforeRestore();
+      const restored = sanitize(files.restore(id, sanitize(null)));
+      sessions.clear();
+      for (const board of restored.boards) for (const node of board.nodes) {
+        if (node.type === 'terminal') sessions.set(node.id, node.data.session ?? null);
+      }
+      current = restored;
+      recovery = null;
+      onSaved(current);
+      return { ok: true };
+    } catch (error) { restoring = false; generation = previousGeneration; return { error: error.message }; }
+  });
+  ipcMain.handle('workspace:set', (_e, workspace, token) => { if (token === generation) save(workspace); });
+  // Version synchrone pour la fermeture de la fenêtre : une sauvegarde asynchrone n'aurait pas le temps de finir.
+  ipcMain.on('workspace:saveSync', (event, workspace, token) => {
+    try {
+      if (token === generation) save(workspace);
+    } catch (error) {
+      console.error('Workspace save failed:', error.message);
     } finally {
       event.returnValue = true;
     }
   });
 }
 
-module.exports = { register };
+module.exports = { register, getSession, setSession };

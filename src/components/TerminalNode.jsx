@@ -35,6 +35,8 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const [editingRole, setEditingRole] = useState(false);
   const [inRepo, setInRepo] = useState(false);
   const [showingChanges, setShowingChanges] = useState(false);
+  const [resumeError, setResumeError] = useState('');
+  const launching = useRef(false);
   const { deleteElements, updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
@@ -155,12 +157,18 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     }
   }, [id, theme, accent, terminalFontSize]);
 
-  const launch = (resume) => {
+  const launch = async (resume) => {
     const term = termRef.current;
-    if (!term) return;
-    updateNodeData(id, { restored: false });
-    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
-    term.focus();
+    if (!term || launching.current) return;
+    launching.current = true;
+    try {
+      const result = await window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
+      if (result?.error || !result) { setResumeError(result?.error || t('terminal.launchFailed')); return; }
+      setResumeError('');
+      updateNodeData(id, { restored: false });
+      term.focus();
+    } catch { setResumeError(t('terminal.launchFailed')); }
+    finally { launching.current = false; }
   };
 
   // Choix « Reprendre » ou « Nouvelle discussion » au démarrage : la case l'applique d'elle-même.
@@ -188,7 +196,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     setFinished(false);
     setConfirmingClose(false);
     term.reset();
-    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
+    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model })
+      .then((result) => { if (result?.error) setResumeError(result.error); })
+      .catch(() => setResumeError(t('terminal.launchFailed')));
     term.focus();
   };
 
@@ -334,9 +344,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
         {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
         <div className="terminal-body nodrag nowheel" onPointerDown={stopResizing}>
           <div className="terminal-mount" ref={containerRef} />
-          {askResume && resumeChoice === 'manual' && (
+          {((askResume && resumeChoice === 'manual') || resumeError) && (
             <div className="resume-prompt">
-              <p>{t('terminal.resumeQuestion', { name })}</p>
+              <p role={resumeError ? 'alert' : undefined}>{resumeError || t('terminal.resumeQuestion', { name })}</p>
               <div className="resume-actions">
                 <button className="text-button primary" onClick={() => launch(true)}>
                   <History size={15} />

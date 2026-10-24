@@ -4,7 +4,8 @@ const { app, ipcMain } = require('electron');
 
 // Paramètres de l'app (PLAN.md §3.3), dans userData/settings.json.
 // Agents de base : toujours présents, seuls leur ordre et « masqué » sont modifiables.
-// resumeArgs : reprendre la dernière conversation du dossier après un redémarrage de l'app.
+// resumeArgs : capacité de reprise ; main.cjs impose la session exacte pour Claude/Codex,
+// les autres CLI utilisent leurs propres arguments.
 // hooks : 'claude' ou 'codex' = statut, réponses et orchestration par les hooks et le serveur MCP de l'agent
 // (sinon statut déduit de l'activité du terminal).
 const BUILTIN_AGENTS = [

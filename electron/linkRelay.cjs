@@ -21,6 +21,7 @@ let deps = { write: () => {}, status: () => null, arm: () => {}, emit: () => {},
 let links = new Map(); // source -> [{ key, id, source, target, prompt, maxTurns, enabled }]
 const chains = new Map(); // case -> { counts: Map(key -> envois) }
 const queues = new Map(); // case cible -> [{ key, text, chain, turns }]
+const deliveries = new Map(); // réservation de la cible, du collage jusqu'au Stop correspondant
 
 const newChain = () => ({ counts: new Map() });
 
@@ -102,35 +103,63 @@ function buildText(prompt, reply) {
 // Collage entre crochets (le CLI le reçoit comme un collage, pas comme une frappe), puis Entrée à part.
 // item : { key, id, text, chain, turns, maxTurns, stillValid(), onDelivered() } (les deux derniers facultatifs).
 function deliver(target, item) {
-  if (item.stillValid && !item.stillValid()) return;
+  const delivery = { item, submitted: false, working: false, stopping: false };
+  deliveries.set(target, delivery);
   chains.set(target, item.chain);
+  item.onStaged?.();
   deps.write(target, PASTE_START + item.text.replace(/\r?\n/g, '\r') + PASTE_END);
-  // onDelivered après Entrée : le hook Stop qui a libéré la case (et déclenché cet envoi) ne doit pas
-  // passer pour la réponse à ce message.
+  // Le collage démarre la livraison : ne pas l'abandonner dans l'invite avant un autre message.
   setTimeout(() => {
+    if (deliveries.get(target) !== delivery || !deps.status(target)) return;
+    delivery.submitted = true;
     deps.arm(target);
-    deps.write(target, '\r');
     item.onDelivered?.();
-    confirmSubmit(target, ENTER_RETRIES);
+    deps.write(target, '\r');
+    confirmSubmit(target, delivery, ENTER_RETRIES);
+    deps.emit(item.id, { state: 'sent', to: target, turns: item.turns, maxTurns: item.maxTurns });
   }, ENTER_DELAY);
-  deps.emit(item.id, { state: 'sent', to: target, turns: item.turns, maxTurns: item.maxTurns });
+  delivery.timeout = setTimeout(() => {
+    if (deliveries.get(target) !== delivery || delivery.working || delivery.stopping) return;
+    // Sans accusé de travail, ne pas envoyer la suite dans une invite au comportement inconnu.
+    failTarget(target, t('link.unconfirmed'));
+  }, 30000);
 }
 
 // Une Entrée en trop sur une invite vide ne fait rien, dans Claude Code comme dans Codex.
-function confirmSubmit(target, retries) {
+function confirmSubmit(target, delivery, retries) {
   if (!retries) return;
   setTimeout(() => {
+    if (deliveries.get(target) !== delivery || delivery.stopping) return;
     const status = deps.status(target);
     if (!status || status === 'working' || status === 'waiting') return;
     deps.arm(target);
     deps.write(target, '\r');
-    confirmSubmit(target, retries - 1);
+    confirmSubmit(target, delivery, retries - 1);
   }, ENTER_RETRY_DELAY);
 }
 
 // Message pour une case (Transmission, ou Délégation via delegation.cjs) : envoyé dès qu'elle est libre.
 function enqueue(target, item) {
   queues.set(target, [...(queues.get(target) ?? []), item]);
+  flush(target);
+}
+
+function failTarget(target, message) {
+  const delivery = deliveries.get(target);
+  clearTimeout(delivery?.timeout);
+  deliveries.delete(target);
+  const items = [...(delivery ? [delivery.item] : []), ...(queues.get(target) ?? [])];
+  queues.delete(target);
+  for (const item of items) {
+    item.onFailed?.(message);
+    deps.emit(item.id, { state: 'error', message });
+  }
+}
+
+function release(target, delivery) {
+  if (deliveries.get(target) !== delivery) return;
+  clearTimeout(delivery.timeout);
+  deliveries.delete(target);
   flush(target);
 }
 
@@ -147,21 +176,33 @@ function flush(target) {
   if (!queue?.length) return;
   const status = deps.status(target);
   if (!status) {
-    queues.delete(target);
-    for (const item of queue) deps.emit(item.id, { state: 'error', message: t('link.targetGone') });
+    failTarget(target, t('link.targetGone'));
     return;
   }
-  if (status === 'working' || status === 'waiting') {
+  if (deliveries.has(target) || status === 'working' || status === 'waiting') {
     for (const item of queue) deps.emit(item.id, { state: 'queued', to: target, turns: item.turns, maxTurns: item.maxTurns });
     return;
   }
   // Un message à la fois : le suivant part quand B aura fini de traiter celui-ci.
-  deliver(target, queue.shift());
+  let item;
+  while (queue.length) {
+    item = queue.shift();
+    if (!item.stillValid || item.stillValid()) break;
+    item.onFailed?.(t('link.cancelled'));
+    item = null;
+  }
   if (!queue.length) queues.delete(target);
+  if (item) deliver(target, item);
 }
 
 function onStop(id, payload) {
   if (!deps.status(id)) return;
+  const delivery = deliveries.get(id);
+  if (delivery?.submitted && !delivery.stopping) {
+    delivery.stopping = true;
+    clearTimeout(delivery.timeout);
+    setTimeout(() => release(id, delivery), READ_DELAY + 10);
+  }
   const outgoing = (links.get(id) ?? []).filter((l) => l.enabled && l.prompt.trim());
   if (!outgoing.length) return;
   const chain = chainOf(id);
@@ -198,7 +239,7 @@ function onStop(id, payload) {
         maxTurns: link.maxTurns,
         stillValid: () => {
           const current = findLink(link.key);
-          return Boolean(current?.enabled && current.prompt.trim());
+          return Boolean(current?.enabled && current.prompt.trim() && current.source === link.source && current.target === link.target);
         },
       });
     }
@@ -217,7 +258,14 @@ function onUserInput(id) {
 
 // Statut d'une case : B a fini, on envoie la suite. null = case fermée ou processus terminé.
 function onStatus(id, info) {
-  if (!info) chains.delete(id);
+  if (!info) {
+    chains.delete(id);
+    failTarget(id, t('link.targetGone'));
+  }
+  const delivery = deliveries.get(id);
+  if (delivery && info?.status === 'working') delivery.working = true;
+  // Les cibles sans hooks (réception seule) se libèrent sur leur fin d'activité.
+  if (delivery?.submitted && delivery.working && info?.status === 'done' && !delivery.stopping && !delivery.item.onDelivered) release(id, delivery);
   if (!info || info.status === 'idle' || info.status === 'done') flush(id);
 }
 

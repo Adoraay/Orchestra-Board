@@ -3,6 +3,21 @@
 const s = (n) => (n > 1 ? 's' : '');
 
 export default {
+  'backup.title': 'Board backups',
+  'backup.recoveryTitle': 'Recover your boards',
+  'backup.corrupt': 'Your workspace cannot be read. Choose a backup or start with a new board. The unreadable file will be preserved before replacement.',
+  'backup.description': 'Up to 10 previous workspaces are kept locally, at most once per minute while saving. Restoring replaces all boards.',
+  'backup.choose': 'Choose a backup',
+  'backup.boards': '{n} board(s)',
+  'backup.new': 'Start with a new board',
+  'backup.empty': 'No valid backup available yet.',
+  'backup.open': 'Browse backups',
+  'backup.continue': 'Continue',
+  'backup.confirm': 'Restoring closes all running terminals and replaces all boards. The current readable workspace is backed up; an unreadable file is preserved separately. Continue?',
+  'backup.restore': 'Restore and reload',
+  'backup.failed': 'Could not load or restore the workspace. No automatic replacement was performed. Check access to the app data folder and try again.',
+  'backup.saveFailed': 'Your latest changes could not be saved. Check the app data folder. If workspace.json is unreadable, restart to recover your boards.',
+  'terminal.launchFailed': 'Could not start this agent. Check its command and try again, or start a new conversation.',
   // Commun
   'common.cancel': 'Cancel',
   'common.save': 'Save',
@@ -75,7 +90,7 @@ export default {
   'terminal.exited': 'exited',
   'terminal.closeConfirm': '{name} is still working. Close?',
   'terminal.renameHint': 'Double-click or F2 to rename',
-  'terminal.resumeQuestion': "Resume {name}'s last conversation in this folder?",
+  'terminal.resumeQuestion': "Resume the saved conversation for {name}?",
   'terminal.resume': 'Resume conversation',
   'terminal.newConversation': 'New conversation',
   'notify.finished': '{name} finished its task',

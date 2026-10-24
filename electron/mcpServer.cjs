@@ -20,11 +20,11 @@ const TOOLS = [
   },
   {
     name: 'send_to_agent',
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     description:
       'Sends a message to a reachable agent (see list_agents), as if the user typed it in its terminal. ' +
       'Does not block: the agent works in parallel, you can write to several agents in a row. ' +
-      'If it is busy, the message is delivered as soon as it is done. Then get its reply with wait_for_replies. ' +
+      'Returns a unique task ID. Requests to the same target are queued in order without overwriting earlier requests. Get replies with wait_for_replies. ' +
       'The agent does not see your conversation: the message must be self-contained. Write it in the language of your conversation with the user.',
     inputSchema: {
       type: 'object',
@@ -38,16 +38,17 @@ const TOOLS = [
   },
   {
     name: 'wait_for_replies',
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     description:
       'Waits for the final reply of the agents you sent a message to, and returns it. ' +
-      'Without "names", waits for all agents with a message in progress. ' +
+      'Use task_ids to select exact requests, or names to select agents. Without either, waits for all your outstanding tasks. Completed replies are consumed. ' +
       'After timeout_seconds (180 by default, 300 at most), returns what arrived and says who is still working: ' +
       'you can then call the tool again.',
     inputSchema: {
       type: 'object',
       properties: {
         names: { type: 'array', items: { type: 'string' }, description: 'Names of the agents to wait for.' },
+        task_ids: { type: 'array', items: { type: 'string' }, description: 'Task IDs returned by send_to_agent. Only your own tasks are accessible.' },
         timeout_seconds: { type: 'integer', minimum: 10, maximum: 300 },
       },
       additionalProperties: false,

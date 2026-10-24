@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Télécharger pour Windows et macOS" src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-Windows%20%26%20macOS-d97757?style=for-the-badge&logoColor=white"></a>
-  <img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848f?style=for-the-badge&logo=electron&logoColor=white">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-45-47848f?style=for-the-badge&logo=electron&logoColor=white">
   <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-3c3a36?style=for-the-badge"></a>
 </p>
 
@@ -88,10 +88,11 @@ Prends l'**outil Lien** (`L`) dans la barre d'outils, clique sur la première ca
 | Lien | Ce qui se passe | Idéal pour |
 |---|---|---|
 | **Transmission** | Quand A a fini, sa dernière réponse est collée dans B avec ta consigne (`{response}` est remplacé par la réponse). | Dev → relecteur, rédacteur → traducteur |
-| **Délégation** | A voit B dans ses outils et décide lui-même quand lui écrire ; la réponse de B revient à A. | Un chef qui répartit le travail entre plusieurs agents |
+| **Délégation** | A envoie une tâche avec un identifiant unique. Les demandes vers un même agent sont mises en file ; chaque réponse revient à son émetteur. | Un chef qui répartit le travail entre plusieurs agents |
 | **Terminal** | A lance des commandes dans une case Terminal que tu vois, après t'avoir demandé la permission. | Serveurs de dev, tests, build |
+| **Note** | A lit et met à jour un post-it relié avec `list_notes`, `read_note` et `write_note`. | Plans partagés, listes et observations |
 
-Un lien peut être inversé ou mis dans les deux sens, et chaque lien a une **limite de tours** (3 par défaut).
+Les liens Transmission et Délégation peuvent être inversés ou mis dans les deux sens, avec une **limite de tours** (3 par défaut). Les liens Terminal et Note vont de l'agent vers leur cible.
 
 <p align="center"><img src="docs/images/link-panel.png" alt="Le panneau d'un lien : Transmission ou Délégation, consigne, limite de tours" width="100%"></p>
 
@@ -103,6 +104,16 @@ Survole la petite encoche qui dépasse au-dessus d'une case Claude Code ou Codex
 
 <p align="center"><img src="docs/images/role.png" alt="Modifier le rôle d'un agent" width="520"></p>
 
+### Partage un post-it
+
+Pose un post-it sur la map et relie un agent à celui-ci : cela crée un lien Note. Demande à l'agent de lire ou modifier la note ; les changements sont visibles et tu peux aussi l'éditer. Les lignes `- [ ] À faire`, `- [~] En cours` et `- [x] Fait` affichent des icônes de statut. Une écriture remplace toute la note : l'agent doit la lire avant de la modifier.
+
+### Reprends et récupère tes tableaux
+
+Claude Code et Codex reprennent la session exacte sauvegardée pour chaque case, même lorsque deux cases utilisent le même dossier. Si la session ou son transcript est introuvable, Orchestra propose une nouvelle discussion au lieu de reprendre celle d'une autre case. Les anciens workspaces sans identifiants de session demandent aussi une nouvelle discussion pour ces agents. Les autres CLI conservent leur propre comportement de reprise.
+
+**Paramètres › Général › Sauvegardes des tableaux** liste jusqu'à 10 anciens workspaces, conservés localement au plus une fois par minute pendant les sauvegardes. Restaurer ferme tous les terminaux, remplace tous les tableaux et recharge l'interface ; le workspace lisible actuel est d'abord sauvegardé. Si `workspace.json` est illisible au démarrage, choisis une sauvegarde ou un nouveau tableau : le fichier illisible est conservé à part avant remplacement. Les sauvegardes contiennent notes, chemins, rôles et références de sessions ; les agents conservent leurs conversations séparément. Le journal des échanges n'y figure pas.
+
 ### Suis les échanges
 
 Ouvre la languette **Journal** sur le bord droit de la map (`Ctrl+Maj+J`). Elle liste tout ce qui est passé par un lien : messages transmis, tâches déléguées et leurs réponses, commandes du terminal et leur sortie, et les refus en rouge (limite de tours atteinte, terminal occupé…). Clique sur un nom pour aller à sa case.
@@ -111,7 +122,7 @@ Ouvre la languette **Journal** sur le bord droit de la map (`Ctrl+Maj+J`). Elle 
 
 ### Relis les changements
 
-Quand une case travaille dans un dépôt Git, une deuxième encoche au-dessus d'elle ouvre la fenêtre **Changements** : chaque fichier modifié depuis le dernier commit, avec un diff coloré et un bouton *Ouvrir dans VS Code*. Ici, Orchestra ne fait que lire Git.
+Quand une case travaille dans un dépôt Git, une deuxième encoche au-dessus d'elle ouvre la fenêtre **Changements** : chaque fichier modifié dans son worktree depuis le dernier commit, avec un diff coloré et un bouton *Ouvrir dans VS Code*. Cela n'identifie pas quel agent a fait chaque modification lorsque des cases partagent le dossier. Ici, Orchestra ne fait que lire Git.
 
 <p align="center"><img src="docs/images/changes.png" alt="La fenêtre des changements avec un diff" width="100%"></p>
 
@@ -149,7 +160,7 @@ Dans un terminal, `Ctrl+C` copie quand du texte est sélectionné (sinon il inte
 
 ## Confidentialité et sécurité
 
-- **Tout en local.** Orchestra parle aux agents par un petit serveur limité à `127.0.0.1`, protégé par un jeton secret qui change à chaque lancement. Orchestra n'envoie rien nulle part. Son seul accès réseau : au démarrage, il demande à GitHub la dernière release pour te prévenir des mises à jour (désactivable dans Paramètres › Général).
+- **Orchestration locale.** Orchestra parle aux agents par un petit serveur limité à `127.0.0.1`, protégé par un jeton secret qui change à chaque lancement. Les échanges entre agents sont traités localement. Les vérifications de mises à jour contactent GitHub (vérification au démarrage désactivable dans Paramètres › Général) ; télécharger une mise à jour utilise aussi le réseau. Les fetch Git et les CLI d'agents utilisent leurs propres connexions.
 - **Tes permissions restent les tiennes.** Orchestra n'approuve jamais une demande de permission à la place d'un agent. Ses propres outils sont autorisés d'office, sauf `run_in_terminal`, qui demande toujours.
 - **Git presque en lecture seule.** Orchestra ne lance que `git fetch` et `git worktree add` (quand tu choisis une branche) et des commandes de lecture. Jamais de commit ni de push.
 - **Ce qu'il écrit hors de son dossier :**
@@ -168,7 +179,7 @@ Ce sont les hooks de statut d'Orchestra (travaille / a fini). Choisis **Trust al
 <details>
 <summary><b>Quels agents peuvent utiliser les liens ?</b></summary>
 
-Claude Code et Codex peuvent transmettre, déléguer et piloter un terminal. Les autres CLI (Aider, Gemini CLI, le tien…) marchent dans une case et peuvent *recevoir* des messages transmis, mais pas en envoyer. Gemini CLI n'est plus maintenu par Google et n'a pas d'orchestration.
+Claude Code et Codex peuvent transmettre, déléguer, piloter un terminal et utiliser les notes reliées. Les autres CLI (Aider, Gemini CLI, le tien…) marchent dans une case et peuvent *recevoir* des messages transmis ; leur intégration ici n'inclut pas les hooks ou outils d'orchestration d'Orchestra.
 </details>
 
 <details>
@@ -185,11 +196,12 @@ Orchestra tourne sur Windows et macOS (Apple Silicon et Intel), avec un installa
 
 ## Compiler depuis les sources
 
-Il faut Node.js 20+.
+Utilise Node.js 22.12+ pour développer cette version. Installe les dépendances verrouillées avec `npm ci`.
 
 ```bash
 npm install      # node-pty arrive avec ses binaires précompilés : ni Visual Studio ni Python
 npm run dev      # Vite + Electron avec rechargement à chaud
+npm test         # régressions : sessions, récupération, files et annulation
 npm run dist     # installateur Windows dans release/Orchestra-Setup-<version>.exe
 ```
 

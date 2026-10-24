@@ -26,10 +26,23 @@ contextBridge.exposeInMainWorld('agents', {
   models: (agentId) => ipcRenderer.invoke('agents:models', agentId),
 });
 
+let workspaceGeneration;
 contextBridge.exposeInMainWorld('workspace', {
   get: () => ipcRenderer.invoke('workspace:get'),
-  set: (workspace) => ipcRenderer.invoke('workspace:set', workspace),
-  saveSync: (workspace) => ipcRenderer.sendSync('workspace:saveSync', workspace),
+  startup: async () => {
+    const result = await ipcRenderer.invoke('workspace:startup');
+    workspaceGeneration = result.generation;
+    return result;
+  },
+  backups: () => ipcRenderer.invoke('workspace:backups'),
+  restore: (id) => ipcRenderer.invoke('workspace:restore', id),
+  onSaveError: (cb) => {
+    const listener = () => cb();
+    ipcRenderer.on('workspace:saveError', listener);
+    return () => ipcRenderer.removeListener('workspace:saveError', listener);
+  },
+  set: (workspace) => ipcRenderer.invoke('workspace:set', workspace, workspaceGeneration),
+  saveSync: (workspace) => ipcRenderer.sendSync('workspace:saveSync', workspace, workspaceGeneration),
 });
 
 contextBridge.exposeInMainWorld('git', {

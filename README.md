@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download for Windows and macOS" src="https://img.shields.io/badge/Download-Windows%20%26%20macOS-d97757?style=for-the-badge&logoColor=white"></a>
-  <img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848f?style=for-the-badge&logo=electron&logoColor=white">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-45-47848f?style=for-the-badge&logo=electron&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-3c3a36?style=for-the-badge"></a>
 </p>
 
@@ -88,10 +88,11 @@ Pick the **Link tool** (`L`) in the toolbar, click the first tile, then the seco
 | Link | What happens | Good for |
 |---|---|---|
 | **Relay** | When A finishes, its last reply is pasted into B with your instruction (`{response}` is replaced by the reply). | Dev → reviewer, writer → translator |
-| **Delegation** | A sees B in its tools and decides itself when to write to it; B's reply comes back to A. | A lead that splits work between several agents |
+| **Delegation** | A sends a task with a unique ID. Requests to the same agent are queued in order; each reply goes back to its caller. | A lead that splits work between several agents |
 | **Terminal** | A runs commands in a Terminal tile you can watch, after asking your permission. | Dev servers, tests, builds |
+| **Note** | A reads and updates a linked sticky note through `list_notes`, `read_note` and `write_note`. | Shared plans, checklists and findings |
 
-Links can be reversed or made two-way, and every link has a **turn limit** (3 by default).
+Relay and Delegation links can be reversed or made two-way, and have a **turn limit** (3 by default). Terminal and Note links point from an agent to their target.
 
 <p align="center"><img src="docs/images/link-panel.png" alt="The link panel: Relay or Delegation, instruction, turn limit" width="100%"></p>
 
@@ -103,6 +104,16 @@ Hover the small tab peeking above a Claude Code or Codex tile and click the **ma
 
 <p align="center"><img src="docs/images/role.png" alt="Editing the role of an agent" width="520"></p>
 
+### Share a note
+
+Drop a sticky note on the map and link an agent to it. This creates a Note link. Ask the agent to read or update the note; you see the changes on the map and can edit it yourself. Lines such as `- [ ] To do`, `- [~] In progress` and `- [x] Done` show status icons. A write replaces the entire note, so agents should read it before updating it.
+
+### Resume and recover your boards
+
+Claude Code and Codex resume the exact session saved for each tile, including when two tiles use the same folder. If the saved session or its transcript is missing, Orchestra asks you to start a new conversation instead of resuming another tile's discussion. Older workspaces without saved session IDs also require a new conversation for these agents. Other CLIs keep their own resume behavior.
+
+**Settings › General › Board backups** lists up to 10 previous workspaces, kept locally at most once per minute while saving. Restoring closes all terminals, replaces every board and reloads the interface; the current readable workspace is backed up first. If `workspace.json` is unreadable at startup, choose a backup or a new board: the unreadable file is preserved separately before replacement. Backups include notes, paths, roles and session references; the agents keep their conversation files separately. No exchange log is included.
+
 ### Follow the exchanges
 
 Open the **Log** tab on the right edge of the map (`Ctrl+Shift+J`). It lists everything that went through a link: relayed messages, delegated tasks and their replies, terminal commands and their output, and refusals in red (turn limit reached, busy terminal…). Click a name to jump to its tile.
@@ -111,7 +122,7 @@ Open the **Log** tab on the right edge of the map (`Ctrl+Shift+J`). It lists eve
 
 ### Review the changes
 
-When a tile works in a Git repository, a second tab above it opens the **Changes** window: every file changed since the last commit, with a colored diff and an *Open in VS Code* button. Orchestra only reads Git here.
+When a tile works in a Git repository, a second tab above it opens the **Changes** window: every file changed in its worktree since the last commit, with a colored diff and an *Open in VS Code* button. This does not identify which agent made a change when tiles share a folder. Orchestra only reads Git here.
 
 <p align="center"><img src="docs/images/changes.png" alt="The changes window with a diff" width="100%"></p>
 
@@ -149,7 +160,7 @@ In a terminal, `Ctrl+C` copies when text is selected (otherwise it interrupts) a
 
 ## Privacy and safety
 
-- **Local only.** Orchestra talks to agents through a small server bound to `127.0.0.1`, protected by a secret token that changes at every launch. Nothing is sent anywhere by Orchestra itself. Its only network request: at startup, it asks GitHub for the latest release to tell you about updates (can be turned off in Settings › General).
+- **Local orchestration.** Orchestra talks to agents through a small server bound to `127.0.0.1`, protected by a secret token that changes at every launch. Agent exchanges are handled locally. Update checks contact GitHub (startup checks can be disabled in Settings › General); downloading an update also uses the network. Git fetches and the agent CLIs use their own network connections.
 - **Your permissions stay yours.** Orchestra never approves a permission request for an agent. Its own tools are pre-approved, except `run_in_terminal`, which always asks.
 - **Git, read-mostly.** Orchestra only runs `git fetch` and `git worktree add` (when you pick a branch) and read-only commands. It never commits or pushes.
 - **What it writes outside its folder:**
@@ -168,7 +179,7 @@ That's Orchestra's status hooks (working / done). Choose **Trust all and continu
 <details>
 <summary><b>Which agents can use links?</b></summary>
 
-Claude Code and Codex can relay, delegate and drive a terminal. Any other CLI (Aider, Gemini CLI, your own…) works in a tile and can *receive* relayed messages, but cannot send them. Gemini CLI is no longer maintained by Google and has no orchestration.
+Claude Code and Codex can relay, delegate, drive a terminal and use linked notes. Other CLIs (Aider, Gemini CLI, your own…) work in a tile and can *receive* relayed messages; their integration here does not include Orchestra hooks or orchestration tools.
 </details>
 
 <details>
@@ -185,11 +196,12 @@ Orchestra runs on Windows and macOS (Apple Silicon and Intel), with an installer
 
 ## Build from source
 
-Requires Node.js 20+.
+Use Node.js 22.12+ to develop this version. Install the locked dependencies with `npm ci`.
 
 ```bash
 npm install      # node-pty ships prebuilt binaries: no Visual Studio or Python needed
 npm run dev      # Vite + Electron with hot reload
+npm test         # session, workspace recovery, queue and undo regression tests
 npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 ```
 

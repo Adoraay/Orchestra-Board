@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { restoreBoardHistory } from '../lib/boardHistory.js';
 
 const SETTLE_DELAY = 400; // ms sans changement = une étape (une saisie, un trait, un déplacement…)
 const LIMIT = 100;
@@ -72,12 +73,10 @@ export default function useBoardHistory({ nodes, edges, strokes, setNodes, setEd
   const restore = (entry) => {
     adoptNext.current = true;
     present.current = entry;
-    const { annotations, edges: savedEdges, strokes: savedStrokes } = entry.snapshot;
-    const terminals = nodesRef.current.filter((n) => !ANNOTATIONS.has(n.type));
-    const ids = new Set(terminals.map((n) => n.id));
-    setStrokes(savedStrokes);
-    setNodes([...terminals, ...annotations]);
-    setEdges(savedEdges.filter((e) => ids.has(e.source) && ids.has(e.target))); // case fermée entre-temps
+    const restored = restoreBoardHistory(nodesRef.current, entry.snapshot);
+    setStrokes(restored.strokes);
+    setNodes(restored.nodes);
+    setEdges(restored.edges);
   };
 
   const undo = () => {

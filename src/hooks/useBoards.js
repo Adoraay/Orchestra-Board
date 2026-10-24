@@ -16,6 +16,8 @@ function nextName(boards, t) {
 // changement sans faire re-rendre l'app, et on la relit quand on rouvre un tableau.
 export default function useBoards(saved) {
   const t = useT();
+  const [saveError, setSaveError] = useState(false);
+  useEffect(() => window.workspace.onSaveError(() => setSaveError(true)), []);
   const content = useRef(null);
   if (!content.current) content.current = Object.fromEntries(saved.boards.map((b) => [b.id, deserializeBoard(b)]));
 
@@ -32,7 +34,7 @@ export default function useBoards(saved) {
 
   const scheduleSave = useCallback(() => {
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => window.workspace.set(snapshot()), SAVE_DELAY);
+    saveTimer.current = setTimeout(() => window.workspace.set(snapshot()).then(() => setSaveError(false)).catch(() => setSaveError(true)), SAVE_DELAY);
   }, []);
 
   useEffect(scheduleSave, [boards, activeId, scheduleSave]);
@@ -87,5 +89,6 @@ export default function useBoards(saved) {
     renameBoard,
     deleteBoard,
     agentCount,
+    saveError,
   };
 }
