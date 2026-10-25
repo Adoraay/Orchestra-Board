@@ -66,7 +66,10 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "extraResources": [
+        { "from": "build/icon.ico", "to": "Orchestra.ico" }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -77,6 +80,7 @@
       "shortcutName": "Orchestra",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
+      "include": "build/installer.nsh",
       "artifactName": "Orchestra-Setup-${version}.exe"
     },
     "mac": {

@@ -2,6 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, Menu, Notification, ipcMain, shell } = require('electron');
+const { loadWindowIdentity } = require('./windowIdentity.cjs');
 const ptyManager = require('./ptyManager.cjs');
 const fsHandlers = require('./fsHandlers.cjs');
 const settingsStore = require('./settingsStore.cjs');
@@ -59,11 +60,12 @@ function migrateOldUserData() {
 }
 
 function createWindow() {
+  const identity = loadWindowIdentity();
   win = new BrowserWindow({
     width: 1400,
     height: 900,
     title: 'Orchestra',
-    icon: path.join(__dirname, '..', 'build', 'icon.ico'), // barre des tâches (généré par npm run build:icon)
+    icon: identity.icon,
     backgroundColor: '#262624', // = fond de l'écran de démarrage (splash.css) : aucun flash au lancement
     show: false, // affichée quand la page est prête, pour ne jamais montrer une fenêtre vide
     // Une seule barre en haut : celle de l'app, avec les boutons Windows dessinés par-dessus à droite,
@@ -81,16 +83,8 @@ function createWindow() {
   });
 
   if (process.platform === 'win32') {
-    const launcher = path.join(__dirname, '..', 'launcher.exe');
-    const development = fs.existsSync(launcher);
-    // Identité de la fenêtre et du raccourci épinglé, y compris depuis le lanceur de développement.
-    win.setAppDetails({
-      appId: 'com.orchestraboard.orchestra',
-      appIconPath: development ? path.join(__dirname, '..', 'build', 'icon.ico') : process.execPath,
-      appIconIndex: 0,
-      relaunchCommand: `"${development ? launcher : process.execPath}"`,
-      relaunchDisplayName: 'Orchestra',
-    });
+    win.setAppDetails(identity.details);
+    win.setIcon(identity.icon);
   }
 
   // L'interface ne s'ouvre jamais ailleurs : pas de nouvelle fenêtre, pas de navigation hors de l'app

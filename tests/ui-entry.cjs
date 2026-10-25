@@ -18,9 +18,16 @@ app.setAppUserModelId = () => {};
 BrowserWindow.prototype.show = () => {};
 if (process.platform === 'win32') {
   const setDetails = BrowserWindow.prototype.setAppDetails;
+  const setIcon = BrowserWindow.prototype.setIcon;
   BrowserWindow.prototype.setAppDetails = function (details) {
     this.orchestraAppDetails = details;
     return setDetails.call(this, details);
+  };
+  BrowserWindow.prototype.setIcon = function (icon) {
+    assert.equal(typeof icon, 'object');
+    assert.equal(icon.isEmpty(), false);
+    this.orchestraWindowIcon = icon;
+    return setIcon.call(this, icon);
   };
 }
 
@@ -51,6 +58,7 @@ app.on('browser-window-created', (_event, win) => {
         assert.equal(win.orchestraAppDetails?.appId, 'com.orchestraboard.orchestra');
         assert.equal(win.orchestraAppDetails?.relaunchDisplayName, 'Orchestra');
         assert.ok(fs.existsSync(win.orchestraAppDetails.appIconPath));
+        assert.equal(win.orchestraWindowIcon?.isEmpty(), false);
         assert.equal(win.orchestraAppDetails.relaunchCommand, `"${path.resolve(__dirname, '..', 'launcher.exe')}"`);
         if (process.env.ORCHESTRA_SMOKE_BRANDED === '1') assert.equal(path.basename(process.execPath), 'Orchestra.exe');
       }
