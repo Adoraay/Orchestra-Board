@@ -44,7 +44,7 @@ function pendingList() {
     text: item.preview ?? item.text, at: item.at,
   });
   const list = [...drafts.values()].map((d) => row({ ...d, from: d.source }, d.target, 'draft'));
-  for (const [target, delivery] of deliveries) if (!delivery.submitted) list.push(row(delivery.item, target, 'delivering'));
+  for (const [target, delivery] of deliveries) if (!delivery.submitted) list.push(row(delivery.item, target, delivery.pasted ? 'delivering' : 'queued'));
   for (const [target, queue] of queues) for (const item of queue) list.push(row(item, target, 'queued'));
   return list.sort((a, b) => a.at - b.at);
 }
@@ -133,8 +133,44 @@ function buildText(prompt, reply) {
 // Collage entre crochets (le CLI le reçoit comme un collage, pas comme une frappe), puis Entrée à part.
 // item : { key, id, text, chain, turns, maxTurns, stillValid(), onDelivered() } (les deux derniers facultatifs).
 function deliver(target, item) {
-  const delivery = { item, submitted: false, working: false, stopping: false };
+  const delivery = { item, submitted: false, pasted: false, working: false, stopping: false };
   deliveries.set(target, delivery);
+  if (deps.beforeDeliver) {
+    deps.emit(item.id, { state: 'queued', to: target, turns: item.turns, maxTurns: item.maxTurns });
+    Promise.resolve().then(() => deps.beforeDeliver(item.taskId ?? item.qid)).then(() => {
+      if (deliveries.get(target) !== delivery) return;
+      if (!deps.status(target)) { failTarget(target, t('link.targetGone')); return; }
+      if (item.stillValid && !item.stillValid()) { dropPrepared(target, delivery, t('link.cancelled')); return; }
+      if (['working', 'waiting'].includes(deps.status(target))) {
+        deliveries.delete(target);
+        deps.deferred?.(item.taskId ?? item.qid);
+        queues.set(target, [item, ...(queues.get(target) ?? [])]);
+        flush(target);
+        notify();
+        return;
+      }
+      paste(target, item, delivery);
+    }).catch((error) => { if (deliveries.get(target) === delivery) dropPrepared(target, delivery, error.message || t('link.cancelled'), 'refused'); });
+    notify();
+    return;
+  }
+  paste(target, item, delivery);
+}
+
+function dropPrepared(target, delivery, message, kind = 'cancelled') {
+  const item = delivery.item;
+  deliveries.delete(target);
+  const used = item.chain.counts.get(item.key) ?? 0;
+  if (used > 0) item.chain.counts.set(item.key, used - 1);
+  item.onFailed?.(message);
+  deps.log({ kind, taskId: item.taskId ?? item.qid, linkId: item.id, from: item.from ?? null, to: target, text: message });
+  deps.emit(item.id, kind === 'refused' ? { state: 'error', message } : { state: 'ready', turns: Math.max(0, used - 1), maxTurns: item.maxTurns });
+  flush(target);
+  notify();
+}
+
+function paste(target, item, delivery) {
+  delivery.pasted = true;
   chains.set(target, item.chain);
   item.onStaged?.();
   notify();
@@ -337,6 +373,11 @@ function discard(qid) {
 // Message en file annulé avant son collage : il ne partira pas, et son tour est rendu.
 // Un message déjà collé ou remis ne se rappelle pas.
 function cancel(qid) {
+  for (const [target, delivery] of deliveries) {
+    if (delivery.item.qid !== qid || delivery.pasted) continue;
+    dropPrepared(target, delivery, t('pending.cancelledByUser'));
+    return { ok: true };
+  }
   for (const [target, queue] of queues) {
     const index = queue.findIndex((item) => item.qid === qid);
     if (index < 0) continue;

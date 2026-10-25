@@ -13,7 +13,7 @@ const splitPath = (file) => {
 // Fenêtre « Changements » d'une case (PLAN.md §3.20) : fichiers modifiés de son dossier (ou worktree) par
 // rapport au dernier commit, et diff du fichier choisi. Lecture seule. Rendue dans body : dans la map,
 // le transform des cases décalerait une fenêtre en position fixed.
-export default function ChangesDialog({ id, dir, name, onClose }) {
+export default function ChangesDialog({ id, dir, name, taskId, onClose }) {
   const t = useT();
   const [list, setList] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -28,7 +28,7 @@ export default function ChangesDialog({ id, dir, name, onClose }) {
     const token = ++listRequest.current;
     directoryRequest.current++;
     setLoading(true);
-    const result = await window.git.changes(dir, id).catch(() => ({ error: t('changes.failed') }));
+    const result = await (taskId ? window.tasks.changes(taskId) : window.git.changes(dir, id)).catch(() => ({ error: t('changes.failed') }));
     if (token !== listRequest.current) return;
     setLoading(false);
     setList(result);
@@ -42,7 +42,7 @@ export default function ChangesDialog({ id, dir, name, onClose }) {
     const onKeyDown = (event) => event.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dir]);
+  }, [dir, taskId]);
 
   useEffect(() => {
     const id = ++request.current;
@@ -50,11 +50,11 @@ export default function ChangesDialog({ id, dir, name, onClose }) {
     setExpanding(false);
     setDiff(null);
     if (!selected) return;
-    window.git.diff(dir, selected)
+    (taskId ? window.tasks.diff(taskId, selected) : window.git.diff(dir, selected))
       .catch(() => ({ error: t('changes.failed') }))
       .then((result) => id === request.current && setDiff(result));
     return () => { request.current++; };
-  }, [dir, selected, list]);
+  }, [dir, taskId, selected, list]);
 
   useEffect(() => () => { listRequest.current++; directoryRequest.current++; }, []);
 
@@ -91,10 +91,10 @@ export default function ChangesDialog({ id, dir, name, onClose }) {
             <button className={`icon-button ${loading ? 'spinning' : ''}`} onClick={load} disabled={loading} title={t('changes.refresh')}>
               <RefreshCw size={15} />
             </button>
-            <button className="text-button" onClick={() => window.git.openInEditor(dir, selected)} disabled={!list?.root}>
+            {!taskId && <button className="text-button" onClick={() => window.git.openInEditor(dir, selected)} disabled={!list?.root}>
               <Code size={14} />
               {t('changes.openInEditor')}
-            </button>
+            </button>}
             <button className="icon-button" onClick={onClose} title={t('common.close')}>
               <X size={17} />
             </button>
@@ -102,9 +102,10 @@ export default function ChangesDialog({ id, dir, name, onClose }) {
         </header>
 
         {list?.root && <div className="changes-scope">
-          <strong>{t(list.base === 'empty' ? 'changes.scopeEmpty' : 'changes.scopeHead')}</strong>
+          <strong>{taskId ? t('tasks.diffScope', { date: new Date(list.at).toLocaleString(t.locale) }) : t(list.base === 'empty' ? 'changes.scopeEmpty' : 'changes.scopeHead')}</strong>
           <span className="hint">{list.root}</span>
-          <p className="hint">{t('changes.attribution')}</p>
+          <p className="hint">{t(taskId ? 'tasks.attribution' : 'changes.attribution')}</p>
+          {taskId && <p className="hint">{t('tasks.snapshotLimits')}</p>}
           {list.sharedCases?.length > 0 && <p className="shared-worktree" role="status">{t('changes.shared', { names: list.sharedCases.map((entry) => `${entry.name} (${entry.boardName})`).join(', ') })}</p>}
         </div>}
 

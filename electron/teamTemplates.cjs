@@ -102,7 +102,8 @@ function instantiate(id, cwd, replacements = {}, agents = settings.load().agents
     if (edge.data.mode === 'relay' && target?.type !== 'terminal') throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'terminal' && target?.data.agentId !== 'shell') throw new Error(t('team.incompatible'));
   }
-  return { name: template.name, board: { nodes, edges, strokes: template.board.strokes.map((stroke) => ({ ...stroke, id: 'stroke-' + randomUUID() })), viewport: template.board.viewport } };
+  const groups = template.board.groups.map((group) => ({ ...group, id: 'group-' + randomUUID(), members: group.members.map((id) => ids.get(id)) }));
+  return { name: template.name, board: { nodes, edges, groups, strokes: template.board.strokes.map((stroke) => ({ ...stroke, id: 'stroke-' + randomUUID() })), viewport: template.board.viewport } };
 }
 
 function register() {

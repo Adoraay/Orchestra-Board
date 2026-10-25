@@ -18,7 +18,7 @@ const SHELLS = [
   { id: 'bash', name: 'Git Bash' },
 ];
 
-export default function GeneralTab({ onStartTutorial }) {
+export default function GeneralTab({ onStartTutorial, onStartSetup }) {
   const [backupsOpen, setBackupsOpen] = useState(false);
   const { settings, updateSettings } = useSettings();
   const { rootPath, homeDir, changeRoot, resetRoot } = useWorkspace();
@@ -95,6 +95,7 @@ export default function GeneralTab({ onStartTutorial }) {
             <Compass size={15} />
             {t('general.tutorialRestart')}
           </button>
+          <button className="text-button" onClick={onStartSetup}>{t('general.setupRestart')}</button>
         </div>
         <span className="hint">{t('general.tutorialHint')}</span>
       </div>

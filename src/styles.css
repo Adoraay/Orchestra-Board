@@ -2182,6 +2182,56 @@ kbd {
 .diag-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .diag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); font-size: 12px; }
 .diag-name { font-weight: 600; }
+
+/* Tâches locales et dépendances (PLAN.md §7, 4.1). */
+.modal.tasks-modal { width: min(960px, calc(100vw - 40px)); height: min(780px, calc(100vh - 48px)); }
+.react-flow__viewport-portal { pointer-events: none; }
+.board-group { position: absolute; box-sizing: border-box; border: 1px dashed var(--accent); border-radius: var(--radius-md); pointer-events: none; }
+.board-group-header { display: flex; align-items: center; gap: 6px; position: absolute; top: 0; left: 8px; max-width: calc(100% - 16px); height: 26px; padding: 0 6px; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--surface); color: var(--accent); pointer-events: auto; cursor: grab; touch-action: none; }
+.board-group-header:active { cursor: grabbing; }
+.board-group.inactive .board-group-header { pointer-events: none; }
+.board-group-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border: none; background: none; color: inherit; font: inherit; cursor: inherit; }
+.board-group-header input { width: 160px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); font: inherit; }
+.layout-toolbar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; max-width: calc(100% - 110px); padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 4px 14px var(--shadow); }
+.layout-toolbar select, .layout-toolbar input { max-width: 160px; padding: 4px 6px; color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); font: inherit; font-size: 12px; }
+.layout-toolbar form { display: flex; align-items: center; gap: 4px; }
+.layout-toggle { display: inline-flex; align-items: center; gap: 5px; }
+.layout-choices { position: absolute; top: calc(100% + 7px); left: 0; box-sizing: border-box; width: min(370px, calc(100vw - 100px)); max-height: calc(100vh - 130px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 10px 25px var(--shadow); }
+.formation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.layout-choice { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
+.layout-choice small { color: var(--text-muted); font-size: 11px; }
+.layout-choice:hover, .layout-choice:focus-visible { border-color: var(--accent); }
+.layout-choice:focus-visible { outline: 1px solid var(--accent); }
+.formation-illustration { width: 108px; max-width: 100%; height: 65px; padding: 3px 0; }
+.formation-illustration rect { fill: color-mix(in srgb, var(--accent) 15%, var(--surface-2)); stroke: var(--accent); stroke-width: 1.2; }
+.layout-choices > p { margin: 0; font-size: 11px; line-height: 1.4; }
+.setup-folder .field-row { justify-content: space-between; }
+.setup-folder .field-row > span { overflow-wrap: anywhere; min-width: 0; }
+.setup-folder .text-button { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.tasks-modal h1 { display: flex; align-items: center; gap: 8px; }
+.tasks-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 18px; }
+.task-list { display: flex; flex-direction: column; gap: 7px; max-height: 62vh; overflow-y: auto; }
+.task-item { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.task-item.active { border-color: var(--accent); }
+.task-editor { min-width: 0; }
+.task-editor.settings-form { gap: 12px; }
+.task-editor p { margin: 0; }
+.task-editor input:not([type='checkbox']), .task-editor textarea { box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; }
+.task-editor textarea:focus-visible { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+.task-list select { max-width: 100%; }
+.task-editor .task-owner-input { width: 100%; }
+.task-editor textarea { resize: vertical; }
+.log-export-result { overflow-wrap: anywhere; }
+.task-state { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+.task-state.validated { color: var(--success); }
+.task-state.failed, .task-state.cancelled { color: var(--danger); }
+.task-state.blocked, .task-state.review { color: var(--warning); }
+.task-actions { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; bottom: -18px; padding: 10px 0; background: var(--surface-2); border-top: 1px solid var(--border); }
+.task-actions .text-button { display: inline-flex; gap: 5px; align-items: center; }
+.task-dependencies { margin: 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.task-dependencies legend { color: var(--text-muted); font-size: 12px; }
+.task-dependencies > div { display: flex; flex-direction: column; gap: 7px; max-height: 130px; overflow-y: auto; }
+@media (max-width: 760px) { .tasks-layout { grid-template-columns: 180px minmax(0, 1fr); } }
 .diag-path { min-width: 0; max-width: 100%; overflow: hidden; font-family: var(--font-mono); white-space: nowrap; text-overflow: ellipsis; color: var(--text-muted); }
 .diag-bad { color: var(--danger); }
 .diag-warn { color: var(--warning); }

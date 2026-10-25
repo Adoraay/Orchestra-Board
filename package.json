@@ -14,6 +14,7 @@
     "dist": "vite build && electron-builder --win",
     "start": "electron .",
     "build:icon": "electron scripts/make-icon.cjs",
+    "build:runtime": "node scripts/prepare-runtime.cjs",
     "build:launcher": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /target:winexe /codepage:65001 /out:launcher.exe /win32icon:build\\icon.ico /r:System.Windows.Forms.dll scripts\\launcher.cs"
   },
   "dependencies": {

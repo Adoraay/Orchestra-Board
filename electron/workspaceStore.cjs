@@ -89,6 +89,15 @@ function sanitizeLink(data = {}) {
 function sanitizeContent(input) {
   const nodes = (Array.isArray(input?.nodes) ? input.nodes : []).map(sanitizeNode).filter(Boolean);
   const ids = new Set(nodes.map((n) => n.id));
+  const grouped = new Set();
+  const groupIds = new Set();
+  const groups = (Array.isArray(input?.groups) ? input.groups : []).slice(0, 200).flatMap((group) => {
+    if (!group || !ID.test(group.id) || groupIds.has(group.id) || typeof group.name !== 'string' || !group.name.trim() || !Array.isArray(group.members)) return [];
+    groupIds.add(group.id);
+    const members = [...new Set(group.members.filter((id) => ids.has(id) && !grouped.has(id)))];
+    members.forEach((id) => grouped.add(id));
+    return members.length ? [{ id: group.id, name: group.name.trim().slice(0, MAX_NAME), members }] : [];
+  });
   const edges = (Array.isArray(input?.edges) ? input.edges : [])
     .filter((e) => e && ID.test(e.id) && ids.has(e.source) && ids.has(e.target))
     .map((e) => {
@@ -102,7 +111,7 @@ function sanitizeContent(input) {
     .filter((s) => s.points.length > 1);
   const v = input?.viewport;
   const viewport = isNum(v?.x) && isNum(v?.y) && isNum(v?.zoom) ? { x: v.x, y: v.y, zoom: clamp(v.zoom, 0.1, 4, 1) } : null;
-  return { nodes, edges, strokes, viewport };
+  return { nodes, edges, strokes, groups, viewport };
 }
 
 // Nom par défaut, dans la langue de l'interface (« Board 1 », « Tableau 1 »).

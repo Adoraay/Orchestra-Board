@@ -1,5 +1,21 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+contextBridge.exposeInMainWorld('tasks', {
+  list: () => ipcRenderer.invoke('tasks:list'),
+  create: (input) => ipcRenderer.invoke('tasks:create', input),
+  update: (id, patch) => ipcRenderer.invoke('tasks:update', id, patch),
+  start: (id) => ipcRenderer.invoke('tasks:start', id),
+  action: (id, action) => ipcRenderer.invoke('tasks:action', id, action),
+  remove: (id) => ipcRenderer.invoke('tasks:remove', id),
+  changes: (id) => ipcRenderer.invoke('tasks:changes', id),
+  diff: (id, file) => ipcRenderer.invoke('tasks:diff', id, file),
+  onChanged: (cb) => {
+    const listener = (_e, value) => cb(value);
+    ipcRenderer.on('tasks:changed', listener);
+    return () => ipcRenderer.removeListener('tasks:changed', listener);
+  },
+});
+
 // Seule porte entre l'interface (React) et le système.
 contextBridge.exposeInMainWorld('fs', {
   listDir: (dirPath) => ipcRenderer.invoke('fs:listDir', dirPath),
@@ -127,6 +143,7 @@ contextBridge.exposeInMainWorld('notes', {
 
 // Journal des échanges entre agents (PLAN.md §3.18).
 contextBridge.exposeInMainWorld('activityLog', {
+  export: (filter) => ipcRenderer.invoke('log:export', filter),
   get: () => ipcRenderer.invoke('log:get'),
   clear: () => ipcRenderer.invoke('log:clear'),
   onEntry: (cb) => {

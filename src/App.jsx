@@ -41,6 +41,10 @@ import TeamTemplates from './components/TeamTemplates.jsx';
 import BlockersInbox from './components/BlockersInbox.jsx';
 import TopBar from './components/TopBar.jsx';
 import TileSearch from './components/TileSearch.jsx';
+import TasksDialog from './components/TasksDialog.jsx';
+import LayoutToolbar from './components/LayoutToolbar.jsx';
+import GroupsLayer from './components/GroupsLayer.jsx';
+import { arrangeNodes, cleanGroups } from './lib/layout.js';
 import usePendingMessages from './hooks/usePendingMessages.js';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
@@ -100,6 +104,7 @@ function Workspace({ saved }) {
   const [teamsOpen, setTeamsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
   const [blockers, setBlockers] = useState([]);
   useEffect(() => {
     let changed = false;
@@ -153,6 +158,10 @@ function Workspace({ saved }) {
   const startTutorial = useCallback(() => {
     setSettingsOpen(false);
     setTutorial('tour');
+  }, []);
+  const startSetup = useCallback(() => {
+    setSettingsOpen(false);
+    setTutorial('setup');
   }, []);
 
   useAppShortcuts({
@@ -237,6 +246,7 @@ function Workspace({ saved }) {
         onOpenTeams={() => setTeamsOpen(true)}
         onOpenInbox={() => setInboxOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
+        onOpenTasks={() => setTasksOpen(true)}
         blockerCount={blockers.filter((entry) => !entry.resolved).length}
       />
       <div className="workspace">
@@ -260,7 +270,8 @@ function Workspace({ saved }) {
           onLaunchAgent={(agentId, cwd) => setLaunchRequest({ agentId, cwd, at: Date.now() })}
         />
       </div>
-      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} />}
+      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} onStartSetup={startSetup} />}
+      {tasksOpen && <TasksDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
       {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
       {searchOpen && (
         <TileSearch boards={boards.boards} content={content} activeId={activeId} onFocus={focusAgent} onClose={() => setSearchOpen(false)} />
@@ -291,7 +302,13 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
+  const [formationRequest, setFormationRequest] = useState(null);
   const { screenToFlowPosition, fitView, deleteElements } = useReactFlow();
+  useEffect(() => {
+    if (!formationRequest) return;
+    const frame = requestAnimationFrame(() => fitView({ nodes: formationRequest.map((id) => ({ id })), duration: 200, padding: 0.25, maxZoom: 1 }));
+    return () => cancelAnimationFrame(frame);
+  }, [formationRequest, fitView]);
 
   // Clic sur une notification Windows ou dans la barre des agents : on centre la map sur la case et on la
   // choisit (après sa mesure si le tableau vient de s'ouvrir). Demande effacée une fois servie.
@@ -315,6 +332,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   // Barre d'outils (PLAN.md §3.8)
   const [tool, setTool] = useState('select');
   const [strokes, setStrokes] = useState(initial.strokes);
+  const [groups, setGroups] = useState(initial.groups ?? []);
   const [selectedStroke, setSelectedStroke] = useState(null);
   const [linkSource, setLinkSource] = useState(null); // case cliquée en premier avec l'outil Lien
   const [branchTarget, setBranchTarget] = useState(null); // case survolée en glissant « Branche »
@@ -470,12 +488,13 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [setEdges],
   );
 
-  const history = useBoardHistory({ nodes, edges, strokes, setNodes, setEdges, setStrokes });
+  const liveGroups = useMemo(() => cleanGroups(groups, nodes), [groups, nodes]);
+  const history = useBoardHistory({ nodes, edges, strokes, groups: liveGroups, setNodes, setEdges, setStrokes, setGroups });
 
   // Le contenu remonte à chaque changement : c'est ce qui est sauvegardé et relu quand on revient sur l'onglet.
   useEffect(() => {
-    onChange({ nodes, edges, strokes, viewport });
-  }, [nodes, edges, strokes, viewport, onChange]);
+    onChange({ nodes, edges, strokes, groups: liveGroups, viewport });
+  }, [nodes, edges, strokes, liveGroups, viewport, onChange]);
 
   // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
   // only : un seul élément, depuis son menu du clic droit (la sélection n'est alors pas touchée).
@@ -774,6 +793,11 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
               />
             )}
             <Controls position="bottom-left" />
+            <GroupsLayer groups={liveGroups} nodes={nodes} enabled={tool === 'select'}
+              onSelect={(ids) => setNodes((all) => all.map((node) => ({ ...node, selected: ids.includes(node.id) })))}
+              onMove={(positions, dx, dy) => setNodes((all) => all.map((node) => positions.has(node.id) ? { ...node, position: { x: positions.get(node.id).x + dx, y: positions.get(node.id).y + dy } } : node))}
+              onRename={(id, name) => setGroups((all) => all.map((group) => group.id === id ? { ...group, name } : group))}
+              onUngroup={(id) => setGroups((all) => all.filter((group) => group.id !== id))} />
             <MiniMap position="bottom-right" pannable zoomable nodeComponent={MiniMapNode} />
             <DrawingLayer
               strokes={strokes}
@@ -787,6 +811,11 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           </ReactFlow>
         </BoardContext.Provider>
         <BoardToolbar tool={tool} onChange={setTool} />
+        {tool === 'select' && nodes.filter((node) => node.selected).length >= 2 && <LayoutToolbar
+          count={nodes.filter((node) => node.selected).length}
+          canGroup={nodes.filter((node) => node.selected).every((node) => !liveGroups.some((group) => group.members.includes(node.id))) && liveGroups.length < 200}
+          onArrange={(formation) => { setNodes(arrangeNodes(nodes, formation)); setFormationRequest(nodes.filter((node) => node.selected).map((node) => node.id)); }}
+          onGroup={(name) => setGroups((all) => [...all, { id: 'group-' + crypto.randomUUID(), name, members: nodes.filter((node) => node.selected).map((node) => node.id) }])} />}
         {BOARD_HINTS.includes(tool) && (
           <div className="board-hint" role="status">
             {tool === 'link' && linkSource ? t('board.hint.linkTarget') : t(`board.hint.${tool}`)}

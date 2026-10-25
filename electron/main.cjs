@@ -19,6 +19,8 @@ const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
 const activityLog = require('./activityLog.cjs');
 const diagnostics = require('./diagnostics.cjs');
+const tasksHandlers = require('./tasksHandlers.cjs');
+let taskService;
 const updates = require('./updates.cjs');
 const usage = require('./usage.cjs');
 const { t } = require('./i18n.cjs');
@@ -73,6 +75,19 @@ function createWindow() {
     },
   });
 
+  if (process.platform === 'win32') {
+    const launcher = path.join(__dirname, '..', 'launcher.exe');
+    const development = fs.existsSync(launcher);
+    // Identité de la fenêtre et du raccourci épinglé, y compris depuis le lanceur de développement.
+    win.setAppDetails({
+      appId: 'com.orchestraboard.orchestra',
+      appIconPath: development ? path.join(__dirname, '..', 'build', 'icon.ico') : process.execPath,
+      appIconIndex: 0,
+      relaunchCommand: `"${development ? launcher : process.execPath}"`,
+      relaunchDisplayName: 'Orchestra',
+    });
+  }
+
   // L'interface ne s'ouvre jamais ailleurs : pas de nouvelle fenêtre, pas de navigation hors de l'app
   // (un lien externe passe par shell.openExternal côté Node).
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -125,6 +140,7 @@ function sendStatus(id, info) {
 function relayStatus(id, info) {
   linkRelay.onStatus(id, info);
   delegation.onStatus(id, info);
+  if (!info) { try { taskService?.onExit(id); } catch (error) { console.error('Task save failed:', error.message); } }
 }
 
 // Fenêtre pas au premier plan : notification Windows. Un clic ramène l'app et centre la map sur la case.
@@ -154,7 +170,10 @@ activityLog.init({
   nameOf: caseName,
   boardOf: (id) => caseBoards.get(id) ?? null,
   emit: (entry) => send('log:entry', entry),
-  report: blockers.onLog,
+  report: (entry) => {
+    blockers.onLog(entry);
+    try { taskService?.onLog(entry); } catch (error) { console.error('Task save failed:', error.message); }
+  },
 });
 
 function emitLink(linkId, event) {
@@ -163,6 +182,8 @@ function emitLink(linkId, event) {
 }
 
 linkRelay.init({
+  beforeDeliver: (taskId) => taskService?.beforeDeliver(taskId),
+  deferred: (taskId) => taskService?.deferred(taskId),
   log: activityLog.add,
   nameOf: caseName,
   pending: (list) => send('relay:pending', list),
@@ -226,6 +247,10 @@ function onHook(id, payload) {
   }
   // Capturer la réponse avant que le statut « done » ne puisse libérer le prochain message.
   if (payload.hook_event_name === 'Stop') {
+    setTimeout(() => {
+      try { taskService?.finishOwner(id, linkRelay.lastReply(payload)); }
+      catch (error) { console.error('Task save failed:', error.message); }
+    }, linkRelay.READ_DELAY);
     delegation.onStop(id, payload);
     linkRelay.onStop(id, payload);
   }
@@ -443,10 +468,11 @@ workspaceStore.register((workspace) => {
   caseAgents.clear();
 });
 gitHandlers.register(workspaceStore.get);
+taskService = tasksHandlers.register(workspaceStore.get, send, linkRelay);
 teamTemplates.register();
 usage.register();
 updates.register(() => win);
-activityLog.register();
+activityLog.register(() => win);
 
 // Pas de barre de menu File / Edit / View.
 Menu.setApplicationMenu(null);

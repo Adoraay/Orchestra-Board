@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowRight, Ban, Check, CircleSlash, CornerDownLeft, FilePen, Filter, Network, OctagonX, ScrollText, Send, SquareTerminal,
+  ArrowRight, Ban, Check, CircleSlash, CornerDownLeft, Download, FilePen, Filter, Network, OctagonX, ScrollText, Send, SquareTerminal,
   StickyNote, TextQuote, Trash2, X,
 } from 'lucide-react';
 import PendingMessage from './PendingMessage.jsx';
 import PinButton from './PinButton.jsx';
+import LogExportDialog from './LogExportDialog.jsx';
 import useAutoClose from '../hooks/useAutoClose.js';
 import usePendingMessages from '../hooks/usePendingMessages.js';
 import useT from '../hooks/useT.js';
@@ -32,6 +33,7 @@ export default function LogPanel({ open, onToggle, onFocus, boards, pinned, onPi
   const [unseen, setUnseen] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filter, setFilter] = useState(NO_FILTER);
+  const [exportOpen, setExportOpen] = useState(false);
   const pending = usePendingMessages();
   useAutoClose(wrapRef, open && !pinned, onToggle);
 
@@ -102,6 +104,7 @@ export default function LogPanel({ open, onToggle, onFocus, boards, pinned, onPi
             <div className="usage-header">
               <span className="usage-title">{t('log.title')}</span>
               <span className="panel-actions">
+                <button className="icon-button" title={t('log.export.title')} disabled={!entries.length} onClick={() => setExportOpen(true)}><Download size={14} /></button>
                 <button
                   className={`icon-button ${showFilters || filtering ? 'active' : ''}`}
                   title={t('log.filters')}
@@ -210,6 +213,7 @@ export default function LogPanel({ open, onToggle, onFocus, boards, pinned, onPi
         <span className="usage-tab-label">{t('log.title')}</span>
         {(unseen || pending.some((item) => item.state === 'draft')) && !open && <span className="log-unseen" />}
       </button>
+      {exportOpen && <LogExportDialog filter={filter} count={visible.length} onClose={() => setExportOpen(false)} />}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// Lanceur d'Orchestra sans fenêtre de terminal : reconstruit l'interface (vite build) puis ouvre Electron.
+// Lanceur d'Orchestra sans terminal : interface reconstruite puis runtime marqué Orchestra.
 // launcher.exe doit rester à la racine du projet. Recompiler : npm run build:launcher
 // Pour développer avec rechargement à chaud, utiliser plutôt « npm run dev ».
 using System;
@@ -41,7 +41,24 @@ static class Launcher
             }
         }
 
-        Process.Start(new ProcessStartInfo(electron, ".") { WorkingDirectory = root, UseShellExecute = false });
+        var prepare = new ProcessStartInfo("cmd.exe", "/c npm run build:runtime >> launcher.log 2>&1")
+        {
+            WorkingDirectory = root,
+            CreateNoWindow = true,
+            UseShellExecute = false,
+        };
+        using (var process = Process.Start(prepare))
+        {
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+            {
+                MessageBox.Show("La préparation d'Orchestra a échoué.\nDétails dans launcher.log", Title,
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return process.ExitCode;
+            }
+        }
+        string orchestra = Path.Combine(root, @"node_modules\electron\dist\Orchestra.exe");
+        Process.Start(new ProcessStartInfo(orchestra, ".") { WorkingDirectory = root, UseShellExecute = false });
         return 0;
     }
 }
