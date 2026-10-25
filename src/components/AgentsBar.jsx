@@ -6,6 +6,7 @@ import StatusDot from './StatusDot.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useAutoClose from '../hooks/useAutoClose.js';
 import useT from '../hooks/useT.js';
+import PinButton from './PinButton.jsx';
 
 const MAX_NAME = 40;
 const DOUBLE_CLICK_DELAY = 400; // ms
@@ -17,11 +18,11 @@ let lastClick = { id: null, at: 0 };
 // Barre repliable en bas de la map : les agents lancés de tous les tableaux, groupés par tableau.
 // Clic sur un agent = ouvrir son tableau, centrer la map sur sa case et marquer sa fin de tâche comme vue.
 // Rendue dans la map du tableau ouvert (ReactFlowProvider), pour pouvoir renommer ses cases.
-export default function AgentsBar({ boards, content, activeId, running, open, onToggle, onFocus }) {
+export default function AgentsBar({ boards, content, activeId, running, open, onToggle, onFocus, pinned, onPin }) {
   const { agentById } = useSettings();
   const t = useT();
   const wrapRef = useRef(null);
-  useAutoClose(wrapRef, open, onToggle);
+  useAutoClose(wrapRef, open && !pinned, onToggle);
 
   // Double-clic = renommer la case, comme sur son titre (vide = nom de l'agent).
   const [editingId, setEditingId] = useState(null);
@@ -65,6 +66,7 @@ export default function AgentsBar({ boards, content, activeId, running, open, on
         <div className="agents-bar-clip">
           {/* Une seule ligne qui défile : la molette la fait glisser de côté. */}
           <div className="agents-bar" onWheel={(e) => (e.currentTarget.scrollLeft += e.deltaY)}>
+            <span className="agents-bar-pin"><PinButton pinned={pinned} onPin={onPin} /></span>
             {groups.length === 0 && <span className="agents-bar-empty">{t('agentsBar.empty')}</span>}
             {groups.map(({ board, agents }) => (
               <div key={board.id} className="agents-bar-group">

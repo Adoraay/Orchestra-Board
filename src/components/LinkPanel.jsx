@@ -1,7 +1,9 @@
 import { ArrowLeftRight, ArrowRight, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK, LINK_MODES, MAX_TURNS } from '../lib/links.js';
+import usePendingMessages from '../hooks/usePendingMessages.js';
 import useT from '../hooks/useT.js';
+import PendingMessage from './PendingMessage.jsx';
 
 function statusText(event, nameOf, t) {
   const turns = event.maxTurns ? t('link.status.turns', { turns: event.turns, max: event.maxTurns }) : '';
@@ -11,6 +13,7 @@ function statusText(event, nameOf, t) {
     case 'sent': return t('link.status.sent', { to, turns });
     case 'queued': return t('link.status.queued', { to, turns });
     case 'limit': return t('link.status.limit', { max: event.maxTurns });
+    case 'review': return t('link.status.review', { to });
     default: return event.message;
   }
 }
@@ -19,6 +22,7 @@ function statusText(event, nameOf, t) {
 export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDelete, onClose }) {
   const { agentById } = useSettings();
   const t = useT();
+  const pending = usePendingMessages().filter((item) => item.linkId === edge.id);
   const link = { ...DEFAULT_LINK, ...edge.data };
   const caseOf = (id) => {
     const node = nodes.find((n) => n.id === id);
@@ -120,6 +124,10 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
           <p className="hint">
             <code>{t('link.responseToken')}</code> {t('link.promptHint')}
           </p>
+          <label className="checkbox" title={t('link.reviewHint')}>
+            <input type="checkbox" checked={link.review} onChange={(e) => onChange({ review: e.target.checked })} />
+            {t('link.review')}
+          </label>
         </>
       )}
 
@@ -145,6 +153,12 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
         </p>
       )}
       {event && <p className={`link-status ${event.state}`}>{statusText(event, nameOf, t)}</p>}
+      {pending.length > 0 && (
+        <div className="link-pending thin-scrollbar">
+          <span className="field-label">{t('pending.title', { n: pending.length })}</span>
+          {pending.map((item) => <PendingMessage key={item.qid} item={item} />)}
+        </div>
+      )}
 
       <button className="text-button danger link-delete" onClick={onDelete}>
         <Trash2 size={14} />

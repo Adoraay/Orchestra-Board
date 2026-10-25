@@ -17,6 +17,8 @@ export const SHORTCUT_GROUPS = [
       { keys: [MOD_KEY, 'Shift', 'A'], label: 'shortcut.toggleAgents' },
       { keys: [MOD_KEY, 'Shift', 'U'], label: 'shortcut.toggleUsage' },
       { keys: [MOD_KEY, 'Shift', 'J'], label: 'shortcut.toggleLog' },
+      { keys: [MOD_KEY, 'Shift', 'F'], label: 'shortcut.search' },
+      { keys: [MOD_KEY, 'Shift', 'M'], label: 'shortcut.maximize' },
     ],
   },
   {

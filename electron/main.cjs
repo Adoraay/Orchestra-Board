@@ -18,13 +18,22 @@ const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
 const activityLog = require('./activityLog.cjs');
+const diagnostics = require('./diagnostics.cjs');
+const tasksHandlers = require('./tasksHandlers.cjs');
+let taskService;
 const updates = require('./updates.cjs');
 const usage = require('./usage.cjs');
 const shellEnv = require('./shellEnv.cjs');
 const { t } = require('./i18n.cjs');
+const { canResume, sanitizeSession } = require('./sessionState.cjs');
+const teamTemplates = require('./teamTemplates.cjs');
+const { createBlockers } = require('./blockers.cjs');
+const { createRoleState } = require('./roleState.cjs');
 
 let win;
 let quitConfirmed = false;
+const blockers = createBlockers((entries) => send('blockers:change', entries));
+const roleState = createRoleState({ emit: (id, state) => send('roles:change', id, state), running: (id) => Boolean(agentStatus.info(id)) });
 
 // Couleurs de la zone des boutons Windows (réduire, agrandir, fermer) = fond et texte de la barre du haut.
 const TITLE_BAR_HEIGHT = 40;
@@ -71,6 +80,19 @@ function createWindow() {
     },
   });
 
+  if (process.platform === 'win32') {
+    const launcher = path.join(__dirname, '..', 'launcher.exe');
+    const development = fs.existsSync(launcher);
+    // Identité de la fenêtre et du raccourci épinglé, y compris depuis le lanceur de développement.
+    win.setAppDetails({
+      appId: 'com.orchestraboard.orchestra',
+      appIconPath: development ? path.join(__dirname, '..', 'build', 'icon.ico') : process.execPath,
+      appIconIndex: 0,
+      relaunchCommand: `"${development ? launcher : process.execPath}"`,
+      relaunchDisplayName: 'Orchestra',
+    });
+  }
+
   // L'interface ne s'ouvre jamais ailleurs : pas de nouvelle fenêtre, pas de navigation hors de l'app
   // (un lien externe passe par shell.openExternal côté Node).
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -113,6 +135,7 @@ function send(channel, ...args) {
 // Statut envoyé à la case (pty:status:<id>) et à l'app entière (agent:status), qui gère le son et les
 // onglets, y compris pour les cases des tableaux fermés.
 function sendStatus(id, info) {
+  blockers.onStatus(id, info);
   send(`pty:status:${id}`, info);
   send('agent:status', id, info);
   relayStatus(id, info);
@@ -122,6 +145,7 @@ function sendStatus(id, info) {
 function relayStatus(id, info) {
   linkRelay.onStatus(id, info);
   delegation.onStatus(id, info);
+  if (!info) { try { taskService?.onExit(id); } catch (error) { console.error('Task save failed:', error.message); } }
 }
 
 // Fenêtre pas au premier plan : notification Windows. Un clic ramène l'app et centre la map sur la case.
@@ -144,24 +168,41 @@ function notifyFinished(id, info) {
 }
 
 agentStatus.init(sendStatus, notifyFinished);
+// Tableau de chaque case (filtres du journal), mis à jour à chaque sauvegarde de workspace.json.
+let caseBoards = new Map();
+const caseName = (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id;
 activityLog.init({
-  nameOf: (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id,
+  nameOf: caseName,
+  boardOf: (id) => caseBoards.get(id) ?? null,
   emit: (entry) => send('log:entry', entry),
+  report: (entry) => {
+    blockers.onLog(entry);
+    try { taskService?.onLog(entry); } catch (error) { console.error('Task save failed:', error.message); }
+  },
 });
 
+function emitLink(linkId, event) {
+  blockers.onLink(linkId, event);
+  send('link:event', linkId, event);
+}
+
 linkRelay.init({
+  beforeDeliver: (taskId) => taskService?.beforeDeliver(taskId),
+  deferred: (taskId) => taskService?.deferred(taskId),
   log: activityLog.add,
+  nameOf: caseName,
+  pending: (list) => send('relay:pending', list),
   write: ptyManager.write,
   status: (id) => agentStatus.info(id)?.status ?? null,
   arm: agentStatus.arm,
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 delegation.init({
   log: activityLog.add,
   info: agentStatus.info,
   agent: (agentId) => settingsStore.findAgent(settingsStore.load(), agentId) ?? { name: t('agent.missing'), hooks: null },
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 terminalLink.init({
@@ -170,13 +211,13 @@ terminalLink.init({
   buffer: ptyManager.buffer,
   info: agentStatus.info,
   arm: agentStatus.arm,
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 noteLink.init({
   log: activityLog.add,
   write: (id, text) => send('note:write', id, text),
-  emit: (linkId, event) => send('link:event', linkId, event),
+  emit: emitLink,
 });
 
 // Outils du serveur MCP d'une case : lien Note, lien Terminal ou Délégation.
@@ -187,21 +228,15 @@ function callTool(caller, name, args, signal) {
   return terminalLink.callTool(caller, name, args, signal);
 }
 
-// Rôle de chaque case (PLAN.md §3.19), mis à jour à chaque sauvegarde de workspace.json.
-let roles = new Map();
-
-// Conversation de chaque case où l'utilisateur a déjà écrit, pendant ce lancement de l'app : une relance
-// (après un rôle) reprend celle-ci, pas la dernière du dossier (--continue), et rien si elle est encore vide.
-const sessions = new Map(); // case -> session_id
-const launched = new Set(); // cases déjà lancées depuis le démarrage de l'app
-const SESSION_ID = /^[0-9a-f-]{8,64}$/i;
+const caseAgents = new Map(); // agent lancé dans chaque case ; seuls ses hooks peuvent définir la session
 
 function trackSession(id, payload) {
-  const session = SESSION_ID.test(payload.session_id ?? '') ? payload.session_id : null;
-  if (payload.hook_event_name === 'UserPromptSubmit' && session) sessions.set(id, session);
-  if (payload.hook_event_name !== 'SessionStart') return;
-  if (payload.source === 'resume' && session) sessions.set(id, session);
-  else if (payload.source === 'startup' || payload.source === 'clear') sessions.delete(id);
+  const agentId = caseAgents.get(id);
+  const info = agentStatus.info(id);
+  if (!agentId || !info) return;
+  const session = sanitizeSession({ id: payload.session_id, transcriptPath: payload.transcript_path, cwd: info.cwd, agentId });
+  if (session) workspaceStore.setSession(id, session);
+  else if (payload.hook_event_name === 'SessionStart' && ['startup', 'clear'].includes(payload.source)) workspaceStore.setSession(id, null);
 }
 
 // Événements des hooks de Claude Code et Codex : statut de la case, et transmission par ses liens quand il a
@@ -209,30 +244,41 @@ function trackSession(id, payload) {
 // Début de session : la réponse au hook dit à l'agent qu'il tourne dans Orchestra et lui donne son rôle
 // (même format pour Claude Code et Codex). Ce contexte n'est pas affiché dans le terminal.
 function onHook(id, payload) {
+  diagnostics.onHook(id, payload.hook_event_name);
+  try { trackSession(id, payload); }
+  catch (error) {
+    console.error('Session save failed:', error.message);
+    send('workspace:saveError');
+  }
+  // Capturer la réponse avant que le statut « done » ne puisse libérer le prochain message.
+  if (payload.hook_event_name === 'Stop') {
+    setTimeout(() => {
+      try { taskService?.finishOwner(id, linkRelay.lastReply(payload)); }
+      catch (error) { console.error('Task save failed:', error.message); }
+    }, linkRelay.READ_DELAY);
+    delegation.onStop(id, payload);
+    linkRelay.onStop(id, payload);
+  }
   agentStatus.onHook(id, payload);
-  trackSession(id, payload);
   if (payload.hook_event_name === 'SessionStart') {
     const parts = [t('orchestra.context')];
-    if (roles.has(id)) parts.push(t('role.context', { role: roles.get(id) }));
+    if (!agentStatus.info(id)) return {};
+    const role = roleState.start(id);
+    if (role) parts.push(t('role.context', { role }));
     return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: parts.join('\n\n') } };
   }
-  if (payload.hook_event_name !== 'Stop') return;
-  linkRelay.onStop(id, payload);
-  delegation.onStop(id, payload);
 }
 
 // Nom d'une case choisi dans l'interface (double-clic sur son titre).
 const cleanName = (name) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : null);
 
-// Reprise : la conversation de la case si on la connaît, sinon la dernière du dossier, mais seulement
-// au premier lancement de la case (redémarrage de l'app) : une case relancée sans conversation repart à neuf.
+// Les agents à hooks reprennent exclusivement la session persistée de cette case.
 function resumeArgs(id, agent, resume) {
   if (!resume) return '';
-  const session = sessions.get(id);
-  if (session && agent.hooks === 'claude') return ` --resume ${session}`;
-  if (session && agent.hooks === 'codex') return ` resume ${session}`;
-  if (launched.has(id) || !agent.resumeArgs) return '';
-  return ` ${agent.resumeArgs}`;
+  const session = workspaceStore.getSession(id);
+  if (session && agent.hooks === 'claude') return ` --resume ${session.id}`;
+  if (session && agent.hooks === 'codex') return ` resume ${session.id}`;
+  return agent.hooks || !agent.resumeArgs ? '' : ` ${agent.resumeArgs}`;
 }
 
 // Commande à taper dans le shell : celle de l'agent, + profil Orchestra pour Codex, + reprise de conversation, + modèle choisi,
@@ -262,8 +308,16 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
   if (typeof id !== 'string' || !agent) return null;
 
   const existing = agentStatus.info(id);
+  if (!existing && resume && agent.hooks && !canResume(workspaceStore.getSession(id), agentId, cwd)) {
+    return { error: t('session.unavailable') };
+  }
+  if (!existing) {
+    if (!resume) workspaceStore.setSession(id, null);
+    caseAgents.set(id, agentId);
+  }
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) {
+    diagnostics.onLaunch(id);
     agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
     send('agent:status', id, agentStatus.info(id)); // la barre des agents actifs le voit tout de suite
   }
@@ -284,13 +338,18 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
     },
     (id, code) => {
       agentStatus.unregister(id);
+      caseAgents.delete(id);
+      diagnostics.forget(id);
+      roleState.clear(id);
+      blockers.onStatus(id, null);
+      blockers.onExit(id, code);
       claudeHooks.removeSettings(id);
       send('agent:status', id, null);
       send(`pty:exit:${id}`, code);
       relayStatus(id, null);
     },
   );
-  launched.add(id);
+  blockers.onStatus(id, agentStatus.info(id));
   return { ...result, status: agentStatus.info(id) };
 });
 ipcMain.on('pty:write', (_e, id, data) => {
@@ -313,10 +372,47 @@ ipcMain.on('pty:rename', (_e, id, name) => {
 ipcMain.on('pty:kill', (_e, id) => {
   ptyManager.kill(id);
   agentStatus.unregister(id);
+  caseAgents.delete(id);
+  diagnostics.forget(id);
+  roleState.clear(id);
+  blockers.onStatus(id, null);
   claudeHooks.removeSettings(id);
   send('agent:status', id, null);
   relayStatus(id, null);
 });
+
+ipcMain.handle('roles:get', (_e, id) => roleState.get(id));
+ipcMain.handle('roles:set', (_e, id, role) => {
+  if (typeof role !== 'string' || role.length > 2000 || typeof id !== 'string' ||
+      !(caseAgents.has(id) || workspaceStore.get().boards.some((board) => board.nodes.some((node) => node.id === id && node.type === 'terminal')))) {
+    return { error: t('role.saveFailed') };
+  }
+  try {
+    workspaceStore.setRole(id, role);
+    roleState.setSaved(id, role);
+    return { value: roleState.get(id) };
+  } catch { return { error: t('role.saveFailed') }; }
+});
+// Messages à valider ou en file (PLAN.md §7, 3.1) : l'interface n'envoie qu'un identifiant et le texte modifié.
+const QID = /^[0-9a-f-]{36}$/;
+ipcMain.handle('relay:pending', () => linkRelay.pendingList());
+ipcMain.handle('relay:approve', (_e, qid, text) => (QID.test(qid) ? linkRelay.approve(qid, text) : { error: t('pending.notFound') }));
+ipcMain.handle('relay:discard', (_e, qid) => (QID.test(qid) ? linkRelay.discard(qid) : { error: t('pending.notFound') }));
+ipcMain.handle('relay:cancel', (_e, qid) => (QID.test(qid) ? linkRelay.cancel(qid) : { error: t('pending.notFound') }));
+// Diagnostic (Paramètres › Diagnostic) : commandes et versions, puis cases lancées et leur dernier hook.
+ipcMain.handle('diag:agents', () => diagnostics.checkAgents(settingsStore.load().agents, agentsHandlers.testCommand));
+ipcMain.handle('diag:tiles', () => {
+  const { agents } = settingsStore.load();
+  return diagnostics.tileStates(
+    workspaceStore.get().boards.flatMap((board) =>
+      board.nodes
+        .filter((n) => n.type === 'terminal' && agentStatus.info(n.id))
+        .map((n) => ({ id: n.id, agentId: n.data.agentId, name: agentStatus.info(n.id).name, hooks: agents.find((a) => a.id === n.data.agentId)?.hooks ?? null, boardName: board.name })),
+    ),
+  );
+});
+ipcMain.handle('blockers:get', () => blockers.snapshot());
+ipcMain.handle('blockers:clearResolved', () => { blockers.clearResolved(); return blockers.snapshot(); });
 
 // Réponse à app:confirmQuit : « Quitter quand même ».
 // Section « À propos » des paramètres : version de l'app et liens du projet. L'interface envoie un nom de
@@ -351,6 +447,7 @@ fsHandlers.register(() => win, {
 settingsStore.register();
 agentsHandlers.register(() => win);
 workspaceStore.register((workspace) => {
+  caseBoards = new Map(workspace.boards.flatMap((b) => b.nodes.map((n) => [n.id, b.id])));
   usedFolders = workspace.boards.flatMap((b) =>
     b.nodes
       .filter((n) => n.type === 'terminal')
@@ -358,14 +455,29 @@ workspaceStore.register((workspace) => {
   );
   linkRelay.setLinks(workspace);
   delegation.setWorkspace(workspace);
-  roles = new Map(workspace.boards.flatMap((b) => b.nodes.filter((n) => n.data.role).map((n) => [n.id, n.data.role])));
+  blockers.setWorkspace(workspace);
+  roleState.setWorkspace(workspace);
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
   noteLink.setWorkspace(workspace);
+}, () => {
+  for (const id of ptyManager.ids()) {
+    ptyManager.kill(id);
+    agentStatus.unregister(id);
+    roleState.clear(id);
+    blockers.onStatus(id, null);
+    claudeHooks.removeSettings(id);
+    relayStatus(id, null);
+    send('agent:status', id, null);
+  }
+  for (const id of caseAgents.keys()) diagnostics.forget(id);
+  caseAgents.clear();
 });
-gitHandlers.register();
+gitHandlers.register(workspaceStore.get);
+taskService = tasksHandlers.register(workspaceStore.get, send, linkRelay);
+teamTemplates.register();
 usage.register();
 updates.register(() => win);
-activityLog.register();
+activityLog.register(() => win);
 
 // Pas de barre de menu File / Edit / View. macOS garde toujours un menu : le strict nécessaire, dont Édition
 // pour Cmd+C / Cmd+V / Cmd+A dans les champs et les terminaux, et Cmd+Q / Cmd+H.
@@ -394,9 +506,8 @@ app.whenReady().then(async () => {
   createWindow();
 });
 
-// Pas de processus orphelins : on tue tous les agents en quittant. will-quit et pas before-quit : Cmd+Q sur
-// Mac passe par before-quit avant la fenêtre « Quitter Orchestra ? », qui peut encore tout annuler.
-app.on('will-quit', () => {
+// Mac : attendre la confirmation de Cmd+Q ; Windows : arrêter les PTY avant la fin de l'app.
+app.on(isMac ? 'will-quit' : 'before-quit', () => {
   ptyManager.killAll();
   usage.stop();
 });

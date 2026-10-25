@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Download for Windows and macOS" src="https://img.shields.io/badge/Download-Windows%20%26%20macOS-d97757?style=for-the-badge&logoColor=white"></a>
-  <img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848f?style=for-the-badge&logo=electron&logoColor=white">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-45-47848f?style=for-the-badge&logo=electron&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-3c3a36?style=for-the-badge"></a>
 </p>
 
@@ -46,7 +46,7 @@ Everything stays on your machine. Orchestra only starts the CLIs you already use
 | 🔗 **Links between agents** | **Relay** (automatic hand-off), **Delegation** (an agent talks to other agents through tools) and **Terminal** (an agent runs commands in a visible terminal). Turn limits prevent endless loops. |
 | 🎭 **Roles** | Give each agent a lasting role (“You are the reviewer, you never edit files…”). |
 | 📜 **Exchange log** | See every message, reply, command and refusal that went through a link. |
-| 🔍 **Changes** | Review the files an agent changed, with a colored diff, and open them in VS Code. |
+| 🔍 **Changes** | Review worktree changes with a colored diff, open them in VS Code, or compare with a task-start reference. |
 | 🌿 **Git branches** | Drop the *Branch* square on a tile to move its agent to another branch, in its own `git worktree`. |
 | 🟢 **Status & notifications** | Working / waiting for permission / done, with a green glow, a sound and a system notification when an agent finishes. |
 | 🎨 **Themes** | Standard, Light, ChatGPT, Gemini, VS Code, GitHub, Dracula and Nord, plus your own accent color. English and French. |
@@ -88,10 +88,15 @@ Pick the **Link tool** (`L`) in the toolbar, click the first tile, then the seco
 | Link | What happens | Good for |
 |---|---|---|
 | **Relay** | When A finishes, its last reply is pasted into B with your instruction (`{response}` is replaced by the reply). | Dev → reviewer, writer → translator |
-| **Delegation** | A sees B in its tools and decides itself when to write to it; B's reply comes back to A. | A lead that splits work between several agents |
+| **Delegation** | A sends a task with a unique ID. Requests to the same agent are queued in order; each reply goes back to its caller. | A lead that splits work between several agents |
 | **Terminal** | A runs commands in a Terminal tile you can watch, after asking your permission. | Dev servers, tests, builds |
+| **Note** | A reads and updates a linked sticky note through `list_notes`, `read_note` and `write_note`. | Shared plans, checklists and findings |
 
-Links can be reversed or made two-way, and every link has a **turn limit** (3 by default).
+Relay and Delegation links can be reversed or made two-way, and have a **turn limit** (3 by default). Terminal and Note links point from an agent to their target.
+
+Tick **Review before sending** on a Relay link to stay in control: when the source finishes, the message is prepared but not sent. Edit it, send it or discard it from the link panel or the Log. Queued messages (Relay or Delegation, waiting for a busy target) can be cancelled there too until they are pasted; a cancelled delegation tells its caller instead of leaving it waiting. A message already delivered cannot be recalled.
+
+When the link label is visible, it expands to show a short preview and **Send / Discard** buttons. With several drafts, it presents the oldest first and shows how many remain. Click its heading to open the link panel and edit the full message. If the tiles are too close to display a label, use the link panel or Log.
 
 <p align="center"><img src="docs/images/link-panel.png" alt="The link panel: Relay or Delegation, instruction, turn limit" width="100%"></p>
 
@@ -103,19 +108,69 @@ Hover the small tab peeking above a Claude Code or Codex tile and click the **ma
 
 <p align="center"><img src="docs/images/role.png" alt="Editing the role of an agent" width="520"></p>
 
+### Share a note
+
+Drop a sticky note on the map and link an agent to it. This creates a Note link. Ask the agent to read or update the note; you see the changes on the map and can edit it yourself. Lines such as `- [ ] To do`, `- [~] In progress` and `- [x] Done` show status icons. A write replaces the entire note, so agents should read it before updating it.
+
+### Resume and recover your boards
+
+Claude Code and Codex resume the exact session saved for each tile, including when two tiles use the same folder. If the saved session or its transcript is missing, Orchestra asks you to start a new conversation instead of resuming another tile's discussion. Older workspaces without saved session IDs also require a new conversation for these agents. Other CLIs keep their own resume behavior.
+
+**Settings › General › Board backups** lists up to 10 previous workspaces, kept locally at most once per minute while saving. Restoring closes all terminals, replaces every board and reloads the interface; the current readable workspace is backed up first. If `workspace.json` is unreadable at startup, choose a backup or a new board: the unreadable file is preserved separately before replacement. Backups include notes, paths, roles and session references; the agents keep their conversation files separately. No exchange log is included.
+
 ### Follow the exchanges
 
 Open the **Log** tab on the right edge of the map (`Ctrl+Shift+J`). It lists everything that went through a link: relayed messages, delegated tasks and their replies, terminal commands and their output, and refusals in red (turn limit reached, busy terminal…). Click a name to jump to its tile.
+
+Each message shows the state of its task: *to review*, *waiting*, *sent* (once actually delivered), *reply received*, *cancelled* or *refused*. The **Filters** button narrows the list by board, tile and type; click a task ID (`#1a2b3c4d`) to follow that task only. Filters never delete events. Pin the Log (or Usage, or the active agents bar) to keep it open while you work; the pin is remembered.
+
+**Export log** saves the current filters to a JSON file with timestamps, task IDs and exchange states. The confirmation reminds you that messages, paths and results may be private. The log stays in memory until you choose to export; exporting does not enable automatic retention.
 
 <p align="center"><img src="docs/images/log.png" alt="The exchange log next to the board" width="100%"></p>
 
 ### Review the changes
 
-When a tile works in a Git repository, a second tab above it opens the **Changes** window: every file changed since the last commit, with a colored diff and an *Open in VS Code* button. Orchestra only reads Git here.
+When a tile works in a Git repository, a second tab above it opens the **Changes** window: every file changed in its worktree since the last commit, with a colored diff and an *Open in VS Code* button. This does not identify which agent made a change when tiles share a folder. Orchestra only reads Git here.
 
 <p align="center"><img src="docs/images/changes.png" alt="The changes window with a diff" width="100%"></p>
 
+### Find, enlarge and check
+
+- **Find a tile** on every board with `Ctrl+Shift+F` (or the magnifier in the top bar): Enter opens its board and centers it.
+- **Enlarge a terminal** with the icon in its title bar or `Ctrl+Shift+M`: same process and conversation, shown over the whole map; the tile keeps its size and place.
+- **Settings › Diagnostics** shows, without contacting any model, where each agent's command was found, its version when it can be read safely, whether it has Orchestra hooks, and the last hook each running tile sent. A missing or old hook is not necessarily a failure.
+
 ## Recipes
+
+### Track tasks and dependencies
+
+Open **Tasks** (clipboard icon in the top bar). Relay and Delegation exchanges reuse their task IDs here. You can also create a manual task, choose a tile as owner and select required tasks. A reply is shown as **Reply received · review needed**; only **Validate result** satisfies a dependency. Cycles are refused. This is a local tracker: **Start tracking** captures a reference before you send the instruction yourself, and never sends a prompt. Exchange tasks start automatically before their message is pasted. Editing the tracker does not schedule or interrupt CLI work.
+
+Tasks and results are saved separately in `tasks.json` (500 records maximum). Unfinished records become *interrupted* on restart; messages in the old in-memory relay queue are not resent. Deleting a finished record also removes its reference, provided no other task depends on it.
+
+**Changes since task start** compares the current worktree with the captured contents, including files that were already dirty or untracked when the task began. No commit or stash is created. References can contain private project files and are kept locally: up to 20 references, 500 files per reference, 200 KB per file and 8 MB of captured content. Ignored files, symlinks and oversized files are excluded; binary changes are identified without a text preview. The UI reports partial comparisons. A missing or expired reference is never replaced by a comparison with HEAD. Changes in a shared worktree are not attributed to one agent. Capture is bounded but not atomic against concurrent edits.
+
+### Arrange your board
+
+Select several tiles with a right-button rectangle. **Formation** opens illustrated templates: adaptive grid, 3 per row, 4 per row, 2 columns, horizontal line and centered column. Dimensions adapt to the selection: 16 tiles form a 4 × 4 grid, 64 form 8 × 8. Incomplete rows stay centered; tile sizes are respected and enough room is kept for link labels. The selection center stays fixed and the view fits the formation. Templates apply when clicked; tiles remain freely movable afterward. You can also create a named group from ungrouped tiles. Drag its name to move its members, click to select them for a formation, double-click to rename, or ungroup without closing tiles. Groups are saved with the board and included in team templates. Ctrl+Z / Ctrl+Y restore positions and groups without reviving closed terminals or changing links and permissions.
+
+### Set up and take the tour
+
+First launch keeps the original setup: language, theme, terminal font, grid, glow and dock agents, followed by the visual guided tour. Choosing a project folder is optional on the welcome page; the agent picker indicates detected commands. Setup never starts agents or replaces boards. **Skip** leads straight to the tour. In **Settings → General**, **Replay the tour** opens the visual tour directly; **Replay initial setup** separately reopens the setup pages. Existing installations are not shown setup again automatically.
+
+### Reuse a team
+
+Open **Team templates** (the team icon in the top bar). Start with *Developer + reviewer*, *Lead + two workers* or *Developer + terminal*, or save the current board as your own template. Choose the project folder and replace any unavailable agent with an installed compatible one, then create a new board. Roles and links are registered before its agents start. Each instance gets fresh tile IDs and sessions; old folders, branches and pending messages are not copied. Saved templates live in `team-templates.json` in the app data folder and are separate from workspace backups.
+
+### Find blockers and check context
+
+The **Blockers inbox** (inbox icon in the top bar) groups waiting permissions or answers, refused exchanges, turn limits and stopped terminal processes across boards. Click a tile name to jump to it. Events resolve when work resumes, an exchange succeeds or a terminal restarts; clearing resolved events keeps active requests. This inbox stays in memory for the current app session and never answers permissions for you.
+
+**Changes** now shows its comparison scope and the worktree root. Other tiles configured in the same worktree are listed, including those using a subfolder or another board; separate Git worktrees are kept distinct. These are shared changes, without attribution to an individual agent.
+
+Untracked folders are grouped and their files load on request. The list shows up to 500 entries; file previews are bounded, with a notice when truncated. Use **Open in VS Code** to inspect the rest.
+
+The **Role** editor shows the text last injected into the current session alongside the saved role. Pending edits apply at the next `SessionStart`, including a supported `/clear` or restart. A role is an instruction, not a restriction on the agent's tools.
 
 **A lead and two workers** — Put a Claude Code *Lead* above a Codex and a Claude Code, linked with **Delegation**. Ask the lead: *“Ask each of your agents for a short poem and tell me which one is best.”* It writes to both, waits for their replies and answers you.
 
@@ -132,6 +187,8 @@ When a tile works in a Git repository, a second tab above it opens the **Changes
 | `Ctrl+Shift+T` | New board |
 | `Ctrl+,` | Settings |
 | `Ctrl+Shift+E` / `A` / `U` / `J` | Files / active agents / usage / log |
+| `Ctrl+Shift+F` | Find a tile on every board |
+| `Ctrl+Shift+M` | Enlarge or restore the selected terminal |
 
 | On the map | |
 |---|---|
@@ -149,7 +206,7 @@ In a terminal, `Ctrl+C` copies when text is selected (otherwise it interrupts) a
 
 ## Privacy and safety
 
-- **Local only.** Orchestra talks to agents through a small server bound to `127.0.0.1`, protected by a secret token that changes at every launch. Nothing is sent anywhere by Orchestra itself. Its only network request: at startup, it asks GitHub for the latest release to tell you about updates (can be turned off in Settings › General).
+- **Local orchestration.** Orchestra talks to agents through a small server bound to `127.0.0.1`, protected by a secret token that changes at every launch. Agent exchanges are handled locally. Update checks contact GitHub (startup checks can be disabled in Settings › General); downloading an update also uses the network. Git fetches and the agent CLIs use their own network connections.
 - **Your permissions stay yours.** Orchestra never approves a permission request for an agent. Its own tools are pre-approved, except `run_in_terminal`, which always asks.
 - **Git, read-mostly.** Orchestra only runs `git fetch` and `git worktree add` (when you pick a branch) and read-only commands. It never commits or pushes.
 - **What it writes outside its folder:**
@@ -168,7 +225,7 @@ That's Orchestra's status hooks (working / done). Choose **Trust all and continu
 <details>
 <summary><b>Which agents can use links?</b></summary>
 
-Claude Code and Codex can relay, delegate and drive a terminal. Any other CLI (Aider, Gemini CLI, your own…) works in a tile and can *receive* relayed messages, but cannot send them. Gemini CLI is no longer maintained by Google and has no orchestration.
+Claude Code and Codex can relay, delegate, drive a terminal and use linked notes. Other CLIs (Aider, Gemini CLI, your own…) work in a tile and can *receive* relayed messages; their integration here does not include Orchestra hooks or orchestration tools.
 </details>
 
 <details>
@@ -185,17 +242,18 @@ Orchestra runs on Windows and macOS (Apple Silicon and Intel), with an installer
 
 ## Build from source
 
-Requires Node.js 20+.
+Use Node.js 22.12+ to develop this version. Install the locked dependencies with `npm ci`.
 
 ```bash
 npm install      # node-pty ships prebuilt binaries: no Visual Studio or Python needed
 npm run dev      # Vite + Electron with hot reload
+npm test         # session, recovery, queue, review, undo and diagnostics tests
 npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 ```
 
 The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds the `.dmg` files (on a Mac), and every push to that branch builds them on GitHub Actions.
 
-`launcher.exe` at the root rebuilds the interface and opens the app without a terminal window (`npm run build:launcher` to recompile it).
+`launcher.exe` at the root rebuilds the interface and prepares a local `Orchestra.exe` with Orchestra's Windows icon and product metadata (`npm run build:launcher` recompiles the launcher; `npm run build:runtime` prepares the runtime). The original Electron executable stays unchanged. The branded copy adds about 250 MB under ignored `node_modules` and is reused until Electron, the icon or product version changes. Close the app before applying a runtime update.
 
 If Windows' ransomware protection (*Controlled folder access*) is on and the project is in `Documents`, it may block the installer build: allow `makensis.exe` or build elsewhere.
 

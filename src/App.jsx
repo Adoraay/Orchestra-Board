@@ -11,7 +11,9 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
+import { Minimize2 } from 'lucide-react';
 import AgentDock from './components/AgentDock.jsx';
+import AgentLogo from './components/AgentLogo.jsx';
 import AgentsBar from './components/AgentsBar.jsx';
 import BoardToolbar from './components/BoardToolbar.jsx';
 import DeleteDialog from './components/DeleteDialog.jsx';
@@ -34,7 +36,17 @@ import TextNode from './components/TextNode.jsx';
 import Tutorial from './components/Tutorial.jsx';
 import UpdateDialog from './components/UpdateDialog.jsx';
 import Toast from './components/Toast.jsx';
+import WorkspaceRecovery from './components/WorkspaceRecovery.jsx';
+import TeamTemplates from './components/TeamTemplates.jsx';
+import BlockersInbox from './components/BlockersInbox.jsx';
 import TopBar from './components/TopBar.jsx';
+import TileSearch from './components/TileSearch.jsx';
+import TasksDialog from './components/TasksDialog.jsx';
+import LayoutToolbar from './components/LayoutToolbar.jsx';
+import GroupsLayer from './components/GroupsLayer.jsx';
+import { arrangeNodes, cleanGroups } from './lib/layout.js';
+import { hasModifier } from './lib/platform.js';
+import usePendingMessages from './hooks/usePendingMessages.js';
 import { BoardContext } from './context/BoardContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
 import { useWorkspace } from './context/WorkspaceContext.jsx';
@@ -69,11 +81,19 @@ function numberedName(agentName, nodes) {
 // (et pas d'une étape que Ctrl+Z pourrait annuler).
 export default function App() {
   const [saved, setSaved] = useState(null);
+  const [recovery, setRecovery] = useState(false);
+  const [error, setError] = useState(false);
+  const t = useT();
 
   useEffect(() => {
-    window.workspace.get().then(setSaved);
+    window.workspace.startup().then((result) => {
+      if (result.recovery) setRecovery(true);
+      else setSaved(result.workspace);
+    }).catch(() => setError(true));
   }, []);
 
+  if (error) return <p role="alert">{t('backup.failed')}</p>;
+  if (recovery) return <WorkspaceRecovery recovery />;
   return saved ? <Workspace saved={saved} /> : null;
 }
 
@@ -82,6 +102,18 @@ function Workspace({ saved }) {
   const boards = useBoards(saved);
   const { activeId, content, updateContent } = boards;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [teamsOpen, setTeamsOpen] = useState(false);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const [blockers, setBlockers] = useState([]);
+  useEffect(() => {
+    let changed = false;
+    let disposed = false;
+    const off = window.blockers.onChange((entries) => { changed = true; setBlockers(entries); });
+    window.blockers.get().then((entries) => { if (!disposed && !changed) setBlockers(entries); });
+    return () => { disposed = true; off(); };
+  }, []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
   // Post-it d'un autre tableau réécrit par un agent (lien Note) ; le tableau ouvert s'en charge lui-même.
@@ -96,10 +128,14 @@ function Workspace({ saved }) {
     [content, activeId, updateContent],
   );
   const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
-  const [agentsBarOpen, setAgentsBarOpen] = useState(false);
-  const [usageOpen, setUsageOpen] = useState(false);
+  const { settings, agentById, updateSettings } = useSettings();
+  // Panneaux épinglés (PLAN.md §7, 3.4) : rouverts au lancement ; Journal prioritaire sur Utilisation (même bord).
+  const pinned = settings.general.pinned;
+  const pin = useCallback((panel, value) => updateSettings('general', { pinned: { ...settings.general.pinned, [panel]: value } }), [settings.general.pinned, updateSettings]);
+  const [agentsBarOpen, setAgentsBarOpen] = useState(() => pinned.agentsBar);
+  const [usageOpen, setUsageOpen] = useState(() => pinned.usage && !pinned.log);
   const [usageAgent, setUsageAgent] = useState('claude-code');
-  const [logOpen, setLogOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(() => pinned.log);
   // Utilisation et Journal partagent le bord droit de la map : un seul ouvert à la fois.
   const toggleUsage = useCallback(() => {
     setLogOpen(false);
@@ -113,7 +149,6 @@ function Workspace({ saved }) {
   const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
   const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
   const clearLaunch = useCallback(() => setLaunchRequest(null), []);
-  const { settings, agentById, updateSettings } = useSettings();
   // Tutoriel (PLAN.md §3.21) : 'setup' (assistant de personnalisation) puis 'tour' au premier lancement,
   // 'tour' seul relancé depuis les paramètres.
   const [tutorial, setTutorial] = useState(() => (settings.general.tutorialDone ? null : 'setup'));
@@ -124,6 +159,10 @@ function Workspace({ saved }) {
   const startTutorial = useCallback(() => {
     setSettingsOpen(false);
     setTutorial('tour');
+  }, []);
+  const startSetup = useCallback(() => {
+    setSettingsOpen(false);
+    setTutorial('setup');
   }, []);
 
   useAppShortcuts({
@@ -143,6 +182,7 @@ function Workspace({ saved }) {
     toggleAgentsBar: () => setAgentsBarOpen((o) => !o),
     toggleUsage,
     toggleLog,
+    toggleSearch: () => setSearchOpen((o) => !o),
   });
 
   // Démarrage : une seule question pour reprendre (ou non) les conversations de tous les agents restaurés.
@@ -180,8 +220,8 @@ function Workspace({ saved }) {
   // Panneaux posés sur la map : leur état vit ici, car la map est recréée à chaque changement de tableau.
   const overlays = (
     <>
-      <UsagePanel open={usageOpen} onToggle={toggleUsage} agentId={usageAgent} onSelectAgent={setUsageAgent} />
-      <LogPanel open={logOpen} onToggle={toggleLog} onFocus={focusAgent} />
+      <UsagePanel open={usageOpen} onToggle={toggleUsage} agentId={usageAgent} onSelectAgent={setUsageAgent} pinned={pinned.usage} onPin={(v) => pin('usage', v)} />
+      <LogPanel open={logOpen} onToggle={toggleLog} onFocus={focusAgent} boards={boards.boards} pinned={pinned.log} onPin={(v) => pin('log', v)} />
       <AgentsBar
         boards={boards.boards}
         content={content}
@@ -190,17 +230,25 @@ function Workspace({ saved }) {
         open={agentsBarOpen}
         onToggle={() => setAgentsBarOpen((o) => !o)}
         onFocus={focusAgent}
+        pinned={pinned.agentsBar}
+        onPin={(v) => pin('agentsBar', v)}
       />
     </>
   );
 
   return (
     <div className="app">
+      {boards.saveError && <div className="toast" role="alert">{t('backup.saveFailed')}</div>}
       <TopBar
         boards={boards}
         boardsWithNews={boardsWithNews}
         renameRequest={renameRequest}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenTeams={() => setTeamsOpen(true)}
+        onOpenInbox={() => setInboxOpen(true)}
+        onOpenSearch={() => setSearchOpen(true)}
+        onOpenTasks={() => setTasksOpen(true)}
+        blockerCount={blockers.filter((entry) => !entry.resolved).length}
       />
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
@@ -223,7 +271,13 @@ function Workspace({ saved }) {
           onLaunchAgent={(agentId, cwd) => setLaunchRequest({ agentId, cwd, at: Date.now() })}
         />
       </div>
-      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} />}
+      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} onStartSetup={startSetup} />}
+      {tasksOpen && <TasksDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
+      {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
+      {searchOpen && (
+        <TileSearch boards={boards.boards} content={content} activeId={activeId} onFocus={focusAgent} onClose={() => setSearchOpen(false)} />
+      )}
+      {inboxOpen && <BlockersInbox entries={blockers} onFocus={focusAgent} onClose={() => setInboxOpen(false)} />}
       {tutorial && resumeChoice !== 'pending' && !update && (
         tutorial === 'setup' ? (
           <SetupWizard onFinish={() => setTutorial('tour')} />
@@ -249,7 +303,13 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
+  const [formationRequest, setFormationRequest] = useState(null);
   const { screenToFlowPosition, fitView, deleteElements } = useReactFlow();
+  useEffect(() => {
+    if (!formationRequest) return;
+    const frame = requestAnimationFrame(() => fitView({ nodes: formationRequest.map((id) => ({ id })), duration: 200, padding: 0.25, maxZoom: 1 }));
+    return () => cancelAnimationFrame(frame);
+  }, [formationRequest, fitView]);
 
   // Clic sur une notification Windows ou dans la barre des agents : on centre la map sur la case et on la
   // choisit (après sa mesure si le tableau vient de s'ouvrir). Demande effacée une fois servie.
@@ -273,6 +333,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   // Barre d'outils (PLAN.md §3.8)
   const [tool, setTool] = useState('select');
   const [strokes, setStrokes] = useState(initial.strokes);
+  const [groups, setGroups] = useState(initial.groups ?? []);
   const [selectedStroke, setSelectedStroke] = useState(null);
   const [linkSource, setLinkSource] = useState(null); // case cliquée en premier avec l'outil Lien
   const [branchTarget, setBranchTarget] = useState(null); // case survolée en glissant « Branche »
@@ -280,9 +341,12 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [linkEvents, setLinkEvents] = useState({}); // id du lien -> dernier état de transmission
   const [renameRequest, setRenameRequest] = useState(null); // F2 : { id, at } de la case à renommer
   const [editRequest, setEditRequest] = useState(null); // « Modifier le texte » d'un post-it ou d'un texte : { id, at }
+  const [maximized, setMaximized] = useState(null); // case dont le terminal est affiché en grand (PLAN.md §7, 3.3)
+  const [maxSlot, setMaxSlot] = useState(null);
+  const pendingMessages = usePendingMessages();
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, resumeChoice, renameRequest, editRequest }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, resumeChoice, renameRequest, editRequest],
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot }),
+    [tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot],
   );
 
   // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
@@ -291,6 +355,16 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   nodesRef.current = nodes;
   useEffect(() => {
     const onKeyDown = (event) => {
+      // Cmd/Ctrl+Maj+M : agrandir la case choisie ou celle dont le terminal a le curseur.
+      if (hasModifier(event) && event.shiftKey && !event.altKey && event.code === 'KeyM') {
+        if (document.querySelector('.modal-backdrop, .dialog')) return;
+        const focusedId = document.activeElement?.closest('.react-flow__node-terminal')?.dataset.id;
+        const selected = nodesRef.current.filter((n) => n.selected && n.type === 'terminal');
+        event.preventDefault();
+        event.stopPropagation();
+        setMaximized((current) => (current ? null : focusedId ?? (selected.length === 1 ? selected[0].id : null)));
+        return;
+      }
       if (event.key !== 'F2' || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (document.querySelector('.modal-backdrop')) return;
       const focused = document.activeElement;
@@ -415,12 +489,13 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [setEdges],
   );
 
-  const history = useBoardHistory({ nodes, edges, strokes, setNodes, setEdges, setStrokes });
+  const liveGroups = useMemo(() => cleanGroups(groups, nodes), [groups, nodes]);
+  const history = useBoardHistory({ nodes, edges, strokes, groups: liveGroups, setNodes, setEdges, setStrokes, setGroups });
 
   // Le contenu remonte à chaque changement : c'est ce qui est sauvegardé et relu quand on revient sur l'onglet.
   useEffect(() => {
-    onChange({ nodes, edges, strokes, viewport });
-  }, [nodes, edges, strokes, viewport, onChange]);
+    onChange({ nodes, edges, strokes, groups: liveGroups, viewport });
+  }, [nodes, edges, strokes, liveGroups, viewport, onChange]);
 
   // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
   // only : un seul élément, depuis son menu du clic droit (la sélection n'est alors pas touchée).
@@ -653,6 +728,9 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, activeFolder, homeDir, agentById, t],
   );
 
+  const maximizedNode = maximized && nodes.find((n) => n.id === maximized && n.type === 'terminal');
+  const maximizedName = maximizedNode ? maximizedNode.data.label || agentById(maximizedNode.data.agentId).name : '';
+
   return (
     <>
       <AgentDock
@@ -716,6 +794,11 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
               />
             )}
             <Controls position="bottom-left" />
+            <GroupsLayer groups={liveGroups} nodes={nodes} enabled={tool === 'select'}
+              onSelect={(ids) => setNodes((all) => all.map((node) => ({ ...node, selected: ids.includes(node.id) })))}
+              onMove={(positions, dx, dy) => setNodes((all) => all.map((node) => positions.has(node.id) ? { ...node, position: { x: positions.get(node.id).x + dx, y: positions.get(node.id).y + dy } } : node))}
+              onRename={(id, name) => setGroups((all) => all.map((group) => group.id === id ? { ...group, name } : group))}
+              onUngroup={(id) => setGroups((all) => all.filter((group) => group.id !== id))} />
             <MiniMap position="bottom-right" pannable zoomable nodeComponent={MiniMapNode} />
             <DrawingLayer
               strokes={strokes}
@@ -729,6 +812,11 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           </ReactFlow>
         </BoardContext.Provider>
         <BoardToolbar tool={tool} onChange={setTool} />
+        {tool === 'select' && nodes.filter((node) => node.selected).length >= 2 && <LayoutToolbar
+          count={nodes.filter((node) => node.selected).length}
+          canGroup={nodes.filter((node) => node.selected).every((node) => !liveGroups.some((group) => group.members.includes(node.id))) && liveGroups.length < 200}
+          onArrange={(formation) => { setNodes(arrangeNodes(nodes, formation)); setFormationRequest(nodes.filter((node) => node.selected).map((node) => node.id)); }}
+          onGroup={(name) => setGroups((all) => [...all, { id: 'group-' + crypto.randomUUID(), name, members: nodes.filter((node) => node.selected).map((node) => node.id) }])} />}
         {BOARD_HINTS.includes(tool) && (
           <div className="board-hint" role="status">
             {tool === 'link' && linkSource ? t('board.hint.linkTarget') : t(`board.hint.${tool}`)}
@@ -757,6 +845,20 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
         {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} onAction={onNodeAction} onClose={closeNodeMenu} />}
         {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
+        {maximizedNode && (
+          <section className="terminal-max" aria-label={maximizedName}>
+            <header className="terminal-max-header">
+              <AgentLogo agent={agentById(maximizedNode.data.agentId)} size={18} />
+              <span className="terminal-max-title">{maximizedName}</span>
+              <span className="hint">{t('terminal.restoreHint')}</span>
+              <button className="text-button" onClick={() => setMaximized(null)}>
+                <Minimize2 size={14} />
+                {t('terminal.restore')}
+              </button>
+            </header>
+            <div className="terminal-max-body terminal-body" ref={setMaxSlot} />
+          </section>
+        )}
       </main>
     </>
   );

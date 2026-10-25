@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { restoreBoardHistory } from '../lib/boardHistory.js';
 
 const SETTLE_DELAY = 400; // ms sans changement = une étape (une saisie, un trait, un déplacement…)
 const LIMIT = 100;
 const ANNOTATIONS = new Set(['note', 'text']);
 
-// Ce qui peut être annulé : dessins, post-it, textes et liens. Pas les cases terminal :
-// on ne peut pas « dé-fermer » un agent dont le processus a été tué.
-function snapshotOf(nodes, edges, strokes) {
+// Dessins, annotations, liens, groupes et positions : un terminal fermé n'est jamais recréé.
+function snapshotOf(nodes, edges, strokes, groups) {
   return {
     annotations: nodes
       .filter((n) => ANNOTATIONS.has(n.type))
       .map(({ id, type, position, width, height, style, data }) => ({ id, type, position, width, height, style, data })),
     edges: edges.map(({ id, source, target, type, animated, data }) => ({ id, source, target, type, animated, data })),
     strokes,
+    positions: nodes.filter((node) => node.type === 'terminal').map(({ id, position }) => ({ id, position })),
+    groups,
   };
 }
 
 // Historique Ctrl+Z / Ctrl+Y : une photo est prise quand l'état reste stable SETTLE_DELAY ms.
-export default function useBoardHistory({ nodes, edges, strokes, setNodes, setEdges, setStrokes }) {
+export default function useBoardHistory({ nodes, edges, strokes, groups, setNodes, setEdges, setStrokes, setGroups }) {
   const present = useRef(null);
   const past = useRef([]);
   const future = useRef([]);
@@ -27,9 +29,9 @@ export default function useBoardHistory({ nodes, edges, strokes, setNodes, setEd
   nodesRef.current = nodes;
 
   const current = useMemo(() => {
-    const snapshot = snapshotOf(nodes, edges, strokes);
+    const snapshot = snapshotOf(nodes, edges, strokes, groups);
     return { snapshot, key: JSON.stringify(snapshot) };
-  }, [nodes, edges, strokes]);
+  }, [nodes, edges, strokes, groups]);
 
   const commit = (entry) => {
     if (present.current) past.current = [...past.current, present.current].slice(-LIMIT);
@@ -72,12 +74,11 @@ export default function useBoardHistory({ nodes, edges, strokes, setNodes, setEd
   const restore = (entry) => {
     adoptNext.current = true;
     present.current = entry;
-    const { annotations, edges: savedEdges, strokes: savedStrokes } = entry.snapshot;
-    const terminals = nodesRef.current.filter((n) => !ANNOTATIONS.has(n.type));
-    const ids = new Set(terminals.map((n) => n.id));
-    setStrokes(savedStrokes);
-    setNodes([...terminals, ...annotations]);
-    setEdges(savedEdges.filter((e) => ids.has(e.source) && ids.has(e.target))); // case fermée entre-temps
+    const restored = restoreBoardHistory(nodesRef.current, entry.snapshot);
+    setStrokes(restored.strokes);
+    setNodes(restored.nodes);
+    setEdges(restored.edges);
+    setGroups(restored.groups);
   };
 
   const undo = () => {

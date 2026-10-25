@@ -8,11 +8,12 @@ import GlowFields from './GlowFields.jsx';
 import GridField from './GridField.jsx';
 import LanguageField from './LanguageField.jsx';
 import ThemePicker from './ThemePicker.jsx';
+import SetupFolder from './SetupFolder.jsx';
 
 // Assistant du tout premier lancement, avant la visite guidée (PLAN.md §3.21) : chaque choix est appliqué
 // et enregistré tout de suite, comme dans les paramètres. « Passer » et « Terminer » lancent la visite.
 const STEPS = [
-  { id: 'welcome', content: () => <LanguageField labelKey="setup.language" /> },
+  { id: 'welcome', content: () => <><LanguageField labelKey="setup.language" /><SetupFolder /></> },
   { id: 'theme', content: () => <ThemePicker recommended /> },
   { id: 'font', content: () => <FontSizeField /> },
   { id: 'grid', content: () => <GridField /> },

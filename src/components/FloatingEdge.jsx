@@ -62,7 +62,7 @@ function linkState(link, event) {
   if (link.mode === 'relay' && !link.prompt.trim()) return 'unconfigured';
   const rest = link.mode === 'delegate' ? 'delegate' : 'ready';
   if (event?.state === 'sent') return Date.now() - event.at < SENDING_FOR ? 'sending' : rest;
-  if (event?.state === 'queued' || event?.state === 'limit' || event?.state === 'error') return event.state;
+  if (['queued', 'review', 'limit', 'error'].includes(event?.state)) return event.state;
   return rest;
 }
 
@@ -70,7 +70,8 @@ function linkState(link, event) {
 export default function FloatingEdge({ id, source, target, data, style }) {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
-  const event = useBoard().linkEvents[id];
+  const { linkEvents, pendingMessages } = useBoard();
+  const event = linkEvents[id];
   const { agentById } = useSettings();
   const t = useT();
   const { setEdges, setNodes } = useReactFlow();
@@ -98,13 +99,16 @@ export default function FloatingEdge({ id, source, target, data, style }) {
   });
 
   const link = { ...DEFAULT_LINK, ...data };
-  const state = linkState(link, event);
+  const drafts = pendingMessages.filter((item) => item.linkId === id && item.state === 'draft');
+  const draft = link.mode === 'relay' && link.enabled ? drafts[0] : null;
+  // La file fait foi, même si un autre envoi ou une remise à zéro a remplacé le dernier événement.
+  const state = draft ? 'review' : linkState(link, event?.state === 'review' ? null : event);
   const pulsing = event?.state === 'sent' && Date.now() - event.at < PULSE_DURATION;
   const horizontal = sourceSide === Position.Left || sourceSide === Position.Right;
   const roomy = horizontal ? Math.abs(to.x - from.x) >= LABEL_ROOM.horizontal : Math.abs(to.y - from.y) >= LABEL_ROOM.vertical;
   const turns = event && typeof event.turns === 'number' ? event.turns : 0;
   // Dans un lien à double sens, le message peut aller vers la source : event.to dit vers qui.
-  const toNode = event?.to === source ? sourceNode : targetNode;
+  const toNode = (draft?.to ?? event?.to) === source ? sourceNode : targetNode;
   const targetName = toNode.data?.label || (toNode.type === 'note' ? t('note.defaultName') : agentById(toNode.data?.agentId).name);
 
   // Clic sur l'étiquette = ce lien seul choisi, son panneau s'ouvre.
@@ -141,6 +145,8 @@ export default function FloatingEdge({ id, source, target, data, style }) {
           maxTurns={link.mode === 'terminal' || link.mode === 'note' ? null : link.maxTurns}
           message={event?.message}
           onOpen={open}
+          draft={draft}
+          draftCount={drafts.length}
         />
       )}
     </>

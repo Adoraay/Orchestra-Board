@@ -14,7 +14,7 @@
 
 <p align="center">
   <a href="../../releases/latest"><img alt="Télécharger pour Windows et macOS" src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger-Windows%20%26%20macOS-d97757?style=for-the-badge&logoColor=white"></a>
-  <img alt="Electron" src="https://img.shields.io/badge/Electron-33-47848f?style=for-the-badge&logo=electron&logoColor=white">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-45-47848f?style=for-the-badge&logo=electron&logoColor=white">
   <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/Licence-MIT-3c3a36?style=for-the-badge"></a>
 </p>
 
@@ -46,7 +46,7 @@ Tout reste sur ta machine. Orchestra lance seulement les CLI que tu utilises dé
 | 🔗 **Liens entre agents** | **Transmission** (passage de relais automatique), **Délégation** (un agent parle à d'autres agents par des outils) et **Terminal** (un agent lance des commandes dans un terminal visible). Une limite de tours évite les boucles. |
 | 🎭 **Rôles** | Donne à chaque agent un rôle durable (« Tu es le relecteur, tu ne modifies jamais de fichier… »). |
 | 📜 **Journal des échanges** | Tous les messages, réponses, commandes et refus passés par un lien. |
-| 🔍 **Changements** | Les fichiers modifiés par un agent, avec un diff coloré, à ouvrir dans VS Code. |
+| 🔍 **Changements** | Les modifications du worktree avec un diff coloré, à ouvrir dans VS Code ou à comparer à une référence de début de tâche. |
 | 🌿 **Branches Git** | Glisse le carré *Branche* sur une case pour passer son agent sur une autre branche, dans son propre `git worktree`. |
 | 🟢 **Statuts et notifications** | Travaille / attend une permission / a fini, avec une lueur verte, un son et une notification du système quand un agent termine. |
 | 🎨 **Thèmes** | Standard, Clair, ChatGPT, Gemini, VS Code, GitHub, Dracula et Nord, et ta couleur d'accent. Anglais et français. |
@@ -88,10 +88,15 @@ Prends l'**outil Lien** (`L`) dans la barre d'outils, clique sur la première ca
 | Lien | Ce qui se passe | Idéal pour |
 |---|---|---|
 | **Transmission** | Quand A a fini, sa dernière réponse est collée dans B avec ta consigne (`{response}` est remplacé par la réponse). | Dev → relecteur, rédacteur → traducteur |
-| **Délégation** | A voit B dans ses outils et décide lui-même quand lui écrire ; la réponse de B revient à A. | Un chef qui répartit le travail entre plusieurs agents |
+| **Délégation** | A envoie une tâche avec un identifiant unique. Les demandes vers un même agent sont mises en file ; chaque réponse revient à son émetteur. | Un chef qui répartit le travail entre plusieurs agents |
 | **Terminal** | A lance des commandes dans une case Terminal que tu vois, après t'avoir demandé la permission. | Serveurs de dev, tests, build |
+| **Note** | A lit et met à jour un post-it relié avec `list_notes`, `read_note` et `write_note`. | Plans partagés, listes et observations |
 
-Un lien peut être inversé ou mis dans les deux sens, et chaque lien a une **limite de tours** (3 par défaut).
+Les liens Transmission et Délégation peuvent être inversés ou mis dans les deux sens, avec une **limite de tours** (3 par défaut). Les liens Terminal et Note vont de l'agent vers leur cible.
+
+Coche **Valider avant l'envoi** sur une Transmission pour garder la main : quand la source a fini, le message est préparé mais pas envoyé. Modifie-le, envoie-le ou abandonne-le depuis le panneau du lien ou le Journal. Les messages en file (Transmission ou Délégation, en attente d'une cible occupée) s'y annulent aussi tant qu'ils ne sont pas collés ; une délégation annulée prévient son émetteur au lieu de le laisser attendre. Un message déjà remis ne peut pas être rappelé.
+
+Quand la pastille du lien est visible, elle s'agrandit avec un court aperçu et les boutons **Envoyer / Abandonner**. S'il y a plusieurs brouillons, elle présente le plus ancien et indique combien restent à traiter. Clique sur son en-tête pour ouvrir le panneau et modifier le message complet. Si les cases sont trop proches pour afficher la pastille, utilise le panneau du lien ou le Journal.
 
 <p align="center"><img src="docs/images/link-panel.png" alt="Le panneau d'un lien : Transmission ou Délégation, consigne, limite de tours" width="100%"></p>
 
@@ -103,19 +108,69 @@ Survole la petite encoche qui dépasse au-dessus d'une case Claude Code ou Codex
 
 <p align="center"><img src="docs/images/role.png" alt="Modifier le rôle d'un agent" width="520"></p>
 
+### Partage un post-it
+
+Pose un post-it sur la map et relie un agent à celui-ci : cela crée un lien Note. Demande à l'agent de lire ou modifier la note ; les changements sont visibles et tu peux aussi l'éditer. Les lignes `- [ ] À faire`, `- [~] En cours` et `- [x] Fait` affichent des icônes de statut. Une écriture remplace toute la note : l'agent doit la lire avant de la modifier.
+
+### Reprends et récupère tes tableaux
+
+Claude Code et Codex reprennent la session exacte sauvegardée pour chaque case, même lorsque deux cases utilisent le même dossier. Si la session ou son transcript est introuvable, Orchestra propose une nouvelle discussion au lieu de reprendre celle d'une autre case. Les anciens workspaces sans identifiants de session demandent aussi une nouvelle discussion pour ces agents. Les autres CLI conservent leur propre comportement de reprise.
+
+**Paramètres › Général › Sauvegardes des tableaux** liste jusqu'à 10 anciens workspaces, conservés localement au plus une fois par minute pendant les sauvegardes. Restaurer ferme tous les terminaux, remplace tous les tableaux et recharge l'interface ; le workspace lisible actuel est d'abord sauvegardé. Si `workspace.json` est illisible au démarrage, choisis une sauvegarde ou un nouveau tableau : le fichier illisible est conservé à part avant remplacement. Les sauvegardes contiennent notes, chemins, rôles et références de sessions ; les agents conservent leurs conversations séparément. Le journal des échanges n'y figure pas.
+
 ### Suis les échanges
 
 Ouvre la languette **Journal** sur le bord droit de la map (`Ctrl+Maj+J`). Elle liste tout ce qui est passé par un lien : messages transmis, tâches déléguées et leurs réponses, commandes du terminal et leur sortie, et les refus en rouge (limite de tours atteinte, terminal occupé…). Clique sur un nom pour aller à sa case.
+
+Chaque message affiche l'état de sa tâche : *à valider*, *en attente*, *envoyé* (une fois réellement remis), *réponse reçue*, *annulé* ou *refusé*. Le bouton **Filtres** restreint la liste par tableau, case et type ; clique sur un identifiant de tâche (`#1a2b3c4d`) pour ne suivre que celle-ci. Les filtres ne suppriment aucun événement. Épingle le Journal (ou l'Utilisation, ou la barre des agents actifs) pour le garder ouvert pendant que tu travailles ; l'épinglage est mémorisé.
+
+**Exporter le journal** enregistre les filtres courants dans un fichier JSON avec dates, identifiants de tâche et états des échanges. La confirmation rappelle que messages, chemins et résultats peuvent être privés. Le journal reste en mémoire tant que tu ne l'exportes pas ; l'export n'active aucune conservation automatique.
 
 <p align="center"><img src="docs/images/log.png" alt="Le journal des échanges à côté du tableau" width="100%"></p>
 
 ### Relis les changements
 
-Quand une case travaille dans un dépôt Git, une deuxième encoche au-dessus d'elle ouvre la fenêtre **Changements** : chaque fichier modifié depuis le dernier commit, avec un diff coloré et un bouton *Ouvrir dans VS Code*. Ici, Orchestra ne fait que lire Git.
+Quand une case travaille dans un dépôt Git, une deuxième encoche au-dessus d'elle ouvre la fenêtre **Changements** : chaque fichier modifié dans son worktree depuis le dernier commit, avec un diff coloré et un bouton *Ouvrir dans VS Code*. Cela n'identifie pas quel agent a fait chaque modification lorsque des cases partagent le dossier. Ici, Orchestra ne fait que lire Git.
 
 <p align="center"><img src="docs/images/changes.png" alt="La fenêtre des changements avec un diff" width="100%"></p>
 
+### Retrouve, agrandis et vérifie
+
+- **Trouve une case** dans tous les tableaux avec `Ctrl+Maj+F` (ou la loupe de la barre du haut) : Entrée ouvre son tableau et la centre.
+- **Agrandis un terminal** avec l'icône de sa barre de titre ou `Ctrl+Maj+M` : même processus et même conversation, affichés sur toute la map ; la case garde sa taille et sa place.
+- **Paramètres › Diagnostic** montre, sans contacter de modèle, où la commande de chaque agent a été trouvée, sa version quand elle se lit sans risque, s'il a les hooks d'Orchestra, et le dernier hook envoyé par chaque case lancée. Un hook absent ou ancien n'est pas forcément une panne.
+
 ## Recettes
+
+### Suis les tâches et leurs dépendances
+
+Ouvre **Tâches** (icône de presse-papiers dans la barre du haut). Les échanges Transmission et Délégation y reprennent leurs identifiants de tâche. Tu peux aussi créer une tâche manuelle, choisir sa case responsable et ses prérequis. Une réponse apparaît **Réponse reçue · à vérifier** ; seul **Valider le résultat** satisfait une dépendance. Les cycles sont refusés. C'est un suivi local : **Démarrer le suivi** capture une référence avant que tu envoies toi-même la consigne, sans envoyer de message. Les tâches d'échange démarrent automatiquement avant le collage du message. Modifier le suivi ne planifie ni n'interrompt le travail des CLI.
+
+Tâches et résultats sont conservés séparément dans `tasks.json` (500 suivis maximum). Les tâches non terminées deviennent *interrompues* au redémarrage ; les messages de l'ancienne file en mémoire ne sont pas renvoyés. Supprimer un suivi terminé supprime aussi sa référence, si aucune autre tâche n'en dépend.
+
+**Changements depuis le début** compare le worktree actuel au contenu capturé, y compris les fichiers déjà modifiés ou non suivis au démarrage de la tâche. Aucun commit ni stash n'est créé. Les références peuvent contenir des fichiers privés du projet et restent locales : 20 références au maximum, 500 fichiers par référence, 200 Ko par fichier et 8 Mo de contenu capturé. Les fichiers ignorés, liens symboliques et fichiers trop volumineux sont exclus ; les changements binaires sont signalés sans aperçu textuel. L'interface signale les comparaisons partielles. Une référence absente ou expirée n'est jamais remplacée par un diff HEAD. Dans un worktree partagé, les modifications ne sont pas attribuées à un agent. La capture est bornée mais ne constitue pas un instantané atomique face aux modifications concurrentes.
+
+### Organise ton tableau
+
+Sélectionne plusieurs cases avec un rectangle au clic droit. **Formation** propose des modèles illustrés : grille adaptative, 3 par ligne, 4 par ligne, 2 colonnes, ligne horizontale et colonne centrée. Les dimensions suivent la sélection : 16 cases donnent une grille 4 × 4, 64 cases une grille 8 × 8. Les rangées incomplètes restent centrées ; la taille des cases est respectée et de la place est gardée pour les languettes des liens. Le centre de la sélection reste fixe et la vue se recadre sur la formation. Le modèle s'applique au clic ; les cases restent librement déplaçables ensuite. Tu peux aussi créer un groupe nommé avec des cases non groupées. Glisse son nom pour déplacer ses membres, clique pour les sélectionner et appliquer une formation, double-clique pour renommer ou dissocie sans fermer les cases. Les groupes sont sauvegardés avec le tableau et inclus dans les modèles d'équipes. Ctrl+Z / Ctrl+Y rétablissent positions et groupes, sans recréer les terminaux fermés ni modifier liens et permissions.
+
+### Configure et fais la visite
+
+Le premier lancement conserve la configuration d'origine : langue, thème, police du terminal, grille, halo et choix des agents du dock, puis la visite guidée visuelle. Le dossier du projet se choisit facultativement sur la page de bienvenue ; la sélection des agents indique les commandes détectées. La configuration ne lance aucun agent et ne remplace aucun tableau. **Passer** mène directement à la visite. Dans **Paramètres → Général**, **Refaire la visite** ouvre directement la visite visuelle ; **Refaire la configuration initiale** rouvre séparément les pages de configuration. Les installations existantes ne revoient pas l'assistant automatiquement.
+
+### Réutilise une équipe
+
+Ouvre **Modèles d’équipes** (icône d’équipe dans la barre du haut). Pars de *Développeur + relecteur*, *Chef + deux agents* ou *Développeur + terminal*, ou enregistre le tableau courant comme modèle personnel. Choisis le dossier du projet et remplace les agents indisponibles par des agents compatibles installés, puis crée un nouveau tableau. Les rôles et liens sont enregistrés avant le lancement de ses agents. Chaque instance reçoit de nouveaux identifiants et sessions ; les anciens dossiers, branches et messages en attente ne sont pas copiés. Les modèles sont dans `team-templates.json`, dans les données de l’app, séparément des sauvegardes de workspace.
+
+### Retrouve les blocages et vérifie le contexte
+
+La **Boîte de réception des blocages** (icône de boîte dans la barre du haut) regroupe permissions ou réponses attendues, échanges refusés, limites de tours et arrêts de terminaux de tous les tableaux. Clique sur un nom de case pour la retrouver. Les événements se résolvent quand le travail reprend, qu’un échange réussit ou qu’un terminal redémarre ; effacer les événements résolus conserve les demandes actives. Cette boîte reste en mémoire pour le lancement courant et ne répond jamais aux permissions à ta place.
+
+**Changements** affiche maintenant la portée de comparaison et la racine du worktree. Les autres cases configurées dans ce même worktree sont listées, y compris depuis un sous-dossier ou un autre tableau ; les worktrees Git distincts restent séparés. Ces changements partagés ne sont pas attribués à un agent précis.
+
+Les dossiers non suivis sont regroupés et leurs fichiers se chargent sur demande. La liste affiche au maximum 500 entrées ; les aperçus de fichiers sont limités, avec un message lorsqu'ils sont tronqués. Utilise **Ouvrir dans VS Code** pour consulter le reste.
+
+L’éditeur de **Rôle** présente le texte transmis à la session courante à côté du rôle enregistré. Les modifications en attente s’appliquent au prochain `SessionStart`, notamment après un `/clear` compatible ou une relance. Le rôle est une consigne, pas une restriction des outils de l’agent.
 
 **Un chef et deux agents** — Place un Claude Code *Lead* au-dessus d'un Codex et d'un Claude Code, reliés en **Délégation**. Demande au chef : « Demande un court poème à chacun de tes agents et dis-moi lequel est le meilleur. » Il écrit aux deux, attend leurs réponses et te répond.
 
@@ -132,6 +187,8 @@ Quand une case travaille dans un dépôt Git, une deuxième encoche au-dessus d'
 | `Ctrl+Maj+T` | Nouveau tableau |
 | `Ctrl+,` | Paramètres |
 | `Ctrl+Maj+E` / `A` / `U` / `J` | Fichiers / agents actifs / utilisation / journal |
+| `Ctrl+Maj+F` | Trouver une case dans tous les tableaux |
+| `Ctrl+Maj+M` | Agrandir ou remettre en place le terminal choisi |
 
 | Sur la map | |
 |---|---|
@@ -149,7 +206,7 @@ Dans un terminal, `Ctrl+C` copie quand du texte est sélectionné (sinon il inte
 
 ## Confidentialité et sécurité
 
-- **Tout en local.** Orchestra parle aux agents par un petit serveur limité à `127.0.0.1`, protégé par un jeton secret qui change à chaque lancement. Orchestra n'envoie rien nulle part. Son seul accès réseau : au démarrage, il demande à GitHub la dernière release pour te prévenir des mises à jour (désactivable dans Paramètres › Général).
+- **Orchestration locale.** Orchestra parle aux agents par un petit serveur limité à `127.0.0.1`, protégé par un jeton secret qui change à chaque lancement. Les échanges entre agents sont traités localement. Les vérifications de mises à jour contactent GitHub (vérification au démarrage désactivable dans Paramètres › Général) ; télécharger une mise à jour utilise aussi le réseau. Les fetch Git et les CLI d'agents utilisent leurs propres connexions.
 - **Tes permissions restent les tiennes.** Orchestra n'approuve jamais une demande de permission à la place d'un agent. Ses propres outils sont autorisés d'office, sauf `run_in_terminal`, qui demande toujours.
 - **Git presque en lecture seule.** Orchestra ne lance que `git fetch` et `git worktree add` (quand tu choisis une branche) et des commandes de lecture. Jamais de commit ni de push.
 - **Ce qu'il écrit hors de son dossier :**
@@ -168,7 +225,7 @@ Ce sont les hooks de statut d'Orchestra (travaille / a fini). Choisis **Trust al
 <details>
 <summary><b>Quels agents peuvent utiliser les liens ?</b></summary>
 
-Claude Code et Codex peuvent transmettre, déléguer et piloter un terminal. Les autres CLI (Aider, Gemini CLI, le tien…) marchent dans une case et peuvent *recevoir* des messages transmis, mais pas en envoyer. Gemini CLI n'est plus maintenu par Google et n'a pas d'orchestration.
+Claude Code et Codex peuvent transmettre, déléguer, piloter un terminal et utiliser les notes reliées. Les autres CLI (Aider, Gemini CLI, le tien…) marchent dans une case et peuvent *recevoir* des messages transmis ; leur intégration ici n'inclut pas les hooks ou outils d'orchestration d'Orchestra.
 </details>
 
 <details>
@@ -185,17 +242,18 @@ Orchestra tourne sur Windows et macOS (Apple Silicon et Intel), avec un installa
 
 ## Compiler depuis les sources
 
-Il faut Node.js 20+.
+Utilise Node.js 22.12+ pour développer cette version. Installe les dépendances verrouillées avec `npm ci`.
 
 ```bash
 npm install      # node-pty arrive avec ses binaires précompilés : ni Visual Studio ni Python
 npm run dev      # Vite + Electron avec rechargement à chaud
+npm test         # sessions, récupération, files, validation, annulation et diagnostic
 npm run dist     # installateur Windows dans release/Orchestra-Setup-<version>.exe
 ```
 
 La version macOS est sur la branche `macbook` : `npm run dist:mac` y fabrique les `.dmg` (sur un Mac), et chaque push sur cette branche les fabrique sur GitHub Actions.
 
-`launcher.exe` à la racine reconstruit l'interface et ouvre l'app sans fenêtre de terminal (`npm run build:launcher` pour le recompiler).
+`launcher.exe` à la racine reconstruit l'interface et prépare un `Orchestra.exe` local avec le logo et les informations produit Windows d'Orchestra (`npm run build:launcher` recompile le lanceur ; `npm run build:runtime` prépare le runtime). L'exécutable Electron d'origine reste intact. La copie ajoute environ 250 Mo dans `node_modules`, ignoré par Git, et reste réutilisée tant qu'Electron, le logo ou la version produit ne changent pas. Ferme l'app avant une mise à jour de ce runtime.
 
 Si la protection anti-ransomware de Windows (*Dossiers contrôlés*) est active et que le projet est dans `Documents`, elle peut bloquer la fabrication de l'installateur : autorise `makensis.exe` ou fabrique ailleurs.
 

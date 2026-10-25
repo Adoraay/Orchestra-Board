@@ -4,7 +4,8 @@ const { app, ipcMain } = require('electron');
 
 // Paramètres de l'app (PLAN.md §3.3), dans userData/settings.json.
 // Agents de base : toujours présents, seuls leur ordre et « masqué » sont modifiables.
-// resumeArgs : reprendre la dernière conversation du dossier après un redémarrage de l'app.
+// resumeArgs : capacité de reprise ; main.cjs impose la session exacte pour Claude/Codex,
+// les autres CLI utilisent leurs propres arguments.
 // hooks : 'claude' ou 'codex' = statut, réponses et orchestration par les hooks et le serveur MCP de l'agent
 // (sinon statut déduit de l'activité du terminal).
 const BUILTIN_AGENTS = [
@@ -32,7 +33,7 @@ const CATALOG_AGENTS = [
 const DEFAULTS = {
   // glow : points de la grille colorés autour de la souris, glowColor null = couleur d'accent, glowSize = rayon en px.
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots', glow: true, glowColor: null, glowSize: 110 },
-  general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true, codexOrchestration: true },
+  general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true, codexOrchestration: true, pinned: {} },
 };
 
 const THEMES = ['standard', 'light', 'chatgpt', 'gemini', 'vscode', 'github', 'dracula', 'nord'];
@@ -40,6 +41,7 @@ const GRIDS = ['dots', 'lines', 'none'];
 const SHELLS = ['default', 'powershell', 'pwsh', 'cmd', 'bash'];
 const LANGUAGES = ['en', 'fr']; // langue de l'interface (PLAN.md §3.15), anglais par défaut
 const LINK_MODES = ['relay', 'delegate']; // type des nouveaux liens (PLAN.md §3.11)
+const PANELS = ['log', 'usage', 'agentsBar']; // panneaux qui peuvent rester épinglés ouverts
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 const CUSTOM_ID = /^custom-[a-z0-9]{4,32}$/;
 const LOGO_FILE = /^custom-[a-z0-9]{4,32}\.(png|jpg|jpeg|svg|webp|gif)$/;
@@ -140,6 +142,7 @@ function sanitize(input) {
       tutorialDone: typeof g.tutorialDone === 'boolean' ? g.tutorialDone : input != null,
       // Mises à jour (PLAN.md §3.22) : oui par défaut.
       checkUpdates: g.checkUpdates !== false,
+      pinned: Object.fromEntries(PANELS.map((panel) => [panel, g.pinned?.[panel] === true])),
     },
   };
 }

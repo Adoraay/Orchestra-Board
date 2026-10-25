@@ -1,5 +1,6 @@
 const { chainOf, enqueue, lastReply, READ_DELAY } = require('./linkRelay.cjs');
 const { tIn, appLanguage, detectLanguage } = require('./i18n.cjs');
+const { randomUUID } = require('crypto');
 
 // Délégation (PLAN.md §3.11) : outils MCP qu'un Claude appelle lui-même pour parler aux agents reliés
 // à sa case par un lien en Délégation. Appelés par mcpServer.cjs via le serveur local (hookServer.cjs).
@@ -10,7 +11,8 @@ const MAX_MESSAGE = 20000;
 let deps = { info: () => null, agent: () => ({ name: '?', hooks: null }), emit: () => {}, log: () => {} };
 let cases = new Map(); // id -> { name, agent, cwd, branch }
 let reachable = new Map(); // appelant -> [{ key, id, target, maxTurns, enabled }]
-const expects = new Map(); // cible -> { from, key, id, turns, maxTurns, delivered, reply }
+const tasks = new Map(); // identifiant de tâche -> demande et réponse propres à son émetteur
+const active = new Map(); // cible -> identifiant de la tâche effectivement livrée
 const waiters = new Set(); // vérifications des wait_for_replies en cours
 // Langue de la conversation de chaque case qui délègue, déduite des messages qu'elle envoie (PLAN.md §3.15) :
 // les réponses des outils et l'en-tête remis à la cible suivent la langue parlée dans le chat.
@@ -41,6 +43,12 @@ function setWorkspace(workspace) {
       if (edge.data.bidirectional) add(edge.target, { key: `${edge.id}:r`, id: edge.id, target: edge.source, maxTurns, enabled });
     }
   }
+  for (const task of tasks.values()) {
+    if (!task.staged && task.reply === null && !task.error && !linksOf(task.from).some((link) => link.key === task.key && link.target === task.target)) {
+      task.error = tIn(langOf(task.from), 'link.cancelled');
+    }
+  }
+  checkWaiters();
 }
 
 const linksOf = (caller) => (reachable.get(caller) ?? []).filter((l) => l.enabled && cases.has(l.target));
@@ -91,6 +99,7 @@ function sendToAgent(caller, { name, message } = {}) {
   if (!target.agent.hooks) return refuse(tIn(lang, 'delegate.noHooks', { name: target.name }));
   const info = deps.info(link.target);
   if (!info) return refuse(tIn(lang, 'delegate.notRunning', { name: target.name }));
+  if (tasks.size >= 500) return refuse(tIn(lang, 'delegate.queueFull'));
 
   // Limite de tours de la chaîne en cours (PLAN.md §3.5) : pas de boucle sans fin entre agents.
   const chain = chainOf(caller);
@@ -100,11 +109,16 @@ function sendToAgent(caller, { name, message } = {}) {
     return refuse(tIn(lang, 'delegate.limit', { max: link.maxTurns, name: target.name }));
   }
   chain.counts.set(link.key, used + 1);
-  deps.log({ kind: 'delegate', linkId: link.id, from: caller, to: link.target, text: message.trim() });
-
-  const expect = { from: caller, key: link.key, id: link.id, turns: used + 1, maxTurns: link.maxTurns, delivered: false, reply: null };
-  expects.set(link.target, expect);
+  const taskId = randomUUID();
+  const expect = { taskId, target: link.target, targetName: target.name, from: caller, key: link.key, id: link.id, turns: used + 1, maxTurns: link.maxTurns, delivered: false, reply: null, error: null };
+  tasks.set(taskId, expect);
+  deps.log({ kind: 'delegate', taskId, linkId: link.id, from: caller, to: link.target, text: message.trim() });
   enqueue(link.target, {
+    qid: taskId,
+    kind: 'delegate',
+    taskId,
+    from: caller,
+    preview: message.trim(),
     key: link.key,
     id: link.id,
     // En-tête dans la langue du message lui-même : la cible reçoit un message cohérent.
@@ -112,15 +126,21 @@ function sendToAgent(caller, { name, message } = {}) {
     chain,
     turns: used + 1,
     maxTurns: link.maxTurns,
-    stillValid: () => expects.get(link.target) === expect && linksOf(caller).some((l) => l.key === link.key),
+    onStaged: () => { expect.staged = true; },
+    stillValid: () => tasks.has(taskId) && !expect.error && linksOf(caller).some((l) => l.key === link.key),
     onDelivered: () => {
       expect.delivered = true;
+      active.set(link.target, taskId);
+    },
+    onFailed: (message) => {
+      if (expect.reply === null) expect.error = message;
+      if (active.get(link.target) === taskId) active.delete(link.target);
+      checkWaiters();
     },
   });
 
-  const busy = info.status === 'working' || info.status === 'waiting';
   return result(
-    `${tIn(lang, busy ? 'delegate.queued' : 'delegate.delivered', { name: target.name })} ${tIn(lang, 'delegate.getReply')}`,
+    `${tIn(lang, 'delegate.queued', { name: target.name })} ${tIn(lang, 'delegate.taskId', { id: taskId })} ${tIn(lang, 'delegate.getReply')}`,
   );
 }
 
@@ -131,19 +151,28 @@ function checkWaiters() {
 // Une case qui avait reçu un message délégué a fini : sa réponse est gardée pour wait_for_replies,
 // et le lien s'anime dans l'autre sens.
 function onStop(id, payload) {
-  const expect = expects.get(id);
-  if (!expect || !expect.delivered || expect.reply !== null) return;
+  const taskId = active.get(id);
+  const expect = tasks.get(taskId);
+  if (!expect || !expect.delivered || expect.reply !== null || expect.stopping) return;
+  expect.stopping = true;
   setTimeout(() => {
-    if (expects.get(id) !== expect) return;
+    if (tasks.get(taskId) !== expect || expect.error) return;
     expect.reply = lastReply(payload) || tIn(langOf(expect.from), 'delegate.emptyReply');
-    deps.log({ kind: 'reply', linkId: expect.id, from: id, to: expect.from, text: expect.reply });
+    if (active.get(id) === taskId) active.delete(id);
+    deps.log({ kind: 'reply', taskId, linkId: expect.id, from: id, to: expect.from, text: expect.reply });
     deps.emit(expect.id, { state: 'sent', to: expect.from, turns: expect.turns, maxTurns: expect.maxTurns });
     checkWaiters();
   }, READ_DELAY);
 }
 
 function onStatus(id, info) {
-  if (!info) checkWaiters(); // une case fermée ne répondra plus : on n'attend plus pour rien
+  if (info) return;
+  active.delete(id);
+  for (const [taskId, task] of tasks) {
+    if (task.from === id) tasks.delete(taskId);
+    else if (task.target === id && task.reply === null) task.error = tIn(langOf(task.from), 'delegate.closed');
+  }
+  checkWaiters();
 }
 
 // Nouvelle consigne de l'utilisateur : les compteurs affichés sur les liens en Délégation repartent à zéro.
@@ -151,25 +180,31 @@ function resetCounters(id) {
   for (const link of reachable.get(id) ?? []) deps.emit(link.id, { state: 'ready', turns: 0, maxTurns: link.maxTurns });
 }
 
-async function waitForReplies(caller, { names, timeout_seconds: timeout } = {}, signal) {
-  const pending = [...expects].filter(([, e]) => e.from === caller).map(([target]) => target);
+async function waitForReplies(caller, { names, task_ids: taskIds, timeout_seconds: timeout } = {}, signal) {
+  const pending = [...tasks.values()].filter((task) => task.from === caller);
   let targets = pending;
-  if (Array.isArray(names) && names.length) {
+  if (Array.isArray(taskIds) && taskIds.length) {
     targets = [];
+    for (const id of new Set(taskIds)) {
+      const task = tasks.get(id);
+      if (!task || task.from !== caller) return result(tIn(langOf(caller), 'delegate.unknownTask'), true);
+      targets.push(task);
+    }
+  }
+  if (Array.isArray(names) && names.length) {
+    const allowed = new Set();
     for (const name of names) {
       const link = findLink(caller, name);
-      const target = link?.target ?? pending.find((t) => normalize(nameOf(t)) === normalize(name));
+      const target = link?.target ?? pending.find((task) => normalize(task.targetName) === normalize(name))?.target;
       if (!target) return unknownAgent(caller, name);
-      targets.push(target);
+      allowed.add(target);
     }
+    targets = targets.filter((task) => allowed.has(task.target));
   }
   const lang = langOf(caller);
   if (!targets.length) return result(tIn(lang, 'delegate.nothingPending'));
 
-  const waiting = (t) => {
-    const e = expects.get(t);
-    return e?.from === caller && e.reply === null && Boolean(deps.info(t));
-  };
+  const waiting = (task) => tasks.has(task.taskId) && task.reply === null && !task.error;
   const seconds = Math.min(MAX_WAIT, Math.max(10, Number.isFinite(timeout) ? Math.round(timeout) : DEFAULT_WAIT));
   await new Promise((resolve) => {
     let timer;
@@ -185,18 +220,17 @@ async function waitForReplies(caller, { names, timeout_seconds: timeout } = {}, 
     timer = setTimeout(done, seconds * 1000);
     waiters.add(check);
     signal?.addEventListener('abort', done); // Claude interrompu : on arrête d'attendre
+    if (signal?.aborted) done();
     check();
   });
 
-  const parts = targets.map((target) => {
-    const e = expects.get(target);
-    const title = `### ${nameOf(target)}`;
-    if (e?.from !== caller) return `${title}\n${tIn(lang, 'delegate.notSent')}`;
-    if (e.reply !== null) {
-      expects.delete(target);
-      return `${title}\n${e.reply}`;
+  const parts = targets.map((task) => {
+    const title = `### ${task.targetName} · ${task.taskId}`;
+    if (!tasks.has(task.taskId)) return `${title}\n${tIn(lang, 'delegate.notSent')}`;
+    if (task.reply !== null || task.error) {
+      tasks.delete(task.taskId);
+      return `${title}\n${task.error || task.reply}`;
     }
-    if (!deps.info(target)) return `${title}\n${tIn(lang, 'delegate.closed')}`;
     return `${title}\n${tIn(lang, 'delegate.stillWorking', { seconds })}`;
   });
   return result(parts.join('\n\n'));

@@ -1,4 +1,6 @@
 import { Compass, FolderInput, Home } from 'lucide-react';
+import { useState } from 'react';
+import WorkspaceRecovery from './WorkspaceRecovery.jsx';
 import AboutSection from './AboutSection.jsx';
 import LanguageField from './LanguageField.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
@@ -20,7 +22,8 @@ const SHELLS = isMac
       { id: 'bash', name: 'Git Bash' },
     ];
 
-export default function GeneralTab({ onStartTutorial }) {
+export default function GeneralTab({ onStartTutorial, onStartSetup }) {
+  const [backupsOpen, setBackupsOpen] = useState(false);
   const { settings, updateSettings } = useSettings();
   const { rootPath, homeDir, changeRoot, resetRoot } = useWorkspace();
   const general = settings.general;
@@ -101,10 +104,17 @@ export default function GeneralTab({ onStartTutorial }) {
             <Compass size={15} />
             {t('general.tutorialRestart')}
           </button>
+          <button className="text-button" onClick={onStartSetup}>{t('general.setupRestart')}</button>
         </div>
         <span className="hint">{t('general.tutorialHint')}</span>
       </div>
 
+      <div className="field">
+        <span className="field-label">{t('backup.title')}</span>
+        <button className="text-button" onClick={() => setBackupsOpen(true)}>{t('backup.open')}</button>
+        <span className="hint">{t('backup.description')}</span>
+      </div>
+      {backupsOpen && <WorkspaceRecovery onClose={() => setBackupsOpen(false)} />}
       <AboutSection />
     </div>
   );

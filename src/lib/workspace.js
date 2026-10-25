@@ -1,10 +1,11 @@
 // Passage entre l'état d'un tableau et workspace.json (validé côté Node par electron/workspaceStore.cjs).
 
-export function serializeBoard({ nodes, edges, strokes, viewport }) {
+export function serializeBoard({ nodes, edges, strokes, groups = [], viewport }) {
   return {
     nodes: nodes.map(({ id, type, position, width, height, style, data }) => ({ id, type, position, width, height, style, data })),
     edges: edges.map(({ id, source, target, data }) => ({ id, source, target, data })),
     strokes,
+    groups,
     viewport,
   };
 }
@@ -18,8 +19,9 @@ export function deserializeBoard(saved) {
     ),
     edges: saved.edges,
     strokes: saved.strokes,
+    groups: saved.groups ?? [],
     viewport: saved.viewport,
   };
 }
 
-export const EMPTY_BOARD = { nodes: [], edges: [], strokes: [], viewport: null };
+export const EMPTY_BOARD = { nodes: [], edges: [], strokes: [], groups: [], viewport: null };

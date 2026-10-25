@@ -75,7 +75,9 @@ function testCommand(command) {
   const finder = process.platform === 'win32' ? 'where' : 'which';
   return new Promise((resolve) => {
     execFile(finder, [program], { timeout: 5000, windowsHide: true }, (error, stdout) => {
-      const found = stdout?.split(/\r?\n/).find(Boolean);
+      // Sous Windows, npm installe aussi un script sans extension (pour bash) : on préfère le .cmd ou le .exe.
+      const lines = stdout?.split(/\r?\n/).filter(Boolean) ?? [];
+      const found = (process.platform === 'win32' && lines.find((line) => /\.(exe|cmd|bat|com)$/i.test(line))) || lines[0];
       resolve(error || !found ? { ok: false, message: t('agents.notInPath', { program }) } : { ok: true, message: found });
     });
   });
@@ -113,4 +115,4 @@ function register(getWindow) {
   ipcMain.handle('agents:models', (_e, agentId) => listModels(agentId));
 }
 
-module.exports = { register };
+module.exports = { register, testCommand };

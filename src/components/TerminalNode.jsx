@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Handle, NodeResizer, Position, useReactFlow, useStoreApi } from '@xyflow/react';
-import { Drama, FileDiff, GitBranch, History, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
+import { Drama, FileDiff, GitBranch, History, Maximize2, MessageSquarePlus, RotateCcw, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import AgentLogo from './AgentLogo.jsx';
@@ -27,7 +27,8 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
   const t = useT();
-  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest } = useBoard();
+  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest, maximized, setMaximized, maxSlot } = useBoard();
+  const bodyRef = useRef(null);
   const { theme, accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
   const [status, setStatus] = useState('idle');
@@ -36,6 +37,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const [editingRole, setEditingRole] = useState(false);
   const [inRepo, setInRepo] = useState(false);
   const [showingChanges, setShowingChanges] = useState(false);
+  const [resumeError, setResumeError] = useState('');
+  const launching = useRef(false);
+  const [roleState, setRoleState] = useState(null);
   const { deleteElements, updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
@@ -49,6 +53,14 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const runDir = data.worktree ?? data.cwd;
   const runDirRef = useRef(runDir);
   runDirRef.current = runDir;
+
+  useEffect(() => {
+    let disposed = false;
+    let changed = false;
+    const off = window.roles.onChange(id, (state) => { changed = true; setRoleState(state); });
+    window.roles.get(id).then((state) => { if (!disposed && !changed) setRoleState(state); });
+    return () => { disposed = true; off(); };
+  }, [id]);
 
   // Case restaurée au démarrage d'un agent qui sait reprendre (Claude Code) : rien n'est lancé avant le choix
   // fait au démarrage (ResumeDialog), ou celui fait dans la case avec « Voir le tableau ».
@@ -133,6 +145,18 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     // Police et thème sont appliqués en direct par l'effet suivant, sans recréer le terminal.
   }, [id, data.agentId, data.cwd]);
 
+  // Terminal agrandi (PLAN.md §7, 3.3) : le même terminal xterm est déplacé dans le calque au-dessus de la map,
+  // puis remis dans la case. Rien n'est relancé ; position et taille de la case ne changent pas.
+  const enlarged = maximized === id && maxSlot;
+  useEffect(() => {
+    if (!enlarged) return;
+    const mount = containerRef.current;
+    const body = bodyRef.current;
+    maxSlot.appendChild(mount);
+    termRef.current?.focus();
+    return () => body.prepend(mount);
+  }, [enlarged, maxSlot]);
+
   // Bouton « Changements » seulement pour un dossier dans un dépôt Git (PLAN.md §3.20).
   useEffect(() => {
     let cancelled = false;
@@ -156,12 +180,18 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     }
   }, [id, theme, accent, terminalFontSize]);
 
-  const launch = (resume) => {
+  const launch = async (resume) => {
     const term = termRef.current;
-    if (!term) return;
-    updateNodeData(id, { restored: false });
-    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
-    term.focus();
+    if (!term || launching.current) return;
+    launching.current = true;
+    try {
+      const result = await window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
+      if (result?.error || !result) { setResumeError(result?.error || t('terminal.launchFailed')); return; }
+      setResumeError('');
+      updateNodeData(id, { restored: false });
+      term.focus();
+    } catch { setResumeError(t('terminal.launchFailed')); }
+    finally { launching.current = false; }
   };
 
   // Choix « Reprendre » ou « Nouvelle discussion » au démarrage : la case l'applique d'elle-même.
@@ -189,7 +219,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     setFinished(false);
     setConfirmingClose(false);
     term.reset();
-    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
+    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model })
+      .then((result) => { if (result?.error) setResumeError(result.error); })
+      .catch(() => setResumeError(t('terminal.launchFailed')));
     term.focus();
   };
 
@@ -251,21 +283,27 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
           )}
           {agent.hooks && (
             <button
-              className={`case-tab ${data.role ? 'active' : ''}`}
+              className={`case-tab ${data.role ? 'active' : ''} ${roleState?.pending ? 'role-pending' : ''}`}
               onClick={() => setEditingRole((o) => !o)}
-              title={data.role ? t('role.current', { role: data.role }) : t('role.add')}
+              title={roleState?.pending ? t('role.pending') : data.role ? t('role.current', { role: data.role }) : t('role.add')}
             >
               <Drama size={14} />
             </button>
           )}
         </div>
       )}
-      {showingChanges && <ChangesDialog dir={runDir} name={name} onClose={() => setShowingChanges(false)} />}
+      {showingChanges && <ChangesDialog id={id} dir={runDir} name={name} onClose={() => setShowingChanges(false)} />}
       {editingRole && (
         <RoleEditor
           role={data.role}
-          running={!exited && !askResume}
-          onSave={(role) => updateNodeData(id, { role: role || undefined })}
+          state={roleState}
+          running={roleState?.running ?? (!exited && !askResume)}
+          onSave={async (role) => {
+            const result = await window.roles.set(id, role);
+            if (result.error) throw new Error(result.error);
+            updateNodeData(id, { role: role || undefined });
+            setRoleState(result.value);
+          }}
           onRelaunch={() => respawn(runDir, true)}
           onClose={() => setEditingRole(false)}
         />
@@ -320,6 +358,11 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
                 {t('common.restart')}
               </button>
             )}
+            {!confirmingClose && (
+              <button className="maximize nodrag" onClick={() => setMaximized(id)} title={t('terminal.maximize')}>
+                <Maximize2 size={13} />
+              </button>
+            )}
             {confirmingClose ? (
               <span className="close-confirm nodrag">
                 {t('terminal.closeConfirm', { name })}
@@ -333,11 +376,12 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
         </header>
 
         {/* nodrag / nowheel : on peut sélectionner du texte et scroller sans bouger la map */}
-        <div className="terminal-body nodrag nowheel" onPointerDown={stopResizing}>
+        <div className="terminal-body nodrag nowheel" ref={bodyRef} onPointerDown={stopResizing}>
+          {enlarged && <span className="terminal-elsewhere hint">{t('terminal.enlarged')}</span>}
           <div className="terminal-mount" ref={containerRef} />
-          {askResume && resumeChoice === 'manual' && (
+          {((askResume && resumeChoice === 'manual') || resumeError) && (
             <div className="resume-prompt">
-              <p>{t('terminal.resumeQuestion', { name })}</p>
+              <p role={resumeError ? 'alert' : undefined}>{resumeError || t('terminal.resumeQuestion', { name })}</p>
               <div className="resume-actions">
                 <button className="text-button primary" onClick={() => launch(true)}>
                   <History size={15} />

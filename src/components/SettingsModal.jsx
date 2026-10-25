@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import AgentsTab from './AgentsTab.jsx';
 import AppearanceTab from './AppearanceTab.jsx';
+import DiagnosticsTab from './DiagnosticsTab.jsx';
 import GeneralTab from './GeneralTab.jsx';
 import ShortcutsTab from './ShortcutsTab.jsx';
 import useT from '../hooks/useT.js';
 
-const TABS = ['appearance', 'agents', 'general', 'shortcuts'];
+const TABS = ['appearance', 'agents', 'general', 'diagnostics', 'shortcuts'];
 
 // Fenêtre de paramètres centrée (PLAN.md §3.3) : fermeture par ×, Échap ou clic à côté.
-export default function SettingsModal({ onClose, onStartTutorial }) {
+export default function SettingsModal({ onClose, onStartTutorial, onStartSetup }) {
   const t = useT();
   const [tab, setTab] = useState('appearance');
 
@@ -48,7 +49,8 @@ export default function SettingsModal({ onClose, onStartTutorial }) {
         <div className="modal-body no-scrollbar" role="tabpanel">
           {tab === 'appearance' && <AppearanceTab />}
           {tab === 'agents' && <AgentsTab />}
-          {tab === 'general' && <GeneralTab onStartTutorial={onStartTutorial} />}
+          {tab === 'general' && <GeneralTab onStartTutorial={onStartTutorial} onStartSetup={onStartSetup} />}
+          {tab === 'diagnostics' && <DiagnosticsTab />}
           {tab === 'shortcuts' && <ShortcutsTab />}
         </div>
       </div>

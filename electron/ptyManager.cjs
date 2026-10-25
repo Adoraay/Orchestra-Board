@@ -95,4 +95,4 @@ function killAll() {
   for (const id of [...terminals.keys()]) kill(id);
 }
 
-module.exports = { create, write, buffer, resize, kill, killAll, resolveShell };
+module.exports = { create, write, buffer, resize, kill, killAll, resolveShell, ids: () => [...terminals.keys()] };
