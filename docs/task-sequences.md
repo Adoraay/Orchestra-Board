@@ -13,7 +13,7 @@ Une tâche est une suite de prompts enregistrée. Orchestra attend la fin de la 
 
 La fenêtre peut être fermée pendant l’exécution. Le moteur continue tant qu’Orchestra reste ouvert, même si tu changes de tableau. Rouvre **Tâches** et sélectionne la tâche pour suivre sa progression et consulter les réponses. **Dupliquer** prépare une nouvelle tâche indépendante et permet de changer les agents.
 
-Dans la version 0.1.3, **Suivi et historique** ouvre le suivi des tâches préexistant, avec ses dépendances, résultats et comparaisons de fichiers depuis leur début. Les séquences utilisent un stockage distinct et ne modifient pas cet historique.
+L’onglet **Historique**, à côté de **Séquences** dans la même fenêtre, liste les échanges entre agents (message envoyé, réponse, fichiers modifiés depuis le début) et les tâches suivies à la main, avec des filtres En cours / À vérifier / Terminées / Arrêtées. Les séquences utilisent un stockage distinct et ne modifient pas cet historique.
 
 Les boutons Tâches, Rechercher, Équipes, Réception et Paramètres sont des icônes compactes. **Paramètres → Apparence → Agrandir les boutons de la barre au survol** active ou désactive l’apparition de leurs noms au survol/focus clavier. Le réglage est appliqué immédiatement et conservé après redémarrage.
 

@@ -23,6 +23,7 @@ function createTaskStore(directory, deps = {}) {
       const clean = {
         id: task.id, title: short(task.title, 200), owner: ID.test(task.owner ?? '') ? task.owner : null,
         ownerName: short(task.ownerName, 80), boardId: ID.test(task.boardId ?? '') ? task.boardId : null,
+        from: ID.test(task.from ?? '') ? task.from : null, fromName: short(task.fromName, 80), prompt: short(task.prompt, 20000),
         source: ['relay', 'delegate'].includes(task.source) ? task.source : 'manual',
         state: ['running', 'preparing', 'queued', 'review'].includes(task.state) ? 'interrupted' : task.state,
         result: short(task.result, 20000), reason: short(task.reason, 2000),
@@ -162,7 +163,7 @@ function createTaskStore(directory, deps = {}) {
     let task = tasks.get(entry.taskId);
     if (!task && ['draft', 'relay', 'delegate'].includes(entry.kind)) {
       if (tasks.size >= LIMIT) return;
-      task = { id: entry.taskId, title: short(entry.text?.split('\n')[0], 200) || t('task.exchange'), owner: entry.to, ownerName: entry.toName ?? '', boardId: entry.boardId, source: entry.kind === 'delegate' ? 'delegate' : 'relay', state: entry.kind === 'draft' ? 'review' : 'queued', result: '', reason: '', dependencies: [], createdAt: entry.at, updatedAt: entry.at, startedAt: null, baseline: null };
+      task = { id: entry.taskId, title: short(entry.text?.split('\n')[0], 200) || t('task.exchange'), owner: entry.to, ownerName: entry.toName ?? '', boardId: entry.boardId, from: entry.from ?? null, fromName: short(entry.fromName, 80), prompt: short(entry.text, 20000), source: entry.kind === 'delegate' ? 'delegate' : 'relay', state: entry.kind === 'draft' ? 'review' : 'queued', result: '', reason: '', dependencies: [], createdAt: entry.at, updatedAt: entry.at, startedAt: null, baseline: null };
       tasks.set(task.id, task);
     }
     if (!task || ['validated', 'cancelled', 'failed', 'interrupted'].includes(task.state)) return;

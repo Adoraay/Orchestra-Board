@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { ClipboardList, Copy, Pause, Play, Plus, Save, Square, Trash2, X } from 'lucide-react';
 import TaskSequenceEditor, { emptySequence, sequenceTemplate } from './TaskSequenceEditor.jsx';
+import TaskHistory from './TaskHistory.jsx';
+import ChangesDialog from './ChangesDialog.jsx';
 import useT from '../hooks/useT.js';
 
 const activeStates = ['running', 'paused', 'approval'];
 
-export default function TaskSequencesDialog({ onClose, onFocus, onHistory }) {
+export default function TaskSequencesDialog({ boards, content, onClose, onFocus }) {
   const t = useT();
+  const [view, setView] = useState('sequences');
+  const [diffTask, setDiffTask] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [agents, setAgents] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -82,6 +86,7 @@ export default function TaskSequencesDialog({ onClose, onFocus, onHistory }) {
     else choose(next.id);
   };
   const keyDown = (event) => {
+    if (diffTask) return;
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (pending) setPending(null); else request({ kind: 'close' }); }
     if (event.key !== 'Tab') return;
     const focusable = [...modal.current.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary')];
@@ -92,7 +97,15 @@ export default function TaskSequencesDialog({ onClose, onFocus, onHistory }) {
 
   return <div className="modal-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) request({ kind: 'close' }); }}>
     <div ref={modal} className="modal sequences-modal" role="dialog" aria-modal="true" aria-labelledby="sequences-title" onKeyDown={keyDown}>
-      <header className="modal-header"><h1 id="sequences-title"><ClipboardList size={19} />{t('sequences.title')}</h1><div className="sequence-header-actions">{onHistory && <button className="text-button sequence-history" disabled={busy || dirty} onClick={onHistory}>{t('sequences.trackingHistory')}</button>}<button className="icon-button" title={t('common.close')} onClick={() => request({ kind: 'close' })}><X size={18} /></button></div></header>
+      <header className="modal-header"><h1 id="sequences-title"><ClipboardList size={19} />{t('sequences.title')}</h1><button className="icon-button" title={t('common.close')} onClick={() => request({ kind: 'close' })}><X size={18} /></button></header>
+      <nav className="tabs" role="tablist">
+        {['sequences', 'history'].map((id) => <button key={id} role="tab" aria-selected={view === id} className={`tab tasks-tab-${id} ${view === id ? 'active' : ''}`} onClick={() => setView(id)}>{t(id === 'history' ? 'tasks.historyTab' : 'sequences.tab')}</button>)}
+      </nav>
+      {view === 'history' && <>
+        <p className="sequence-intro">{t('tasks.hint')}</p>
+        <TaskHistory boards={boards} content={content} onFocus={focus} onDiff={setDiffTask} />
+      </>}
+      {view === 'sequences' && <>
       <p className="sequence-intro">{t('sequences.intro')}</p>
       {(error || storageError) && <p className="form-error sequence-message" role="alert">{storageError || error}</p>}
       {pending && <div className="sequence-confirm" role="alert"><span>{t(pending.kind === 'delete' ? 'sequences.deleteConfirm' : pending.kind === 'restart' ? 'sequences.restartConfirm' : 'sequences.discardConfirm')}</span><button className="text-button" onClick={() => setPending(null)}>{t('common.cancel')}</button><button className="text-button danger" onClick={confirm}>{t(pending.kind === 'delete' ? 'common.delete' : pending.kind === 'restart' ? 'sequences.restart' : 'sequences.discard')}</button></div>}
@@ -126,6 +139,8 @@ export default function TaskSequencesDialog({ onClose, onFocus, onHistory }) {
           <p className="hint sequence-footnote">{t('sequences.footnote')}</p>
         </div>
       </div>
+      </>}
     </div>
+    {diffTask && <ChangesDialog taskId={diffTask.id} id={diffTask.owner} name={diffTask.title} onClose={() => setDiffTask(null)} />}
   </div>;
 }
