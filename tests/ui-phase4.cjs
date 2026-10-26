@@ -20,12 +20,12 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
     await win.webContents.capturePage(undefined, { stayHidden: true }); await sleep(200);
     fs.writeFileSync(path.join(data, name + (french ? '-fr' : '') + '.png'), (await win.webContents.capturePage(undefined, { stayHidden: true })).toPNG());
   };
-  const closeTasks = () => click(`.tasks-modal button[title=${JSON.stringify(tr('Close', 'Fermer'))}]`);
-  const openTasks = async () => { await click(`.topbar button[title=${JSON.stringify(tr('Tasks', 'Tâches'))}]`); await click('.sequence-history'); };
+  const closeTasks = () => click(`.sequences-modal button[title=${JSON.stringify(tr('Close', 'Fermer'))}]`);
+  const openTasks = async () => { await click(`.topbar button[title=${JSON.stringify(tr('Tasks', 'Tâches'))}]`); await click('.tasks-tab-history'); };
   const saved = () => JSON.parse(fs.readFileSync(path.join(data, 'workspace.json'), 'utf8'));
   const waitSave = async (predicate) => { for (let i = 0; i < 40; i++) { if (predicate(saved())) return; await sleep(100); } throw new Error('Workspace save did not match expectation'); };
   const create = async (title, depends) => {
-    await button(tr('New task', 'Nouvelle tâche'));
+    await button(tr('Track a task', 'Suivre une tâche'));
     await setValue('.task-title-input', title);
     await setValue('.task-owner-input', 'reader', 'HTMLSelectElement');
     if (depends) await evaluate(`[...document.querySelectorAll('.task-dependencies label')].find(label => label.textContent.includes(${JSON.stringify(depends)})).querySelector('input').click()`);
@@ -53,7 +53,7 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   await evaluate("document.querySelector('.task-dependencies input').click()");
 
   // Sans référence, aucun diff HEAD de substitution.
-  await taskButton(tr('Changes since task start', 'Changements depuis le début'));
+  await taskButton(tr('Files changed since the start', 'Fichiers modifiés depuis le début'));
   await until(`document.querySelector('.changes-modal')?.textContent.includes(${JSON.stringify(tr('No task reference', 'Aucune référence de tâche'))})`);
   await click(`.changes-modal button[title=${JSON.stringify(tr('Close', 'Fermer'))}]`);
   await taskButton(tr('Start tracking', 'Démarrer le suivi'));
@@ -63,7 +63,7 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   const repo = path.join(data, 'task-repo');
   fs.writeFileSync(path.join(repo, 'task.txt'), 'already dirty\nnew task line\n');
   fs.writeFileSync(path.join(repo, 'new.txt'), 'new file during task\n');
-  await taskButton(tr('Changes since task start', 'Changements depuis le début'));
+  await taskButton(tr('Files changed since the start', 'Fichiers modifiés depuis le début'));
   await until("document.querySelectorAll('.changes-file').length === 2");
   await click('.changes-file[title="task.txt"]');
   await until("document.querySelector('.changes-code')?.textContent.includes('+new task line')");
@@ -72,16 +72,16 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   await capture('phase4-task-diff');
   await click(`.changes-modal button[title=${JSON.stringify(tr('Close', 'Fermer'))}]`);
   await setValue('.task-result-input', 'Result checked manually', 'HTMLTextAreaElement');
-  await taskButton(tr('Mark reply received', 'Marquer la réponse reçue'));
+  await taskButton(tr('Mark as finished', 'Marquer comme fini'));
   await until("window.tasks.list().then(r => r.value.tasks.find(task => task.title === 'Build task')?.state === 'responded')");
   assert.equal((await tasks()).find((task) => task.title === 'Review task').state, 'blocked');
   await capture('phase4-tasks');
-  await taskButton(tr('Validate result', 'Valider le résultat'));
+  await taskButton(tr('Mark as done', 'Marquer comme terminée'));
   await until("window.tasks.list().then(r => r.value.tasks.find(task => task.title === 'Review task')?.state === 'todo')");
   await chooseTask('Review task');
   await taskButton(tr('Start tracking', 'Démarrer le suivi'));
   await until("window.tasks.list().then(r => r.value.tasks.find(task => task.title === 'Review task')?.state === 'running')");
-  await taskButton(tr('Mark failed', 'Marquer en échec'));
+  await taskButton(tr('Mark as failed', 'Marquer en échec'));
   await until("window.tasks.list().then(r => r.value.tasks.find(task => task.title === 'Review task')?.state === 'failed')");
   await closeTasks();
 
@@ -92,7 +92,10 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   win.webContents.sendInputEvent({ type: 'mouseUp', x: box.right, y: box.bottom, button: 'right', clickCount: 1 });
   await until("document.querySelectorAll('.react-flow__node.selected').length === 4 && !!document.querySelector('.layout-toolbar')");
   await click('.layout-toggle');
-  await until("document.querySelectorAll('.layout-choice .formation-illustration').length === 6");
+  // 4 cases : les modèles en double (2 colonnes = grille, ligne = 4 par ligne) sont masqués.
+  await until("document.querySelectorAll('.layout-choice .formation-illustration').length === 4");
+  await evaluate("document.querySelector('.layout-choice[data-formation=rows3]').dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))");
+  await until("document.querySelectorAll('.formation-ghost').length === 4");
   assert.match(await evaluate("document.querySelector('.layout-choice[data-formation=grid]').textContent"), /2 × 2/);
   await capture('phase4-formations');
   await click('.layout-choice[data-formation="grid"]');
@@ -109,6 +112,7 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
     }
     await capture('phase4-formation-' + formation);
   }
+  await click('.layout-group-toggle');
   await setValue('.layout-toolbar input', 'Review team');
   await click(`.layout-toolbar button[title=${JSON.stringify(tr('Group selected tiles', 'Grouper les cases sélectionnées'))}]`);
   await until("document.querySelector('.board-group-name')?.textContent === 'Review team'");

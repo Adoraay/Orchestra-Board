@@ -8,7 +8,7 @@ const { hookUrl, toolUrl } = require('./hookServer.cjs');
 //   Windows), qui s'ajoutent à ceux de l'utilisateur, et autorisation des outils d'Orchestra, sauf
 //   run_in_terminal : Claude demande la permission avant de lancer une commande (PLAN.md §3.17) ;
 // - <id>.mcp.json, passé avec `claude --mcp-config` : le serveur MCP « orchestra » (PLAN.md §3.11).
-const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Notification', 'Stop'];
+const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop'];
 const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies', 'list_terminals', 'read_terminal', 'interrupt_terminal', 'list_notes', 'read_note', 'write_note'].map(
   (tool) => `mcp__orchestra__${tool}`,
 );

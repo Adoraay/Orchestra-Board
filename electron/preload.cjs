@@ -183,6 +183,7 @@ contextBridge.exposeInMainWorld('agentEvents', {
     ipcRenderer.on('agent:focus', listener);
     return () => ipcRenderer.removeListener('agent:focus', listener);
   },
+  answerPermission: (id, allow) => ipcRenderer.send('agent:permission', id, allow),
 });
 
 // Fenêtre : confirmation avant de quitter (agents qui travaillent) et couleurs des boutons Windows.

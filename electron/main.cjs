@@ -331,7 +331,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) {
     diagnostics.onLaunch(id);
-    agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
+    agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command), kind: agent.hooks || null });
     send('agent:status', id, agentStatus.info(id)); // la barre des agents actifs le voit tout de suite
   }
   const result = ptyManager.create(
@@ -373,6 +373,11 @@ ipcMain.on('pty:write', (_e, id, data) => {
     if (linkRelay.onUserInput(id)) delegation.resetCounters(id);
   }
   ptyManager.write(id, data);
+});
+// Bouton Accepter / Refuser de l'encoche des permissions : la touche est envoyée dans le terminal de la case.
+ipcMain.on('agent:permission', (_e, id, allow) => {
+  const key = agentStatus.answerPermission(id, allow === true);
+  if (key) ptyManager.write(id, key);
 });
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
 ipcMain.on('pty:ack', (_e, id) => agentStatus.acknowledge(id)); // clic sur une case qui a fini
