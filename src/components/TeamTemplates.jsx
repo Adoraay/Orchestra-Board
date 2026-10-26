@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { FolderOpen, Trash2, X } from 'lucide-react';
+import { ArrowRight, FolderOpen, Trash2, X } from 'lucide-react';
+import AgentLogo from './AgentLogo.jsx';
+import TeamPreview from './TeamPreview.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import useT from '../hooks/useT.js';
+
+const terminals = (board) => board?.nodes.filter((node) => node.type === 'terminal') ?? [];
 
 export default function TeamTemplates({ board, getBoard, boardName, onCreate, onClose }) {
   const t = useT();
@@ -39,7 +43,7 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
   }, [onClose]);
 
   const template = templates.find((item) => item.id === selected);
-  const sourceIds = [...new Set(template?.board.nodes.filter((node) => node.type === 'terminal').map((node) => node.data.agentId) ?? [])];
+  const sourceIds = [...new Set(terminals(template?.board).map((node) => node.data.agentId))];
   const compatible = (sourceId, agent) => {
     if (sourceId === 'shell') return agent.id === 'shell';
     const ids = new Set(template.board.nodes.filter((node) => node.type === 'terminal' && node.data.agentId === sourceId).map((node) => node.id));
@@ -51,6 +55,8 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
     const agent = agents.find((entry) => entry.id === id);
     return agent && installed[id] && compatible(id, agent) ? id : '';
   };
+  const summary = (item) => t('team.summary', { agents: terminals(item.board).length, links: item.board.edges.length });
+  const roles = terminals(template?.board).filter((node) => node.data.role);
 
   const perform = async (action) => {
     setBusy(true); setError('');
@@ -83,45 +89,64 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
       <nav className="tabs" role="tablist">
         {['use', 'save'].map((id) => <button key={id} role="tab" aria-selected={tab === id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => { setTab(id); setError(''); }}>{t(`team.${id}Tab`)}</button>)}
       </nav>
-      <div className="modal-body thin-scrollbar">
-        {tab === 'save' ? <div className="settings-form">
+      {tab === 'save' ? <div className="modal-body thin-scrollbar">
+        <div className="team-details settings-form">
           <p className="hint">{t('team.saveHint')}</p>
           <label className="field"><span>{t('team.name')}</span><input type="text" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} /></label>
-          <button className="text-button primary" disabled={busy || !name.trim() || !board.nodes.length} onClick={save}>{t('team.saveBoard')}</button>
-        </div> : <>
-          <div className="team-layout">
-            <div className="team-list" role="list" aria-label={t('team.title')}>
-              {templates.map((item) => <button key={item.id} className={`team-item ${item.id === selected ? 'active' : ''}`} onClick={() => { setSelected(item.id); setReplacements({}); setConfirmDelete(false); setError(''); }}>
-                <span>{item.name}</span><span className="hint">{t(item.builtin ? 'team.recipe' : 'team.personal')}</span>
-              </button>)}
-            </div>
-            {template && <div className="team-details settings-form">
-              <p className="hint">{t('team.createHint')}</p>
-              <label className="field"><span>{t('team.folder')}</span><div className="field-row">
-                <input type="text" value={folder} onChange={(e) => setFolder(e.target.value)} />
-                <button className="icon-button" title={t('team.pickFolder')} onClick={async () => { const picked = await window.fs.pickFolder(folder); if (picked) setFolder(picked); }}><FolderOpen size={16} /></button>
-              </div></label>
-              {sourceIds.map((id) => <label className="field" key={id}><span>{agents.find((agent) => agent.id === id)?.name || id}</span>
-                <select value={choice(id)} onChange={(e) => setReplacements((current) => ({ ...current, [id]: e.target.value }))}>
+          {board.nodes.length ? <TeamPreview board={board} agents={agents} /> : <p className="hint">{t('team.emptyBoard')}</p>}
+          {error && <p role="alert" className="form-error">{error}</p>}
+          <div className="dialog-actions"><button className="text-button primary" disabled={busy || !name.trim() || !board.nodes.length} onClick={save}>{t('team.saveBoard')}</button></div>
+        </div>
+      </div> : <div className="team-layout">
+        <aside className="team-list thin-scrollbar" aria-label={t('team.title')}>
+          {templates.map((item) => <button key={item.id} className={`team-item ${item.id === selected ? 'active' : ''}`} onClick={() => { setSelected(item.id); setReplacements({}); setConfirmDelete(false); setError(''); }}>
+            <strong>{item.name}</strong>
+            <span className="hint">{t(item.builtin ? 'team.recipe' : 'team.personal')} · {summary(item)}</span>
+          </button>)}
+        </aside>
+        {template && <div className="team-details settings-form thin-scrollbar">
+          <div>
+            <h2 className="team-heading">{template.name}</h2>
+            {template.description && <p className="team-description">{template.description}</p>}
+          </div>
+          <TeamPreview board={template.board} agents={agents} />
+          {roles.length > 0 && <details className="team-roles">
+            <summary>{t('team.roles', { n: roles.length })}</summary>
+            {roles.map((node) => <div key={node.id}><strong>{node.data.label || node.data.agentId}</strong><p>{node.data.role}</p></div>)}
+          </details>}
+
+          <h3 className="team-section">{t('team.setup')}</h3>
+          <label className="field"><span>{t('team.folder')}</span><div className="field-row">
+            <input type="text" value={folder} placeholder={t('team.folderPlaceholder')} onChange={(e) => setFolder(e.target.value)} />
+            <button className="text-button" title={t('team.pickFolder')} onClick={async () => { const picked = await window.fs.pickFolder(folder); if (picked) setFolder(picked); }}><FolderOpen size={15} />{t('team.browse')}</button>
+          </div></label>
+          {sourceIds.length > 0 && <div className="field"><span>{t('team.agents')}</span>
+            <div className="team-agents">{sourceIds.map((id) => {
+              const source = agents.find((agent) => agent.id === id);
+              const count = terminals(template.board).filter((node) => node.data.agentId === id).length;
+              return <label className="team-agent-row" key={id}>
+                <span className="team-agent-source"><AgentLogo agent={source} size={18} />{source?.name || id}{count > 1 && <span className="hint">×{count}</span>}</span>
+                <ArrowRight size={14} className="muted" />
+                <select className={choice(id) ? '' : 'missing'} value={choice(id)} onChange={(e) => setReplacements((current) => ({ ...current, [id]: e.target.value }))}>
                   <option value="">{t('team.chooseAgent')}</option>
                   {agents.filter((agent) => compatible(id, agent)).map((agent) => <option key={agent.id} value={agent.id} disabled={!installed[agent.id]}>{agent.name}{!installed[agent.id] ? ` — ${t('team.notInstalled')}` : ''}</option>)}
                 </select>
-              </label>)}
-              <p className="hint">{t('team.includes', { nodes: template.board.nodes.length, links: template.board.edges.length })}</p>
-              <div className="team-preview">{template.board.nodes.map((node) => <div key={node.id}><strong>{node.data.label || node.data.agentId || t('team.note')}</strong>{node.data.role && <p className="hint">{node.data.role}</p>}</div>)}</div>
-            </div>}
-          </div>
+              </label>;
+            })}</div>
+            {sourceIds.some((id) => !choice(id)) && <p className="link-warning">{t('team.replaceHint')}</p>}
+          </div>}
+          {error && <p role="alert" className="form-error">{error}</p>}
           <div className="dialog-actions">
-            {template && !template.builtin && (confirmDelete ? <>
+            {!template.builtin && (confirmDelete ? <>
               <span className="hint">{t('team.deleteConfirm')}</span>
               <button className="text-button danger" disabled={busy} onClick={remove}>{t('common.yes')}</button>
               <button className="text-button" onClick={() => setConfirmDelete(false)}>{t('common.cancel')}</button>
-            </> : <button className="text-button" onClick={() => setConfirmDelete(true)}><Trash2 size={14} />{t('team.delete')}</button>)}
-            <button className="text-button primary" disabled={busy || !template || !folder.trim() || sourceIds.some((id) => !choice(id))} onClick={create}>{t('team.create')}</button>
+            </> : <button className="icon-button" title={t('team.delete')} onClick={() => setConfirmDelete(true)}><Trash2 size={15} /></button>)}
+            <span className="team-actions-spacer" />
+            <button className="text-button primary" disabled={busy || !folder.trim() || sourceIds.some((id) => !choice(id))} onClick={create}>{t('team.create')}</button>
           </div>
-        </>}
-        {error && <p role="alert" className="form-error">{error}</p>}
-      </div>
+        </div>}
+      </div>}
     </div>
   </div>;
 }

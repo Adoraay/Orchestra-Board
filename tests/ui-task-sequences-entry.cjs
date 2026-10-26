@@ -193,9 +193,9 @@ app.on('browser-window-created', (_event, win) => {
       await evaluate("document.querySelector('.inbox-toggle').click()");
       await domUntil("!!document.querySelector('.inbox-modal')");
       assert.equal(await evaluate("document.querySelectorAll('.inbox-entry').length"), 0);
-      await evaluate("document.querySelector('.inbox-controls input').click()");
+      await evaluate("document.querySelector('.inbox-tab-resolved').click()");
       await domUntil("document.querySelectorAll('.inbox-entry.resolved').length === 1");
-      await evaluate("document.querySelector('.inbox-controls button').click()");
+      await evaluate("document.querySelector('.inbox-clear').click()");
       await domUntil("document.querySelectorAll('.inbox-entry').length === 0");
       await evaluate("document.querySelector('.inbox-modal .modal-header button').click()");
       assert.equal(await evaluate("!!document.body.innerText.match(/(?:team|inbox|search)\.[a-z]/)"), false);
