@@ -39,6 +39,10 @@ Tout reste sur ta machine. Orchestra lance seulement les CLI que tu utilises dé
 
 ## Fonctionnalités
 
+**Séquences de prompts :** **Tâches** permet d’enregistrer des étapes pour Claude Code/Codex, de les lancer dans l’ordre et de passer automatiquement à la suivante après chaque réponse. Tu peux changer d’agent, joindre la réponse précédente, demander une validation, mettre en pause ou arrêter. Le bouton **Suivi et historique** conserve l’accès au suivi des tâches et à leurs comparaisons de fichiers. Voir le [guide des séquences](docs/task-sequences.md).
+
+Les boutons de la barre du haut révèlent leur nom au survol. **Paramètres → Apparence → Agrandir les boutons de la barre au survol** permet d’activer ou désactiver cet effet ; le choix est conservé après redémarrage.
+
 | | |
 |---|---|
 | 🗺️ **Map infinie** | Glisse des agents depuis le dock sur une map avec déplacement, zoom et minicarte. Plusieurs tableaux en onglets ; les agents continuent en arrière-plan. |

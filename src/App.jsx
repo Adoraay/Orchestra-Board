@@ -41,6 +41,7 @@ import TeamTemplates from './components/TeamTemplates.jsx';
 import BlockersInbox from './components/BlockersInbox.jsx';
 import TopBar from './components/TopBar.jsx';
 import TileSearch from './components/TileSearch.jsx';
+import TaskSequencesDialog from './components/TaskSequencesDialog.jsx';
 import TasksDialog from './components/TasksDialog.jsx';
 import LayoutToolbar from './components/LayoutToolbar.jsx';
 import GroupsLayer from './components/GroupsLayer.jsx';
@@ -105,6 +106,7 @@ function Workspace({ saved }) {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
+  const [taskHistoryOpen, setTaskHistoryOpen] = useState(false);
   const [blockers, setBlockers] = useState([]);
   useEffect(() => {
     let changed = false;
@@ -246,7 +248,7 @@ function Workspace({ saved }) {
         onOpenTeams={() => setTeamsOpen(true)}
         onOpenInbox={() => setInboxOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
-        onOpenTasks={() => setTasksOpen(true)}
+        onOpenTasks={() => { boards.flushSave().then(() => setTasksOpen(true)).catch(() => setTasksOpen(true)); }}
         blockerCount={blockers.filter((entry) => !entry.resolved).length}
       />
       <div className="workspace">
@@ -271,7 +273,8 @@ function Workspace({ saved }) {
         />
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} onStartSetup={startSetup} />}
-      {tasksOpen && <TasksDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
+      {tasksOpen && <TaskSequencesDialog onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} onHistory={() => { setTasksOpen(false); setTaskHistoryOpen(true); }} />}
+      {taskHistoryOpen && <TasksDialog boards={boards.boards} content={content} onFocus={(id) => { setTaskHistoryOpen(false); focusAgent(id); }} onClose={() => setTaskHistoryOpen(false)} />}
       {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
       {searchOpen && (
         <TileSearch boards={boards.boards} content={content} activeId={activeId} onFocus={focusAgent} onClose={() => setSearchOpen(false)} />

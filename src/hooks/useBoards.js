@@ -110,5 +110,6 @@ export default function useBoards(saved) {
     deleteBoard,
     agentCount,
     saveError,
+    flushSave: () => { clearTimeout(saveTimer.current); return window.workspace.set(snapshot()); },
   };
 }

@@ -39,6 +39,10 @@ Everything stays on your machine. Orchestra only starts the CLIs you already use
 
 ## Features
 
+**Prompt sequences:** **Tasks** saves ordered steps for Claude Code/Codex and automatically sends the next prompt after each response. Switch agents, attach the previous response, request approval, pause or stop. **Tracking and history** preserves access to the existing task tracker and its file comparisons. See the [sequence guide](docs/task-sequences.md).
+
+Top toolbar buttons reveal their names on hover. Toggle this in **Settings → Appearance → Expand toolbar buttons on hover**; the preference survives a restart.
+
 | | |
 |---|---|
 | 🗺️ **Infinite map** | Drag agents from the dock onto a canvas with pan, zoom and minimap. Several boards in tabs; agents keep running in the background. |

@@ -21,7 +21,7 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
     fs.writeFileSync(path.join(data, name + (french ? '-fr' : '') + '.png'), (await win.webContents.capturePage(undefined, { stayHidden: true })).toPNG());
   };
   const closeTasks = () => click(`.tasks-modal button[title=${JSON.stringify(tr('Close', 'Fermer'))}]`);
-  const openTasks = () => click(`.topbar button[title=${JSON.stringify(tr('Tasks', 'Tâches'))}]`);
+  const openTasks = async () => { await click(`.topbar button[title=${JSON.stringify(tr('Tasks', 'Tâches'))}]`); await click('.sequence-history'); };
   const saved = () => JSON.parse(fs.readFileSync(path.join(data, 'workspace.json'), 'utf8'));
   const waitSave = async (predicate) => { for (let i = 0; i < 40; i++) { if (predicate(saved())) return; await sleep(100); } throw new Error('Workspace save did not match expectation'); };
   const create = async (title, depends) => {

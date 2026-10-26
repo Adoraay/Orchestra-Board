@@ -1,5 +1,23 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+contextBridge.exposeInMainWorld('taskSequences', {
+  list: () => ipcRenderer.invoke('sequences:list'),
+  save: (input, id) => ipcRenderer.invoke('sequences:save', input, id),
+  remove: (id) => ipcRenderer.invoke('sequences:remove', id),
+  start: (id) => ipcRenderer.invoke('sequences:start', id),
+  action: (id, action) => ipcRenderer.invoke('sequences:action', id, action),
+  onChanged: (cb) => {
+    const listener = (_event, value) => cb(value);
+    ipcRenderer.on('sequences:changed', listener);
+    return () => ipcRenderer.removeListener('sequences:changed', listener);
+  },
+  onAgents: (cb) => {
+    const listener = (_event, value) => cb(value);
+    ipcRenderer.on('sequences:agents', listener);
+    return () => ipcRenderer.removeListener('sequences:agents', listener);
+  },
+});
+
 contextBridge.exposeInMainWorld('tasks', {
   list: () => ipcRenderer.invoke('tasks:list'),
   create: (input) => ipcRenderer.invoke('tasks:create', input),

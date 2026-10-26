@@ -32,7 +32,7 @@ const CATALOG_AGENTS = [
 
 const DEFAULTS = {
   // glow : points de la grille colorés autour de la souris, glowColor null = couleur d'accent, glowSize = rayon en px.
-  appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots', glow: true, glowColor: null, glowSize: 110 },
+  appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots', glow: true, glowColor: null, glowSize: 110, expandToolbarOnHover: true },
   general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true, pinned: {} },
 };
 
@@ -122,6 +122,7 @@ function sanitize(input) {
       accent: typeof a.accent === 'string' && HEX_COLOR.test(a.accent) ? a.accent.toLowerCase() : null,
       terminalFontSize: Number.isInteger(fontSize) && fontSize >= 10 && fontSize <= 24 ? fontSize : DEFAULTS.appearance.terminalFontSize,
       grid: pick(a.grid, GRIDS, DEFAULTS.appearance.grid),
+      expandToolbarOnHover: a.expandToolbarOnHover !== false,
       glow: a.glow !== false,
       glowColor: typeof a.glowColor === 'string' && HEX_COLOR.test(a.glowColor) ? a.glowColor.toLowerCase() : null,
       glowSize: Number.isInteger(glowSize) && glowSize >= 40 && glowSize <= 240 ? glowSize : DEFAULTS.appearance.glowSize,

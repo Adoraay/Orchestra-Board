@@ -1,4 +1,4 @@
-import { ClipboardList, Folder, Settings, Users, Inbox, Search } from 'lucide-react';
+import { ClipboardList, Folder, Inbox, Search, Settings, Users } from 'lucide-react';
 import lockup from '../assets/orchestra-lockup.svg';
 import lockupLight from '../assets/orchestra-lockup-light.svg';
 import { useSettings } from '../context/SettingsContext.jsx';
@@ -9,10 +9,17 @@ import BoardTabs from './BoardTabs.jsx';
 
 // Seule barre en haut de la fenêtre (elle sert aussi à la déplacer) : logo et nom, onglets des tableaux,
 // dossier actif (donné au prochain agent), paramètres, puis les boutons Windows.
-export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSettings, onOpenTeams, onOpenInbox, onOpenSearch, onOpenTasks, blockerCount }) {
+export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSettings, onOpenTasks, onOpenInbox, onOpenTeams, onOpenSearch, blockerCount = 0 }) {
   const { activeFolder, homeDir } = useWorkspace();
   const { settings } = useSettings();
   const t = useT();
+  const actions = [
+    { className: 'sequence-open', Icon: ClipboardList, label: t('sequences.title'), title: t('sequences.title'), onClick: onOpenTasks },
+    { className: 'search-toggle', Icon: Search, label: t('topbar.search'), title: t('search.open'), onClick: onOpenSearch },
+    { className: 'teams-toggle', Icon: Users, label: t('topbar.team'), title: t('team.title'), onClick: onOpenTeams },
+    { className: 'inbox-toggle', Icon: Inbox, label: t('topbar.inbox'), title: t('inbox.title'), onClick: onOpenInbox, count: blockerCount },
+    { className: 'settings-toggle', Icon: Settings, label: t('topbar.settingsLabel'), title: t('topbar.settings'), onClick: onOpenSettings },
+  ];
 
   return (
     <header className="topbar">
@@ -39,15 +46,14 @@ export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSe
         </span>
       </div>
 
-      <button className="icon-button no-drag" title={t('search.open')} onClick={onOpenSearch}><Search size={17} /></button>
-      <button className="icon-button no-drag" title={t('tasks.title')} onClick={onOpenTasks}><ClipboardList size={17} /></button>
-      <button className="icon-button no-drag" title={t('team.title')} onClick={onOpenTeams}><Users size={17} /></button>
-      <button className={`icon-button no-drag inbox-toggle ${blockerCount ? 'has-blockers' : ''}`} title={t('inbox.title')} onClick={onOpenInbox}>
-        <Inbox size={17} />{blockerCount > 0 && <span className="inbox-count">{blockerCount}</span>}
-      </button>
-      <button className="icon-button no-drag" title={t('topbar.settings')} onClick={onOpenSettings}>
-        <Settings size={17} />
-      </button>
+      <div className={`topbar-actions no-drag${settings.appearance.expandToolbarOnHover !== false ? ' expand-on-hover' : ''}`}>
+        {actions.map(({ className, Icon, label, title, onClick, count }) => (
+          <button key={className} className={`icon-button topbar-action ${className}${count ? ' has-blockers' : ''}`} title={title} aria-label={title} onClick={onClick}>
+            <span className="topbar-action-icon"><Icon size={17} />{count > 0 && <span className="inbox-count">{count}</span>}</span>
+            <span className="topbar-action-label" aria-hidden="true">{label}</span>
+          </button>
+        ))}
+      </div>
       <span className="topbar-separator" />
     </header>
   );

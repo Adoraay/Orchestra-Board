@@ -34,6 +34,8 @@ function register(id, mode, meta = {}) {
     quietTimer: null,
     sessionId: null,
     transcriptPath: null,
+    turnId: null,
+    ready: mode !== 'hooks',
     name: meta.name ?? '',
     cwd: meta.cwd ?? null,
     notify: meta.notify !== false,
@@ -48,7 +50,7 @@ function unregister(id) {
 function info(id) {
   const e = entries.get(id);
   return e
-    ? { status: e.status, unseen: e.unseen, sessionId: e.sessionId, transcriptPath: e.transcriptPath, name: e.name, cwd: e.cwd }
+    ? { status: e.status, unseen: e.unseen, sessionId: e.sessionId, transcriptPath: e.transcriptPath, turnId: e.turnId, ready: e.ready, mode: e.mode, name: e.name, cwd: e.cwd }
     : null;
 }
 
@@ -81,8 +83,14 @@ function onHook(id, payload) {
 
   switch (payload.hook_event_name) {
     case 'SessionStart':
+      e.ready = true;
+      e.turnId = null;
+      if (e.status === 'idle') emit(id, info(id));
       return set(id, e, 'idle');
     case 'UserPromptSubmit':
+      e.ready = true;
+      e.turnId = typeof payload.turn_id === 'string' ? payload.turn_id : null;
+      return set(id, e, 'working');
     case 'PostToolUse': // reprise du travail, par exemple après une permission accordée
       return set(id, e, 'working');
     case 'Notification': // Claude Code

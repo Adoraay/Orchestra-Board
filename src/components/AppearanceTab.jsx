@@ -36,6 +36,13 @@ export default function AppearanceTab() {
       <FontSizeField />
       <GridField />
       <GlowFields />
+      <div className="field">
+        <label className="checkbox">
+          <input id="toolbar-hover" type="checkbox" checked={settings.appearance.expandToolbarOnHover !== false} onChange={(event) => updateSettings('appearance', { expandToolbarOnHover: event.target.checked })} />
+          {t('appearance.expandToolbarOnHover')}
+        </label>
+        <span className="hint">{t('appearance.expandToolbarOnHoverHint')}</span>
+      </div>
     </div>
   );
 }
