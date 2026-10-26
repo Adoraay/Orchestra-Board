@@ -41,7 +41,7 @@ Everything stays on your machine. Orchestra only starts the CLIs you already use
 
 **Prompt sequences:** **Tasks** saves ordered steps for Claude Code/Codex and automatically sends the next prompt after each response. Switch agents, attach the previous response, request approval, pause or stop. The **History** tab lists every message sent between agents through a link, with its reply and the files changed since the start; mark the result as done or failed there, or track a task you give an agent yourself. See the [sequence guide](docs/task-sequences.md).
 
-Top toolbar buttons reveal their names on hover. Toggle this in **Settings → Appearance → Expand toolbar buttons on hover**; the preference survives a restart.
+Top toolbar buttons are compact icons. To reveal their names on hover, turn on **Settings → Appearance → Expand toolbar buttons on hover**; the preference survives a restart.
 
 | | |
 |---|---|

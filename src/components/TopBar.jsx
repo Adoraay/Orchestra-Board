@@ -46,7 +46,7 @@ export default function TopBar({ boards, boardsWithNews, renameRequest, onOpenSe
         </span>
       </div>
 
-      <div className={`topbar-actions no-drag${settings.appearance.expandToolbarOnHover !== false ? ' expand-on-hover' : ''}`}>
+      <div className={`topbar-actions no-drag${settings.appearance.expandToolbarOnHover === true ? ' expand-on-hover' : ''}`}>
         {actions.map(({ className, Icon, label, title, onClick, count }) => (
           <button key={className} className={`icon-button topbar-action ${className}${count ? ' has-blockers' : ''}`} title={title} aria-label={title} onClick={onClick}>
             <span className="topbar-action-icon"><Icon size={17} />{count > 0 && <span className="inbox-count">{count}</span>}</span>
