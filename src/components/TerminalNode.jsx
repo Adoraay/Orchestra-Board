@@ -324,7 +324,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
 
       <div
         ref={floating.ref}
-        className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${linkSource === id ? 'link-source' : ''} ${finished ? 'finished' : ''} ${branchTarget === id ? 'branch-target' : ''} ${floating.animClass}`}
+        className={`terminal-node ${selected ? 'selected' : ''} ${dragging ? 'lifted' : ''} ${linkSource === id ? 'link-source' : ''} ${finished ? 'finished' : ''} ${!exited && status === 'waiting' ? 'awaiting' : ''} ${branchTarget === id ? 'branch-target' : ''} ${floating.animClass}`}
         onAnimationEnd={floating.onAnimationEnd}
         onPointerDownCapture={select}
       >
@@ -350,7 +350,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
             editRequest={renameRequest?.id === id ? renameRequest.at : null}
           />
           {data.model && <span className="model-tag" title={t('model.tile', { model: data.model })}>{data.model}</span>}
-          {exited ? <span className="badge">{t('terminal.exited')}</span> : <StatusDot status={status} />}
+          {exited ? <span className="badge">{t('terminal.exited')}</span> : status !== 'waiting' && <StatusDot status={status} />}
           <span className="header-actions">
             {exited && (
               <button className="header-button nodrag" onClick={restart} title={t('common.restart')}>

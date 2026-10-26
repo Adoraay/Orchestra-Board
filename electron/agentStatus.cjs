@@ -17,6 +17,7 @@ function set(id, entry, status) {
   if (entry.status === status) return;
   const justFinished = entry.notify && status === 'done' && (entry.status === 'working' || entry.status === 'waiting');
   entry.status = status;
+  if (status !== 'waiting') entry.permission = null;
   if (status === 'working') entry.unseen = false;
   if (justFinished) entry.unseen = true;
   emit(id, info(id));
@@ -34,9 +35,13 @@ function register(id, mode, meta = {}) {
     quietTimer: null,
     sessionId: null,
     transcriptPath: null,
+    turnId: null,
+    ready: mode !== 'hooks',
     name: meta.name ?? '',
     cwd: meta.cwd ?? null,
     notify: meta.notify !== false,
+    kind: meta.kind ?? null,
+    permission: null,
   });
 }
 
@@ -48,7 +53,7 @@ function unregister(id) {
 function info(id) {
   const e = entries.get(id);
   return e
-    ? { status: e.status, unseen: e.unseen, sessionId: e.sessionId, transcriptPath: e.transcriptPath, name: e.name, cwd: e.cwd }
+    ? { status: e.status, unseen: e.unseen, sessionId: e.sessionId, transcriptPath: e.transcriptPath, turnId: e.turnId, ready: e.ready, mode: e.mode, name: e.name, cwd: e.cwd, permission: e.permission }
     : null;
 }
 
@@ -81,12 +86,26 @@ function onHook(id, payload) {
 
   switch (payload.hook_event_name) {
     case 'SessionStart':
+      e.ready = true;
+      e.turnId = null;
+      if (e.status === 'idle') emit(id, info(id));
       return set(id, e, 'idle');
     case 'UserPromptSubmit':
+      e.ready = true;
+      e.turnId = typeof payload.turn_id === 'string' ? payload.turn_id : null;
+      return set(id, e, 'working');
     case 'PostToolUse': // reprise du travail, par exemple après une permission accordée
       return set(id, e, 'working');
+    case 'PermissionRequest': // Claude Code et Codex : arrive avant que la demande s'affiche
+      if (e.kind === 'claude') {
+        if (e.status !== 'working' && e.status !== 'waiting') return;
+        e.status = 'waiting';
+        e.permission = permissionOf(payload);
+        return emit(id, info(id));
+      }
+      if (e.status === 'working') set(id, e, 'waiting');
+      return;
     case 'Notification': // Claude Code
-    case 'PermissionRequest': // Codex
       // Pendant le travail = demande de permission. Après la fin, c'est le rappel « en attente », ignoré.
       if (e.status === 'working') set(id, e, 'waiting');
       return;
@@ -95,12 +114,33 @@ function onHook(id, payload) {
   }
 }
 
+// Outils dont la demande n'est pas un simple oui/non (question, sortie du mode plan) : réponse dans le terminal.
+const OPEN_ENDED = ['AskUserQuestion', 'ExitPlanMode'];
+
+function permissionOf(payload) {
+  const tool = typeof payload.tool_name === 'string' ? payload.tool_name.slice(0, 80) : '';
+  const input = payload.tool_input && typeof payload.tool_input === 'object' ? payload.tool_input : {};
+  const detail = [input.command, input.file_path, input.notebook_path, input.url, input.query, input.description].find((value) => typeof value === 'string' && value.trim()) ?? '';
+  return { tool, detail: detail.slice(0, 300), actionable: Boolean(tool) && !OPEN_ENDED.includes(tool) };
+}
+
+// Réponse à une demande de permission depuis l'interface : seulement « Oui » (1) ou « Non » (Échap),
+// jamais « Oui, ne plus demander ». Un refus n'envoie pas de hook Stop, d'où le retour à idle.
+function answerPermission(id, allow) {
+  const e = entries.get(id);
+  if (!e || e.status !== 'waiting' || !e.permission?.actionable) return null;
+  set(id, e, allow ? 'working' : 'idle');
+  return allow ? '1' : '\x1b';
+}
+
 // Une frappe vaut « vu ». Les séquences qui commencent par Échap sont ignorées : ce sont surtout les
 // réponses automatiques de xterm aux programmes (position du curseur, focus), pas l'utilisateur.
 // Agents sans hooks : Entrée « arme » la case, la sortie qui suit = travaille, le silence = a fini.
 // Sans Entrée avant, la sortie (démarrage, écho des touches, animations) ne change rien.
 function onInput(id, data) {
   const e = entries.get(id);
+  // Échap seul pendant une demande de permission de Claude = refus tapé dans le terminal.
+  if (e?.status === 'waiting' && e.kind === 'claude' && data === '\x1b') return set(id, e, 'idle');
   if (!e || data.startsWith('\x1b')) return;
   acknowledge(id);
   if (e.mode === 'activity' && data.includes('\r')) e.armed = true;
@@ -121,4 +161,4 @@ function onOutput(id) {
   e.quietTimer = setTimeout(() => set(id, e, 'done'), QUIET_DELAY);
 }
 
-module.exports = { init, register, unregister, info, busy, rename, acknowledge, onHook, onInput, onOutput, arm };
+module.exports = { init, register, unregister, info, busy, rename, acknowledge, onHook, onInput, onOutput, arm, answerPermission };

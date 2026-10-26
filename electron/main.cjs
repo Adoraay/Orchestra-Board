@@ -30,9 +30,22 @@ const { canResume, sanitizeSession } = require('./sessionState.cjs');
 const teamTemplates = require('./teamTemplates.cjs');
 const { createBlockers } = require('./blockers.cjs');
 const { createRoleState } = require('./roleState.cjs');
+const { createTaskSequences } = require('./taskSequences.cjs');
 
 let win;
 let quitConfirmed = false;
+let taskSequences;
+let sequenceNodes = [];
+
+function sequenceAgents() {
+  const agents = settingsStore.load().agents;
+  return sequenceNodes.flatMap(({ node, boardName }) => {
+    const agent = agents.find((entry) => entry.id === node.data.agentId);
+    if (!['claude', 'codex'].includes(agent?.hooks)) return [];
+    const info = agentStatus.info(node.id);
+    return [{ id: node.id, name: node.data.label || agent.name, boardName, status: info?.status || 'offline', ready: info?.ready === true }];
+  });
+}
 const blockers = createBlockers((entries) => send('blockers:change', entries));
 const roleState = createRoleState({ emit: (id, state) => send('roles:change', id, state), running: (id) => Boolean(agentStatus.info(id)) });
 
@@ -137,9 +150,11 @@ function sendStatus(id, info) {
 
 // Liens entre agents : une case libérée reçoit la suite de sa file, une case fermée n'est plus attendue.
 function relayStatus(id, info) {
+  taskSequences?.onStatus(id, info);
   linkRelay.onStatus(id, info);
   delegation.onStatus(id, info);
   if (!info) { try { taskService?.onExit(id); } catch (error) { console.error('Task save failed:', error.message); } }
+  send('sequences:agents', sequenceAgents());
 }
 
 // Fenêtre pas au premier plan : notification Windows. Un clic ramène l'app et centre la map sur la case.
@@ -188,6 +203,7 @@ linkRelay.init({
   pending: (list) => send('relay:pending', list),
   write: ptyManager.write,
   status: (id) => agentStatus.info(id)?.status ?? null,
+  ready: (id) => agentStatus.info(id)?.ready ?? false,
   arm: agentStatus.arm,
   emit: emitLink,
 });
@@ -238,6 +254,8 @@ function trackSession(id, payload) {
 // Début de session : la réponse au hook dit à l'agent qu'il tourne dans Orchestra et lui donne son rôle
 // (même format pour Claude Code et Codex). Ce contexte n'est pas affiché dans le terminal.
 function onHook(id, payload) {
+  const turnOwner = linkRelay.onHook(id, payload);
+  taskSequences?.onHook(id, payload);
   diagnostics.onHook(id, payload.hook_event_name);
   try { trackSession(id, payload); }
   catch (error) {
@@ -245,7 +263,7 @@ function onHook(id, payload) {
     send('workspace:saveError');
   }
   // Capturer la réponse avant que le statut « done » ne puisse libérer le prochain message.
-  if (payload.hook_event_name === 'Stop') {
+  if (payload.hook_event_name === 'Stop' && turnOwner !== 'sequence') {
     setTimeout(() => {
       try { taskService?.finishOwner(id, linkRelay.lastReply(payload)); }
       catch (error) { console.error('Task save failed:', error.message); }
@@ -312,7 +330,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) {
     diagnostics.onLaunch(id);
-    agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command) });
+    agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command), kind: agent.hooks || null });
     send('agent:status', id, agentStatus.info(id)); // la barre des agents actifs le voit tout de suite
   }
   const result = ptyManager.create(
@@ -354,6 +372,11 @@ ipcMain.on('pty:write', (_e, id, data) => {
     if (linkRelay.onUserInput(id)) delegation.resetCounters(id);
   }
   ptyManager.write(id, data);
+});
+// Bouton Accepter / Refuser de l'encoche des permissions : la touche est envoyée dans le terminal de la case.
+ipcMain.on('agent:permission', (_e, id, allow) => {
+  const key = agentStatus.answerPermission(id, allow === true);
+  if (key) ptyManager.write(id, key);
 });
 ipcMain.on('pty:resize', (_e, id, cols, rows) => ptyManager.resize(id, cols, rows));
 ipcMain.on('pty:ack', (_e, id) => agentStatus.acknowledge(id)); // clic sur une case qui a fini
@@ -441,6 +464,8 @@ fsHandlers.register(() => win, {
 settingsStore.register();
 agentsHandlers.register(() => win);
 workspaceStore.register((workspace) => {
+  sequenceNodes = workspace.boards.flatMap((board) => board.nodes.filter((node) => node.type === 'terminal').map((node) => ({ node, boardName: board.name })));
+  send('sequences:agents', sequenceAgents());
   caseBoards = new Map(workspace.boards.flatMap((b) => b.nodes.map((n) => [n.id, b.id])));
   usedFolders = workspace.boards.flatMap((b) =>
     b.nodes
@@ -473,9 +498,24 @@ usage.register();
 updates.register(() => win);
 activityLog.register(() => win);
 
+<<<<<<< HEAD
 // Pas de barre de menu File / Edit / View. macOS garde toujours un menu : le strict nécessaire, dont Édition
 // pour Cmd+C / Cmd+V / Cmd+A dans les champs et les terminaux, et Cmd+Q / Cmd+H.
 Menu.setApplicationMenu(isMac ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null);
+=======
+ipcMain.handle('sequences:list', () => ({ ...(taskSequences?.list() ?? { tasks: [], error: t('sequences.storage') }), agents: sequenceAgents() }));
+for (const action of ['save', 'remove', 'start', 'action']) {
+  ipcMain.handle(`sequences:${action}`, (_event, ...args) => {
+    try {
+      if (!taskSequences) throw new Error(t('sequences.storage'));
+      return { value: taskSequences[action](...args) };
+    } catch (error) { return { error: error.message }; }
+  });
+}
+
+// Pas de barre de menu File / Edit / View.
+Menu.setApplicationMenu(null);
+>>>>>>> main
 // Identité propre dans la barre des tâches (sinon Windows regroupe la fenêtre sous « Electron »).
 app.setAppUserModelId('com.orchestraboard.orchestra');
 
@@ -493,15 +533,31 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!isFirstInstance) return;
   migrateOldUserData();
+<<<<<<< HEAD
   await shellEnv.loadLoginPath();
+=======
+  taskSequences = createTaskSequences(app.getPath('userData'), {
+    t, agents: sequenceAgents, info: agentStatus.info,
+    enqueue: linkRelay.enqueue, cancel: linkRelay.cancelSequence,
+    lastReply: linkRelay.lastReply, readDelay: linkRelay.READ_DELAY,
+    emit: (value) => send('sequences:changed', value),
+  });
+>>>>>>> main
   claudeHooks.clearAll();
   await hookServer.start(onHook, callTool);
   codexProfile.ensure();
   createWindow();
 });
 
+<<<<<<< HEAD
 // Mac : attendre la confirmation de Cmd+Q ; Windows : arrêter les PTY avant la fin de l'app.
 app.on(isMac ? 'will-quit' : 'before-quit', () => {
+=======
+// Pas de processus orphelins : on tue tous les agents en quittant.
+app.on('before-quit', () => {
+  taskSequences?.dispose();
+  linkRelay.dispose();
+>>>>>>> main
   ptyManager.killAll();
   usage.stop();
 });

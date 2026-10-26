@@ -41,9 +41,11 @@ import TeamTemplates from './components/TeamTemplates.jsx';
 import BlockersInbox from './components/BlockersInbox.jsx';
 import TopBar from './components/TopBar.jsx';
 import TileSearch from './components/TileSearch.jsx';
-import TasksDialog from './components/TasksDialog.jsx';
+import TaskSequencesDialog from './components/TaskSequencesDialog.jsx';
 import LayoutToolbar from './components/LayoutToolbar.jsx';
 import GroupsLayer from './components/GroupsLayer.jsx';
+import FormationPreview from './components/FormationPreview.jsx';
+import PermissionNotch from './components/PermissionNotch.jsx';
 import { arrangeNodes, cleanGroups } from './lib/layout.js';
 import { hasModifier } from './lib/platform.js';
 import usePendingMessages from './hooks/usePendingMessages.js';
@@ -247,9 +249,10 @@ function Workspace({ saved }) {
         onOpenTeams={() => setTeamsOpen(true)}
         onOpenInbox={() => setInboxOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
-        onOpenTasks={() => setTasksOpen(true)}
+        onOpenTasks={() => { boards.flushSave().then(() => setTasksOpen(true)).catch(() => setTasksOpen(true)); }}
         blockerCount={blockers.filter((entry) => !entry.resolved).length}
       />
+      <PermissionNotch running={running} content={content} onFocus={focusAgent} />
       <div className="workspace">
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
@@ -272,7 +275,7 @@ function Workspace({ saved }) {
         />
       </div>
       {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} onStartSetup={startSetup} />}
-      {tasksOpen && <TasksDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
+      {tasksOpen && <TaskSequencesDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
       {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
       {searchOpen && (
         <TileSearch boards={boards.boards} content={content} activeId={activeId} onFocus={focusAgent} onClose={() => setSearchOpen(false)} />
@@ -304,6 +307,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
   const [formationRequest, setFormationRequest] = useState(null);
+  const [formationPreview, setFormationPreview] = useState(null);
   const { screenToFlowPosition, fitView, deleteElements } = useReactFlow();
   useEffect(() => {
     if (!formationRequest) return;
@@ -490,6 +494,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   );
 
   const liveGroups = useMemo(() => cleanGroups(groups, nodes), [groups, nodes]);
+  const selectedCount = nodes.filter((node) => node.selected).length;
   const history = useBoardHistory({ nodes, edges, strokes, groups: liveGroups, setNodes, setEdges, setStrokes, setGroups });
 
   // Le contenu remonte à chaque changement : c'est ce qui est sauvegardé et relu quand on revient sur l'onglet.
@@ -799,6 +804,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
               onMove={(positions, dx, dy) => setNodes((all) => all.map((node) => positions.has(node.id) ? { ...node, position: { x: positions.get(node.id).x + dx, y: positions.get(node.id).y + dy } } : node))}
               onRename={(id, name) => setGroups((all) => all.map((group) => group.id === id ? { ...group, name } : group))}
               onUngroup={(id) => setGroups((all) => all.filter((group) => group.id !== id))} />
+            {formationPreview && tool === 'select' && selectedCount >= 2 && <FormationPreview nodes={nodes} formation={formationPreview} />}
             <MiniMap position="bottom-right" pannable zoomable nodeComponent={MiniMapNode} />
             <DrawingLayer
               strokes={strokes}
@@ -812,10 +818,12 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           </ReactFlow>
         </BoardContext.Provider>
         <BoardToolbar tool={tool} onChange={setTool} />
-        {tool === 'select' && nodes.filter((node) => node.selected).length >= 2 && <LayoutToolbar
-          count={nodes.filter((node) => node.selected).length}
+        {tool === 'select' && selectedCount >= 2 && <LayoutToolbar
+          count={selectedCount}
+          groupCount={liveGroups.length}
           canGroup={nodes.filter((node) => node.selected).every((node) => !liveGroups.some((group) => group.members.includes(node.id))) && liveGroups.length < 200}
-          onArrange={(formation) => { setNodes(arrangeNodes(nodes, formation)); setFormationRequest(nodes.filter((node) => node.selected).map((node) => node.id)); }}
+          onPreview={setFormationPreview}
+          onArrange={(formation) => { setFormationPreview(null); setNodes(arrangeNodes(nodes, formation)); setFormationRequest(nodes.filter((node) => node.selected).map((node) => node.id)); }}
           onGroup={(name) => setGroups((all) => [...all, { id: 'group-' + crypto.randomUUID(), name, members: nodes.filter((node) => node.selected).map((node) => node.id) }])} />}
         {BOARD_HINTS.includes(tool) && (
           <div className="board-hint" role="status">

@@ -44,12 +44,13 @@ function pendingList() {
     text: item.preview ?? item.text, at: item.at,
   });
   const list = [...drafts.values()].map((d) => row({ ...d, from: d.source }, d.target, 'draft'));
-  for (const [target, delivery] of deliveries) if (!delivery.submitted) list.push(row(delivery.item, target, delivery.pasted ? 'delivering' : 'queued'));
-  for (const [target, queue] of queues) for (const item of queue) list.push(row(item, target, 'queued'));
+  for (const [target, delivery] of deliveries) if (!delivery.submitted && delivery.item.owner !== 'sequence') list.push(row(delivery.item, target, delivery.pasted ? 'delivering' : 'queued'));
+  for (const [target, queue] of queues) for (const item of queue) if (item.owner !== 'sequence') list.push(row(item, target, 'queued'));
   return list.sort((a, b) => a.at - b.at);
 }
 
 const notify = () => deps.pending(pendingList());
+const emitItem = (item, event) => { if (item.owner !== 'sequence') deps.emit(item.id, event); };
 
 // Appelé à chaque sauvegarde de workspace.json (déjà validé), tous tableaux confondus.
 // Seuls les liens en Transmission envoient tout seuls ; la Délégation passe par les outils MCP.
@@ -135,8 +136,8 @@ function buildText(prompt, reply) {
 function deliver(target, item) {
   const delivery = { item, submitted: false, pasted: false, working: false, stopping: false };
   deliveries.set(target, delivery);
-  if (deps.beforeDeliver) {
-    deps.emit(item.id, { state: 'queued', to: target, turns: item.turns, maxTurns: item.maxTurns });
+  if (deps.beforeDeliver && item.owner !== 'sequence') {
+    emitItem(item, { state: 'queued', to: target, turns: item.turns, maxTurns: item.maxTurns });
     Promise.resolve().then(() => deps.beforeDeliver(item.taskId ?? item.qid)).then(() => {
       if (deliveries.get(target) !== delivery) return;
       if (!deps.status(target)) { failTarget(target, t('link.targetGone')); return; }
@@ -164,12 +165,13 @@ function dropPrepared(target, delivery, message, kind = 'cancelled') {
   if (used > 0) item.chain.counts.set(item.key, used - 1);
   item.onFailed?.(message);
   deps.log({ kind, taskId: item.taskId ?? item.qid, linkId: item.id, from: item.from ?? null, to: target, text: message });
-  deps.emit(item.id, kind === 'refused' ? { state: 'error', message } : { state: 'ready', turns: Math.max(0, used - 1), maxTurns: item.maxTurns });
+  emitItem(item, kind === 'refused' ? { state: 'error', message } : { state: 'ready', turns: Math.max(0, used - 1), maxTurns: item.maxTurns });
   flush(target);
   notify();
 }
 
 function paste(target, item, delivery) {
+  if (item.onSending?.() === false) { release(target, delivery); return; }
   delivery.pasted = true;
   chains.set(target, item.chain);
   item.onStaged?.();
@@ -185,11 +187,15 @@ function paste(target, item, delivery) {
     deps.log({ kind: 'delivered', taskId: item.taskId ?? item.qid, linkId: item.id, from: item.from ?? null, to: target });
     notify();
     confirmSubmit(target, delivery, ENTER_RETRIES);
-    deps.emit(item.id, { state: 'sent', to: target, turns: item.turns, maxTurns: item.maxTurns });
+    emitItem(item, { state: 'sent', to: target, turns: item.turns, maxTurns: item.maxTurns });
   }, ENTER_DELAY);
   delivery.timeout = setTimeout(() => {
     if (deliveries.get(target) !== delivery || delivery.working || delivery.stopping) return;
     // Sans accusé de travail, ne pas envoyer la suite dans une invite au comportement inconnu.
+    if (item.owner === 'sequence') {
+      item.onError?.('unconfirmed');
+      return; // conserver la réservation : le prompt pourrait encore être dans l'invite
+    }
     failTarget(target, t('link.unconfirmed'));
   }, 30000);
 }
@@ -224,9 +230,10 @@ function failTarget(target, message) {
   const items = [...(delivery ? [delivery.item] : []), ...(queues.get(target) ?? [])];
   queues.delete(target);
   for (const item of items) {
+    item.onError?.('closed');
     item.onFailed?.(message);
     deps.log({ kind: 'refused', taskId: item.taskId ?? item.qid, linkId: item.id, from: item.from ?? null, to: target, text: message });
-    deps.emit(item.id, { state: 'error', message });
+    emitItem(item, { state: 'error', message });
   }
   if (items.length) notify();
 }
@@ -255,8 +262,9 @@ function flush(target) {
     failTarget(target, t('link.targetGone'));
     return;
   }
+  if (queue[0]?.owner === 'sequence' && deps.ready?.(target) === false) return;
   if (deliveries.has(target) || status === 'working' || status === 'waiting') {
-    for (const item of queue) deps.emit(item.id, { state: 'queued', to: target, turns: item.turns, maxTurns: item.maxTurns });
+    for (const item of queue) emitItem(item, { state: 'queued', to: target, turns: item.turns, maxTurns: item.maxTurns });
     return;
   }
   // Un message à la fois : le suivant part quand B aura fini de traiter celui-ci.
@@ -275,6 +283,7 @@ function flush(target) {
 function onStop(id, payload) {
   if (!deps.status(id)) return;
   const delivery = deliveries.get(id);
+  if (delivery?.item.owner === 'sequence') return;
   if (delivery?.submitted && !delivery.stopping) {
     delivery.stopping = true;
     clearTimeout(delivery.timeout);
@@ -387,7 +396,7 @@ function cancel(qid) {
     if (used > 0) item.chain.counts.set(item.key, used - 1);
     item.onFailed?.(t('pending.cancelledByUser'));
     deps.log({ kind: 'cancelled', taskId: item.taskId ?? item.qid, linkId: item.id, from: item.from ?? null, to: target, text: t('pending.cancelledByUser') });
-    deps.emit(item.id, { state: 'ready', turns: Math.max(0, used - 1), maxTurns: item.maxTurns });
+    emitItem(item, { state: 'ready', turns: Math.max(0, used - 1), maxTurns: item.maxTurns });
     notify();
     return { ok: true };
   }
@@ -412,10 +421,60 @@ function onStatus(id, info) {
     failTarget(id, t('link.targetGone'));
   }
   const delivery = deliveries.get(id);
-  if (delivery && info?.status === 'working') delivery.working = true;
+  if (delivery && info?.status === 'working' && delivery.item.owner !== 'sequence') delivery.working = true;
   // Les cibles sans hooks (réception seule) se libèrent sur leur fin d'activité.
   if (delivery?.submitted && delivery.working && info?.status === 'done' && !delivery.stopping && !delivery.item.onDelivered) release(id, delivery);
-  if (!info || info.status === 'idle' || info.status === 'done') flush(id);
+  if (!info || info.status === 'idle' || info.status === 'done') {
+    if (queues.get(id)?.[0]?.owner === 'sequence') setTimeout(() => flush(id), 0);
+    else flush(id);
+  }
 }
 
-module.exports = { init, setLinks, onStop, onUserInput, onStatus, enqueue, chainOf, lastReply, pendingList, approve, discard, cancel, READ_DELAY };
+// Les séquences utilisent la file existante, sans changer les contrôles des relais de la 0.1.3.
+function onHook(target, payload) {
+  const delivery = deliveries.get(target);
+  if (delivery?.item.owner !== 'sequence') return null;
+  const item = delivery.item;
+  if (payload.hook_event_name === 'SessionStart') {
+    item.onError?.('sessionChanged');
+    clearTimeout(delivery.timeout);
+    deliveries.delete(target);
+    setTimeout(() => flush(target), 0);
+  } else if (payload.hook_event_name === 'UserPromptSubmit') {
+    if (delivery.working && delivery.turn && payload.turn_id === delivery.turn && (!delivery.session || payload.session_id === delivery.session)) return 'sequence';
+    if (delivery.working || delivery.stopping) {
+      item.onError?.('interrupted');
+      clearTimeout(delivery.timeout);
+      deliveries.delete(target);
+      setTimeout(() => flush(target), 0);
+      return null;
+    }
+    delivery.working = true;
+    delivery.session = payload.session_id || null;
+    delivery.turn = payload.turn_id || null;
+    item.onStarted?.(payload);
+  } else if (payload.hook_event_name === 'Stop' && delivery.working && !delivery.stopping &&
+    !(delivery.session && payload.session_id && delivery.session !== payload.session_id) &&
+    !(delivery.turn && payload.turn_id && delivery.turn !== payload.turn_id)) {
+    delivery.stopping = true;
+    clearTimeout(delivery.timeout);
+    item.onCompleted?.(payload);
+    setTimeout(() => release(target, delivery), READ_DELAY + 10);
+  }
+  return 'sequence';
+}
+
+function cancelSequence(key) {
+  for (const [target, queue] of queues) {
+    const rest = queue.filter((item) => item.owner !== 'sequence' || item.key !== key);
+    if (rest.length) queues.set(target, rest); else queues.delete(target);
+  }
+  notify();
+}
+
+function dispose() {
+  for (const delivery of deliveries.values()) clearTimeout(delivery.timeout);
+  deliveries.clear(); queues.clear(); drafts.clear(); chains.clear(); links.clear();
+}
+
+module.exports = { init, setLinks, onStop, onUserInput, onStatus, enqueue, chainOf, lastReply, pendingList, approve, discard, cancel, cancelSequence, onHook, dispose, READ_DELAY };

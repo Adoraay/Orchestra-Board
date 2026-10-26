@@ -33,6 +33,10 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   await button(tr('Save as a template', 'Enregistrer comme modèle'));
   await until("document.body.textContent.includes('Smoke team') && !!document.querySelector('.team-details')");
   await capture('phase2-teams');
+  await evaluate(`[...document.querySelectorAll('.team-item')].find(b => b.textContent.includes(${JSON.stringify(tr('Lead + two workers', 'Chef + deux agents'))})).click()`);
+  await until("document.querySelectorAll('.team-diagram .team-edge').length === 3");
+  await capture('phase2-team-recipe');
+  await evaluate("[...document.querySelectorAll('.team-item')].find(b => b.textContent.includes('Smoke team')).click()");
   await button(tr('Create a new board', 'Créer un nouveau tableau'));
   await until("!document.querySelector('.team-modal') && document.querySelector('.board-tab.active')?.textContent.includes('Smoke team')");
   await until("document.body.textContent.includes('Restored original note')");
@@ -79,7 +83,9 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   await click(`button[title=${JSON.stringify(tr('Blockers inbox', 'Boîte de réception des blocages'))}]`);
   await until("document.querySelector('.inbox-list')?.textContent.includes('Peer')");
   await capture('phase2-inbox');
-  await button(tr('Clear resolved events', 'Effacer les événements résolus'));
+  await click('.inbox-tab-resolved');
+  await evaluate("document.querySelector('.inbox-clear')?.click()");
+  await click('.inbox-tab-active');
   assert.equal((await evaluate('window.blockers.get()')).filter((entry) => !entry.resolved && entry.caseId === 'peer-agent').length, 1);
   await click('.inbox-case');
   await until("document.querySelector('.board-tab.active')?.textContent.includes('Other board')");
@@ -98,5 +104,25 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   await until(`window.pty.create({ id: 'smoke-terminal', agentId: 'shell', cwd: ${JSON.stringify(data)} }).then(result => result?.buffer.includes('>'))`);
   await sleep(300); // ConPTY doit avoir attaché sa console avant la fermeture du processus de test.
   assert.equal((await evaluate('window.blockers.get()')).find((entry) => entry.kind === 'exit' && entry.caseId === 'smoke-terminal').resolved, true);
+  // Encoche des permissions : lueur sur la case, Refuser = Échap, Accepter = « 1 », sans modèle sollicité.
+  status.register('role-agent', 'hooks', { name: 'Reviewer', cwd: path.resolve(__dirname, '..'), notify: false, kind: 'claude' });
+  const ask = async (command) => {
+    await hook('role-agent', 'UserPromptSubmit');
+    await fetch(hooks.hookUrl('role-agent'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command } }) });
+    await until(`document.querySelector('.permission-notch')?.textContent.includes(${JSON.stringify(command)})`);
+  };
+  await ask('git init perm-repo');
+  await until("!!document.querySelector('.react-flow__node[data-id=\"role-agent\"] .terminal-node.awaiting') && !document.querySelector('.react-flow__node[data-id=\"role-agent\"] .status-dot')");
+  assert.match(await evaluate("document.querySelector('.permission-notch').textContent"), new RegExp(tr('Reviewer is waiting for your response', 'Reviewer attend ta réponse')));
+  assert.equal(await evaluate("[...document.querySelectorAll('.permission-notch button')].filter(b => b.textContent.trim()).length"), 2, 'only yes and no');
+  await capture('phase2-permission');
+  await button(tr('Refuse', 'Refuser'), "document.querySelector('.permission-notch')");
+  await until("!document.querySelector('.permission-notch') && !document.querySelector('.terminal-node.awaiting')");
+  assert.equal((await evaluate("window.blockers.get()")).find((entry) => entry.caseId === 'role-agent' && entry.kind === 'permission').resolved, true);
+  await ask('npm test');
+  await button(tr('Accept', 'Accepter'), "document.querySelector('.permission-notch')");
+  await until("!document.querySelector('.permission-notch')");
+  assert.equal(status.info('role-agent').status, 'working');
+  await hook('role-agent', 'Stop');
   assert.deepEqual(errors, []);
 };
