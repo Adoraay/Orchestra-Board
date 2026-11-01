@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="101" height="36" viewBox="0 0 101 36">
+  <rect x="1" y="1" width="99" height="34" rx="17" fill="#1f1e1d" stroke="#4a4844" stroke-width="1.5"/>
+  <g transform="translate(14 10) scale(0.6666666666666666)" fill="none" stroke="#d97757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"/><circle cx="12" cy="12" r="10"/></g>
+  <text x="38" y="23" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#ece9e2">Demos</text>
+</svg>

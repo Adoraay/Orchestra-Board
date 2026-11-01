@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="135" height="36" viewBox="0 0 135 36">
+  <rect x="1" y="1" width="133" height="34" rx="17" fill="#1f1e1d" stroke="#4a4844" stroke-width="1.5"/>
+  <g transform="translate(14 10) scale(0.6666666666666666)" fill="none" stroke="#d97757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></g>
+  <text x="38" y="23" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#ece9e2">What&#39;s new</text>
+</svg>

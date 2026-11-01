@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="64" viewBox="0 0 260 64">
+  <defs>
+    <linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3876a"/><stop offset="1" stop-color="#b8502f"/></linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  </defs>
+  <rect x="1" y="1" width="258" height="62" rx="14" fill="url(#b)"/>
+  <rect x="1" y="1" width="258" height="62" rx="14" fill="url(#s)"/>
+  <rect x="1.5" y="1.5" width="257" height="61" rx="13.5" fill="none" stroke="#fff" stroke-opacity=".25"/>
+  <g transform="translate(22 18) scale(1.15)"><path d="M2 4.5 10 3.4v7.8H2zM11 3.3 22 1.8v9.4H11zM2 12.3h8v7.8l-8-1.1zM11 12.3h11v9.5l-11-1.5z" fill="#fff"/></g>
+  <text x="64" y="27" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="12.5" fill="#fff" fill-opacity=".85">Télécharger pour</text>
+  <text x="64" y="48" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#fff">Windows</text>
+</svg>
