@@ -5,11 +5,11 @@ import StatusDot from './StatusDot.jsx';
 import useT from '../hooks/useT.js';
 
 // Suppr sur la sélection : confirmation avec ce qui va disparaître. Les cases terminal listées seront
-// fermées (agent arrêté). selection : { terminals: [{ id, name, agent, status }], links, notes, texts, strokes }.
+// fermées (agent arrêté). selection : { terminals: [{ id, name, agent, status }], links, notes, texts, panels, strokes }.
 export default function DeleteDialog({ selection, onCancel, onConfirm }) {
   const t = useT();
   const { terminals } = selection;
-  const others = ['links', 'notes', 'texts', 'strokes']
+  const others = ['links', 'notes', 'texts', 'panels', 'strokes']
     .filter((kind) => selection[kind])
     .map((kind) => t(`delete.${kind}`, { count: selection[kind] }));
   const busy = terminals.some((term) => term.status === 'working' || term.status === 'waiting');

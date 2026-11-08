@@ -5,10 +5,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import AgentLogo from './AgentLogo.jsx';
 import ModelMenu from './ModelMenu.jsx';
 import useT from '../hooks/useT.js';
-
-// Image vide pour masquer le « fantôme » du navigateur : seul l'aperçu de la map doit se voir.
-const emptyDragImage = new Image();
-emptyDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+import { emptyDragImage } from '../lib/panels.js';
 
 // Dock de gauche : un carré par agent, le nom en infobulle, à glisser sur la map.
 // Sous un trait, le carré « Branche », à glisser sur une case (PLAN.md §3.10).

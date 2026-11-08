@@ -8,6 +8,7 @@ const ACTIONS = {
   terminal: ['rename', 'duplicate', 'focus', 'link', 'delete'],
   note: ['rename', 'edit', 'duplicate', 'focus', 'link', 'delete'],
   text: ['edit', 'duplicate', 'focus', 'delete'],
+  panel: ['duplicate', 'focus', 'delete'],
 };
 const ICONS = { rename: Pencil, edit: Type, duplicate: Copy, focus: Crosshair, link: Link2, delete: Trash2 };
 

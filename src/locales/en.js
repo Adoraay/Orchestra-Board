@@ -529,6 +529,8 @@ export default {
   'log.state.refused': 'refused',
   'panel.pin': 'Pin: keep this panel open',
   'panel.unpin': 'Unpin: close it again after a click elsewhere',
+  'panel.dragHint': 'Drag onto the map to keep it visible',
+  'panel.remove': 'Remove from the map',
   'search.open': 'Find a tile (Ctrl+Shift+F)',
   'search.title': 'Find a tile',
   'search.placeholder': 'Tile name, on every board…',
@@ -604,6 +606,7 @@ export default {
   'delete.links': ({ count }) => `${count} link${s(count)}`,
   'delete.notes': ({ count }) => `${count} sticky note${s(count)}`,
   'delete.texts': ({ count }) => `${count} text${s(count)}`,
+  'delete.panels': ({ count }) => `${count} panel${s(count)}`,
   'delete.strokes': ({ count }) => `${count} stroke${s(count)}`,
   'delete.busy': 'An agent in the selection is still working: its task will be interrupted.',
 

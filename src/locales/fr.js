@@ -528,6 +528,8 @@ export default {
   'log.state.refused': 'refusé',
   'panel.pin': 'Épingler : garder ce panneau ouvert',
   'panel.unpin': 'Désépingler : il se referme de nouveau après un clic ailleurs',
+  'panel.dragHint': 'Glisser sur la map pour le garder visible',
+  'panel.remove': 'Retirer de la map',
   'search.open': 'Trouver une case (Ctrl+Maj+F)',
   'search.title': 'Trouver une case',
   'search.placeholder': 'Nom de la case, dans tous les tableaux…',
@@ -606,6 +608,7 @@ export default {
   'delete.links': ({ count }) => `${count} lien${s(count)}`,
   'delete.notes': ({ count }) => `${count} post-it`,
   'delete.texts': ({ count }) => `${count} texte${s(count)}`,
+  'delete.panels': ({ count }) => `${count} panneau${count > 1 ? 'x' : ''}`,
   'delete.strokes': ({ count }) => `${count} trait${s(count)}`,
   'delete.busy': 'Un agent de la sélection travaille encore : sa tâche sera interrompue.',
 

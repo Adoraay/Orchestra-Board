@@ -168,6 +168,29 @@ test('formations use actual sizes and undo restores positions without recreating
   assert.equal(restored.nodes[0].position.x, 10);
   assert.deepEqual(restored.edges.map((edge) => edge.id), ['note-link']);
   assert.deepEqual(restored.groups[0].members, ['a', 'c']);
+  // Un panneau posé sur la map suit Ctrl+Z comme un post-it : retiré ou recréé, jamais gardé tel quel.
+  const panel = { id: 'p', type: 'panel', position: { x: 0, y: 0 }, data: { panel: 'log' } };
+  const undone = restoreBoardHistory([distributed[0], panel], { annotations: [], positions: [], edges: [], strokes: [], groups: [] });
+  assert.deepEqual(undone.nodes.map((node) => node.id), ['a']);
+  const redone = restoreBoardHistory([distributed[0]], { annotations: [panel], positions: [], edges: [], strokes: [], groups: [] });
+  assert.deepEqual(redone.nodes.map((node) => node.id), ['a', 'p']);
+});
+
+test('panels placed on the map are validated: known panel and usage agent only', (t) => {
+  const directory = fixture(t);
+  const electron = { app: { getPath: () => directory }, ipcMain: { handle() {}, on() {} } };
+  const workspace = load('workspaceStore.cjs', { electron, './settingsStore.cjs': { MODEL: /^[\w.-]+$/ }, './i18n.cjs': i18n });
+  const panel = (id, data) => ({ id, type: 'panel', position: { x: 0, y: 0 }, style: { width: 300, height: 380 }, data });
+  const { nodes } = workspace.sanitizeContent({
+    nodes: [
+      panel('usage', { panel: 'usage', agentId: 'codex', extra: 'dropped' }),
+      panel('badagent', { panel: 'usage', agentId: '../../evil' }),
+      panel('log', { panel: 'log', agentId: 'codex' }),
+      panel('unknown', { panel: 'nope' }),
+    ],
+  });
+  assert.deepEqual(nodes.map((node) => node.data), [{ panel: 'usage', agentId: 'codex' }, { panel: 'usage' }, { panel: 'log' }, { panel: 'log' }]);
+  assert.deepEqual(nodes[0].style, { width: 300, height: 380 });
 });
 
 test('workspace groups sanitize membership and template instances receive fresh group IDs', (t) => {

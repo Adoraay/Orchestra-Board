@@ -29,6 +29,8 @@ const size = (v) => (isNum(v) && v > 0 && v <= 10000 ? v : undefined);
 const text = (v) => (typeof v === 'string' ? v.slice(0, MAX_TEXT) : '');
 const clamp = (v, min, max, fallback) => (isNum(v) ? Math.min(max, Math.max(min, v)) : fallback);
 
+const USAGE_AGENTS = ['claude-code', 'codex', 'gemini'];
+
 function sanitizeData(type, data = {}) {
   switch (type) {
     case 'terminal': {
@@ -50,13 +52,16 @@ function sanitizeData(type, data = {}) {
       const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
       return { text: text(data.text), ...(label && { label }) }; // label : nom donné aux agents par le lien Note
     }
+    case 'panel': // Utilisation ou Journal posé sur la map (PLAN.md §3.24)
+      if (data.panel === 'usage') return { panel: 'usage', ...(USAGE_AGENTS.includes(data.agentId) && { agentId: data.agentId }) };
+      return { panel: 'log' };
     default:
       return { text: text(data.text), fontSize: Math.round(clamp(data.fontSize, 8, 160, 18)), rotation: clamp(data.rotation, -180, 180, 0) };
   }
 }
 
 function sanitizeNode(n) {
-  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text'].includes(n.type)) return null;
+  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text', 'panel'].includes(n.type)) return null;
   if (!isNum(n.position?.x) || !isNum(n.position?.y)) return null;
   const style = {};
   if (size(n.style?.width)) style.width = n.style.width;

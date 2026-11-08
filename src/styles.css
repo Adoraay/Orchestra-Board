@@ -1459,6 +1459,25 @@ kbd {
 }
 
 /* Post-it et texte libre (PLAN.md §3.8) */
+/* Utilisation ou Journal posé sur la map (PLAN.md §3.24) : le contenu remplit la case et défile à l'intérieur */
+.panel-node {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 6px 16px var(--shadow);
+  overflow: hidden;
+  animation: node-appear 180ms ease-out;
+}
+.panel-node.selected { border-color: var(--accent); }
+.panel-node .usage-panel { width: 100%; min-height: 0; opacity: 1; transform: none; transition: none; }
+.panel-node .usage-header { cursor: grab; flex-shrink: 0; }
+.panel-node .usage-body, .panel-node .log-list { flex: 1; min-height: 0; max-height: none; overflow-y: auto; }
+.tool-link .panel-node * { pointer-events: none; }
+
 .tool-note .react-flow__pane { cursor: copy; }
 .tool-text .react-flow__pane { cursor: text; }
 

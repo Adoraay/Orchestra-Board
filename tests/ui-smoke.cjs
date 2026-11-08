@@ -8,7 +8,7 @@ const artifacts = path.join(root, 'out', 'ui-smoke');
 fs.mkdirSync(artifacts, { recursive: true });
 const original = { version: 2, activeBoardId: 'board-1', boards: [{ id: 'board-1', name: 'Original', nodes: [{ id: 'note-1', type: 'note', position: { x: 100, y: 100 }, data: { label: 'Plan', text: 'Restored original note' } }], edges: [], strokes: [], viewport: { x: 0, y: 0, zoom: 1 } }] };
 const requested = process.argv.slice(2);
-const modes = ['normal', 'corrupt', 'no-backup', 'phase2', 'phase2-fr', 'phase3', 'phase3-fr', 'changes', 'phase4', 'phase4-fr', 'onboarding', 'onboarding-fr'].filter((mode) => !requested.length || requested.includes(mode));
+const modes = ['normal', 'corrupt', 'no-backup', 'phase2', 'phase2-fr', 'phase3', 'phase3-fr', 'changes', 'phase4', 'phase4-fr', 'onboarding', 'onboarding-fr', 'panels'].filter((mode) => !requested.length || requested.includes(mode));
 if (!modes.length) throw new Error('Choose a mode from tests/ui-smoke.cjs');
 for (const mode of modes) {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-ui-'));
@@ -56,7 +56,7 @@ for (const mode of modes) {
     { id: 'other', name: 'Other board', viewport: null, nodes: [], edges: [], strokes: [] },
   ] };
   const changes = { version: 2, activeBoardId: 'changes', boards: [{ id: 'changes', name: 'Changes regression', edges: [], strokes: [], viewport: { x: 0, y: 0, zoom: 0.8 }, nodes: [0, 1].map((i) => ({ ...liveTerminal, id: `diff-${i}`, position: { x: 100 + i * 760, y: 100 }, data: { agentId: 'claude-code', label: `Agent ${i + 1}`, cwd: repo } })) }] };
-  fs.writeFileSync(path.join(data, 'workspace.json'), mode.startsWith('onboarding') ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [] }] }) : mode.startsWith('phase4') ? JSON.stringify(phase4) : mode === 'changes' ? JSON.stringify(changes) : mode.startsWith('phase3') ? JSON.stringify(phase3) : mode.startsWith('phase2') ? JSON.stringify(phase2) : mode === 'normal' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], name: 'Latest', nodes: [liveTerminal] }] }) : '{ broken');
+  fs.writeFileSync(path.join(data, 'workspace.json'), mode.startsWith('onboarding') || mode === 'panels' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [] }] }) : mode.startsWith('phase4') ? JSON.stringify(phase4) : mode === 'changes' ? JSON.stringify(changes) : mode.startsWith('phase3') ? JSON.stringify(phase3) : mode.startsWith('phase2') ? JSON.stringify(phase2) : mode === 'normal' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], name: 'Latest', nodes: [liveTerminal] }] }) : '{ broken');
   const env = { ...process.env, ORCHESTRA_SMOKE_DATA: data, ORCHESTRA_SMOKE_MODE: mode, ORCHESTRA_SMOKE_ARTIFACTS: artifacts };
   delete env.ELECTRON_RUN_AS_NODE;
   const branded = process.env.ORCHESTRA_SMOKE_BRANDED === '1';

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { restoreBoardHistory } from '../lib/boardHistory.js';
+import { ANNOTATIONS, restoreBoardHistory } from '../lib/boardHistory.js';
 
 const SETTLE_DELAY = 400; // ms sans changement = une étape (une saisie, un trait, un déplacement…)
 const LIMIT = 100;
-const ANNOTATIONS = new Set(['note', 'text']);
 
 // Dessins, annotations, liens, groupes et positions : un terminal fermé n'est jamais recréé.
 function snapshotOf(nodes, edges, strokes, groups) {
