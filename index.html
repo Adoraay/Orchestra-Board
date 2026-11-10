@@ -2,481 +2,430 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- Le JS tourne : les éléments .reveal peuvent être masqués avant leur apparition (sans JS, tout reste visible). -->
   <script>document.documentElement.classList.add('js');</script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Orchestra · Be the maestro of your AI orchestra</title>
-  <meta name="description" content="Drop Claude Code, Codex and any CLI agent on an infinite map, each in a real terminal, and link them so they hand work to each other. Free and open source, for Windows and macOS." />
+  <meta name="description" content="A desktop app where Claude Code, Codex and any CLI agent each run in a real terminal on one big map, linked so they hand work to each other. Free and open source, for Windows and macOS." />
   <meta name="theme-color" content="#1f1e1d" />
   <meta name="color-scheme" content="dark" />
   <link rel="canonical" href="https://adoraay.github.io/Orchestra-Board/" />
   <meta property="og:title" content="Orchestra · Be the maestro of your AI orchestra" />
-  <meta property="og:description" content="AI coding agents on an infinite map, in real terminals, linked together. Free & open source, for Windows and macOS." />
+  <meta property="og:description" content="AI coding agents on one big map, in real terminals, linked together. Free and open source, for Windows and macOS." />
   <meta property="og:url" content="https://adoraay.github.io/Orchestra-Board/" />
-  <meta property="og:image" content="https://adoraay.github.io/Orchestra-Board/assets/video/poster.jpg" />
-  <meta property="og:image:width" content="1920" />
-  <meta property="og:image:height" content="1080" />
+  <meta property="og:image" content="https://adoraay.github.io/Orchestra-Board/assets/shots/map-dark.png" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="https://adoraay.github.io/Orchestra-Board/assets/video/poster.jpg" />
   <link rel="icon" href="assets/brand/orchestra-logo-small.svg" type="image/svg+xml" />
   <link rel="icon" href="assets/brand/favicon-32.png" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,700;1,600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Orchestra",
-    "description": "Drop Claude Code, Codex and any CLI agent on an infinite map, each in a real terminal, and link them so they hand work to each other.",
-    "url": "https://adoraay.github.io/Orchestra-Board/",
-    "downloadUrl": "https://github.com/Adoraay/Orchestra-Board/releases/latest",
-    "image": "https://adoraay.github.io/Orchestra-Board/assets/video/poster.jpg",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Windows 10, Windows 11, macOS",
-    "license": "https://opensource.org/licenses/MIT",
-    "isAccessibleForFree": true,
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "author": { "@type": "Person", "name": "Adoraay", "url": "https://github.com/Adoraay" }
-  }
-  </script>
 </head>
 <body>
-  <!-- Logo animé (orbites de l'écran de démarrage de l'app), réutilisé par <use>. -->
+  <!-- Icônes réutilisées par <use> -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <linearGradient id="o1" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#a8603f"/><stop offset="1" stop-color="#e2ad8f"/></linearGradient>
-      <linearGradient id="o2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e58e6c"/><stop offset="1" stop-color="#d97757"/></linearGradient>
-      <radialGradient id="mark-glow"><stop offset="0" stop-color="#c88a6a" stop-opacity="0.35"/><stop offset="1" stop-color="#c88a6a" stop-opacity="0"/></radialGradient>
-      <symbol id="mark" viewBox="56 56 400 400">
-        <circle cx="256" cy="256" r="190" fill="url(#mark-glow)"/>
-        <g transform="rotate(38 256 256)">
-          <path d="M 88 256 A 168 70 0 1 1 424 256 A 168 70 0 1 1 88 256" fill="none" stroke="url(#o2)" stroke-width="12" opacity="0.85"/>
-          <circle r="19" fill="#1f1e1d" stroke="#e2ad8f" stroke-width="8"><animateMotion dur="3.6s" repeatCount="indefinite" path="M 88 256 A 168 70 0 1 1 424 256 A 168 70 0 1 1 88 256"/></circle>
-          <circle r="19" fill="#1f1e1d" stroke="#e2ad8f" stroke-width="8"><animateMotion dur="3.6s" begin="-1.2s" repeatCount="indefinite" path="M 88 256 A 168 70 0 1 1 424 256 A 168 70 0 1 1 88 256"/></circle>
-          <circle r="19" fill="#1f1e1d" stroke="#e2ad8f" stroke-width="8"><animateMotion dur="3.6s" begin="-2.4s" repeatCount="indefinite" path="M 88 256 A 168 70 0 1 1 424 256 A 168 70 0 1 1 88 256"/></circle>
-        </g>
-        <g transform="rotate(-38 256 256)">
-          <path d="M 84 256 A 172 78 0 1 1 428 256 A 172 78 0 1 1 84 256" fill="none" stroke="url(#o1)" stroke-width="26"/>
-          <circle r="27" fill="#e8bfa6"><animateMotion dur="5s" repeatCount="indefinite" path="M 84 256 A 172 78 0 1 1 428 256 A 172 78 0 1 1 84 256" keyPoints="1;0" keyTimes="0;1" calcMode="linear"/></circle>
-          <circle r="19" fill="#1f1e1d" stroke="#e2ad8f" stroke-width="8"><animateMotion dur="5s" begin="-2.5s" repeatCount="indefinite" path="M 84 256 A 172 78 0 1 1 428 256 A 172 78 0 1 1 84 256" keyPoints="1;0" keyTimes="0;1" calcMode="linear"/></circle>
-        </g>
-        <circle cx="256" cy="256" r="15" fill="#ece9e2"/>
-      </symbol>
-      <!-- Version immobile : appel final, mouvement réduit, et tant que la scène ou le tableau ne sont pas à l'écran. -->
-      <symbol id="mark-static" viewBox="56 56 400 400">
-        <circle cx="256" cy="256" r="190" fill="url(#mark-glow)"/>
-        <path transform="rotate(38 256 256)" d="M 88 256 A 168 70 0 1 1 424 256 A 168 70 0 1 1 88 256" fill="none" stroke="url(#o2)" stroke-width="12" opacity="0.85"/>
-        <path transform="rotate(-38 256 256)" d="M 84 256 A 172 78 0 1 1 428 256 A 172 78 0 1 1 84 256" fill="none" stroke="url(#o1)" stroke-width="26"/>
-        <circle cx="123.6" cy="152.6" r="19" fill="#1f1e1d" stroke="#e2ad8f" stroke-width="8"/>
-        <circle cx="388.4" cy="359.4" r="19" fill="#1f1e1d" stroke="#e2ad8f" stroke-width="8"/>
-        <circle cx="120.5" cy="361.9" r="19" fill="#1f1e1d" stroke="#e2ad8f" stroke-width="8"/>
-        <circle cx="391.5" cy="150.1" r="27" fill="#e8bfa6"/>
-        <circle cx="256" cy="256" r="15" fill="#ece9e2"/>
-      </symbol>
+      <symbol id="i-github" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></symbol>
+      <symbol id="i-win" viewBox="0 0 24 24"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.5 1.3L21 21.2V12.6h-9.5zm0-15.6v7.3H21V2.8z"/></symbol>
+      <symbol id="i-mac" viewBox="0 0 24 24"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></symbol>
+      <symbol id="i-out" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M8 7h9v9"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5.5v13l11-6.5z"/></symbol>
+      <symbol id="i-reset" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></symbol>
+      <symbol id="i-inbox" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M22 12h-6l-2 3h-4l-2-3H2M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></symbol>
+      <symbol id="i-pointer" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4l6.5 16 2.3-6.7L19.5 11z"/></symbol>
+      <symbol id="i-spline" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M5 17A12 12 0 0 1 17 5"/></g></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+      <symbol id="i-branch" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m-5-5 5 5 5-5M5 20h14"/></symbol>
     </defs>
   </svg>
 
+  <a class="skip" href="#main" data-i18n="skip">Skip to content</a>
+
   <header class="nav" id="nav">
-    <div class="nav-inner">
-      <a class="brand" href="#top" aria-label="Orchestra">
-        <svg class="brand-mark" aria-hidden="true" data-live-mark><use href="#mark-static" /></svg>
-        <span class="brand-name">Orchestra</span>
-      </a>
-      <nav class="nav-links" aria-label="Sections" data-i18n-aria="nav.sections">
-        <a href="#map" data-i18n="nav.map">Map</a>
-        <a href="#links" data-i18n="nav.links">Agent links</a>
-        <a href="#git" data-i18n="nav.git">Git</a>
-        <a href="#control" data-i18n="nav.control">Control</a>
-        <a href="#install" data-i18n="nav.install">Install</a>
-        <a href="#faq" data-i18n="nav.faq">FAQ</a>
+    <div class="wrap nav-in">
+      <a class="brand" href="#top" aria-label="Orchestra"><img src="assets/brand/orchestra-lockup.svg" alt="Orchestra" width="131" height="24" /></a>
+      <nav class="nav-links" id="nav-links" aria-label="Sections">
+        <a href="#links" data-i18n="nav.links">Links</a>
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#control" data-i18n="nav.control">Permissions</a>
+        <a href="#privacy" data-i18n="nav.privacy">Privacy</a>
+        <a href="#faq">FAQ</a>
       </nav>
-      <div class="nav-actions">
-        <button class="lang" id="lang" type="button" aria-label="Switch to French" data-i18n-aria="lang.switch"><span data-lang="en" aria-hidden="true">EN</span><span data-lang="fr" aria-hidden="true">FR</span></button>
-        <a class="btn btn-ghost btn-sm gh" href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-          <span>GitHub</span><span class="stars" id="stars" hidden></span>
-        </a>
-        <a class="btn btn-primary btn-sm download-link" href="https://github.com/Adoraay/Orchestra-Board/releases/latest" data-i18n="nav.download">Download</a>
-        <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="nav-panel">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
-          <span data-i18n="nav.menu">Menu</span>
-        </button>
+      <div class="nav-side">
+        <button class="lang" id="lang" type="button" aria-label="Passer en français"><span data-l="en">EN</span><span data-l="fr">FR</span></button>
+        <a class="gh" href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener" aria-label="GitHub"><svg><use href="#i-github" /></svg><span id="stars" hidden></span></a>
+        <a class="btn btn-accent btn-sm dl-primary" href="https://github.com/Adoraay/Orchestra-Board/releases/latest" data-i18n="nav.download">Download</a>
+        <button class="burger" id="burger" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu"><i></i><i></i></button>
       </div>
     </div>
-    <!-- Menu des petits écrans (sous 980px, à la place de .nav-links) -->
-    <nav class="nav-panel" id="nav-panel" aria-label="Mobile menu" data-i18n-aria="nav.menuLabel" hidden>
-      <a href="#map" data-i18n="nav.map">Map</a>
-      <a href="#links" data-i18n="nav.links">Agent links</a>
-      <a href="#git" data-i18n="nav.git">Git</a>
-      <a href="#control" data-i18n="nav.control">Control</a>
-      <a href="#install" data-i18n="nav.install">Install</a>
-      <a href="#faq" data-i18n="nav.faq">FAQ</a>
-      <a href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener">GitHub</a>
-      <a class="btn btn-primary btn-sm download-link" href="https://github.com/Adoraay/Orchestra-Board/releases/latest" data-i18n="nav.download">Download</a>
-    </nav>
   </header>
 
-  <main id="top">
-    <!-- Hero -->
-    <section class="hero">
-      <div class="hero-bg" aria-hidden="true"></div>
-      <div class="container hero-copy">
-        <a class="eyebrow reveal" href="https://github.com/Adoraay/Orchestra-Board/releases/latest" target="_blank" rel="noopener"><span class="version">v0.1.0</span><span aria-hidden="true">·</span><span data-i18n="hero.eyebrow">Release notes</span><span aria-hidden="true">→</span></a>
-        <h1 class="reveal" data-i18n-html="hero.title">Be the <em>maestro</em> of your AI orchestra.</h1>
-        <p class="lead reveal" data-i18n="hero.lead">Drop Claude Code, Codex and any CLI agent on an infinite map, each in a real terminal. Then link them, and watch them hand work to each other.</p>
-        <div class="cta reveal">
-          <a class="btn btn-primary btn-lg download-link" href="https://github.com/Adoraay/Orchestra-Board/releases/latest">
-            <svg class="os-icon os-win" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.5 1.3L21 21.2V12.6h-9.5zm0-15.6v7.3H21V2.8z"/></svg>
-            <svg class="os-icon os-mac" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>
-            <span data-i18n="cta.download">Download for Windows</span>
-          </a>
-          <a class="btn btn-ghost btn-lg" href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener">
-            <span data-i18n="cta.github">View on GitHub</span>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M8 7h9v9"/></svg>
-          </a>
-        </div>
-        <p class="meta also" data-also hidden></p>
-        <!-- Taille, date et empreinte de l'installateur ajoutées par main.js depuis l'API GitHub -->
-        <p class="meta reveal"><span data-i18n="hero.meta">Free and open source · Windows 10 &amp; 11 and macOS</span><span id="dl-info"></span></p>
-        <p class="meta reveal"><a class="meta-link" href="#install" data-i18n="hero.unsigned">Unsigned installer: SmartScreen will warn you</a></p>
-        <details class="meta verify" id="verify" hidden>
-          <summary data-i18n="dl.verify">Verify (SHA-256)</summary>
-          <code class="hash" id="sha"></code>
-          <p class="verify-hint" id="verify-hint"></p>
-        </details>
-        <p class="meta os-note" id="os-note" data-i18n-html="hero.osnote" hidden>Orchestra runs on Windows and macOS, not on this system yet. <a href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener">Follow the project on GitHub</a> to hear about other systems.</p>
-      </div>
-
-      <!-- Tableau animé : un Lead qui délègue à Codex et à un Reviewer (remplacé par l'aperçu de la vidéo sous 1100px) -->
-      <div class="container">
-        <div class="board-mock reveal" id="mock" role="img" aria-label="Animated preview of an Orchestra board: a Lead agent asks Codex to fix a bug and a Reviewer to check it, then both report back." data-i18n-aria="mock.label">
-          <div class="mock-top">
-            <svg class="mock-mark" data-live-mark><use href="#mark-static" /></svg>
-            <span class="mock-name">Orchestra</span>
-            <span class="mock-tab active" data-i18n="mock.tab1">Weather app</span>
-            <span class="mock-tab" data-i18n="mock.tab2">Brainstorm</span>
-            <span class="mock-folder">C:\Projects\weather-app</span>
-            <span class="mock-win"><i></i><i></i><i></i></span>
+  <main id="main">
+    <!-- Héro -->
+    <section class="hero" id="top">
+      <div class="hero-grid" aria-hidden="true"></div>
+      <div class="wrap hero-top">
+        <div class="hero-copy">
+          <a class="release" id="release" href="https://github.com/Adoraay/Orchestra-Board/releases/latest" target="_blank" rel="noopener"><i></i><span class="version">v0.1.3</span><span data-i18n="hero.release">is out. Read what changed</span><svg><use href="#i-out" /></svg></a>
+          <h1 data-i18n="hero.title">Be the maestro of your AI&nbsp;orchestra.</h1>
+          <p class="lead" data-i18n="hero.lead">Orchestra is a desktop app. Drop Claude Code, Codex or any CLI agent on one big map, each in a real terminal, then draw links so they hand work to each other.</p>
+          <div class="cta">
+            <a class="btn btn-accent btn-lg dl-primary" href="https://github.com/Adoraay/Orchestra-Board/releases/latest">
+              <svg class="os os-win"><use href="#i-win" /></svg><svg class="os os-mac"><use href="#i-mac" /></svg>
+              <span data-dl-label data-i18n="cta.win">Download for Windows</span>
+            </a>
+            <a class="btn btn-line btn-lg" href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener"><svg><use href="#i-github" /></svg><span data-i18n="cta.github">Source on GitHub</span></a>
           </div>
-          <div class="mock-body">
-            <div class="mock-dock">
-              <img src="assets/agents/claude-code.svg" alt="" />
-              <img src="assets/agents/codex.svg" alt="" />
-              <img src="assets/agents/antigravity.svg" alt="" />
-              <img src="assets/agents/shell.svg" alt="" />
-              <span class="mock-sep"></span>
-              <svg viewBox="0 0 24 24" class="mock-branch"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg>
-            </div>
-            <div class="mock-map">
-              <svg class="mock-links" viewBox="0 0 1000 560" preserveAspectRatio="none" aria-hidden="true">
-                <path id="l1" d="M 430 290 C 520 290, 520 140, 600 140" />
-                <path id="l2" d="M 430 290 C 520 290, 520 420, 600 420" />
-              </svg>
-              <span class="pulse" id="p1"></span>
-              <span class="pulse" id="p2"></span>
-              <span class="pulse back" id="p3"></span>
-              <span class="pulse back" id="p4"></span>
-
-              <div class="tile" id="t-lead" style="--x:3%;--y:28%;--w:40%;--h:46%">
-                <div class="tile-head"><img src="assets/agents/claude-code.svg" alt="" /><b>Lead</b><span class="folder">· weather-app</span><i class="status"></i></div>
-                <div class="term" data-term></div>
-                <div class="bubble"><img src="assets/agents/claude-code.svg" alt="" /><span data-i18n="mock.lead.done">Lead finished its task</span></div>
-              </div>
-              <div class="tile" id="t-codex" style="--x:60%;--y:5%;--w:37%;--h:40%">
-                <div class="tile-head"><img src="assets/agents/codex.svg" alt="" /><b>Codex</b><span class="folder">· weather-app</span><i class="status"></i></div>
-                <div class="term" data-term></div>
-                <div class="bubble"><img src="assets/agents/codex.svg" alt="" /><span data-i18n="mock.codex.done">Codex finished its task</span></div>
-              </div>
-              <div class="tile" id="t-review" style="--x:60%;--y:55%;--w:37%;--h:40%">
-                <div class="tile-head"><img src="assets/agents/claude-code.svg" alt="" /><b>Reviewer</b><span class="folder">· weather-app</span><i class="status"></i></div>
-                <div class="term" data-term></div>
-                <div class="bubble"><img src="assets/agents/claude-code.svg" alt="" /><span data-i18n="mock.review.done">Reviewer finished its task</span></div>
-              </div>
-              <div class="mock-badge"><span></span><b data-i18n="mock.badge">Delegation</b></div>
-            </div>
-          </div>
+          <p class="fine"><span data-i18n="hero.fine">Free, MIT license. Windows 10 and 11, macOS.</span><span id="dl-info"></span> <a href="#install" data-i18n="hero.other">Other downloads</a></p>
         </div>
-        <img class="mock-poster reveal" src="assets/video/poster.jpg" alt="An Orchestra board with linked agent terminals" data-i18n-alt="mock.poster" width="1920" height="1080" loading="lazy" />
-      </div>
-    </section>
-
-    <!-- Agents pris en charge : intégration complète au premier rang, les autres CLI autour (scène construite par main.js) -->
-    <section class="section ensemble" id="agents">
-      <div class="container">
-        <div class="section-head center reveal">
-          <p class="kicker" data-i18n="ens.kicker">Supported agents</p>
-          <h2 data-i18n-html="ens.title">Claude Code and Codex, <em>plus any CLI agent</em></h2>
-        </div>
-        <div class="orchestra reveal" id="orchestra" role="img" aria-label="Agents supported by Orchestra. Full integration: Claude Code and Codex. Also runs in a terminal: Gemini CLI, Antigravity, Aider, Qwen Code, OpenCode, Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI, Hermes Agent, a plain terminal, or your own command." data-i18n-aria="ens.label">
-          <div class="conductor">
-            <div class="conductor-glow"><svg data-live-mark><use href="#mark-static" /></svg></div>
-            <span data-i18n="ens.you">Orchestra</span>
-          </div>
-        </div>
-        <div class="ens-legend reveal">
-          <p><i class="lg-dot" aria-hidden="true"></i><span><b data-i18n="ens.full.t">Full integration</b> <span data-i18n="ens.full.p">Claude Code and Codex: relay, delegation, roles and precise status through hooks.</span></span></p>
-          <p><i class="lg-box" aria-hidden="true"></i><span><b data-i18n="ens.term.t">Also runs in a terminal</b> <span data-i18n="ens.term.p">Any other CLI gets a status from terminal activity and can receive relayed messages.</span></span></p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Vidéo de présentation -->
-    <section class="section tour" id="tour">
-      <div class="container">
-        <div class="section-head center reveal">
-          <p class="kicker" data-i18n="tour.kicker">Video tour</p>
-          <h2 data-i18n-html="tour.title">Every feature in <em>under three minutes</em></h2>
-        </div>
-        <div class="video-frame reveal">
-          <video id="promo" src="assets/video/orchestra-promo.mp4" poster="assets/video/poster.jpg" preload="none" playsinline controls></video>
-          <button class="play" id="play" type="button" aria-label="Play the video tour" data-i18n-aria="tour.playLabel">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 5.5v13l11-6.5z"/></svg>
-            <span data-i18n="tour.play">Watch the tour · 2:40</span>
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- La map -->
-    <section class="section" id="map">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker" data-i18n="map.kicker">The map</p>
-          <h2 data-i18n-html="map.title">Each agent runs in a real terminal <em>on an infinite map</em></h2>
-          <p class="section-lead" data-i18n="map.lead">Drag an agent from the dock: it starts in a real terminal, in the folder you picked. Line up as many as you want, across as many boards as you need.</p>
-        </div>
-        <div class="bento">
-          <article class="card wide reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/drop.mp4" poster="assets/clips/drop.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="map.drop.t">Drop an agent from the dock</h3><p data-i18n="map.drop.p">Pick a folder in the explorer and drop Claude Code or Codex on the map. It runs in a real terminal, not a chat imitation.</p></div>
-          </article>
-          <article class="card reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/agents.mp4" poster="assets/clips/agents.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="map.agents.t">Every agent, one click away</h3><p data-i18n="map.agents.p">The active agents bar lists everything running across all your boards, with its live status.</p></div>
-          </article>
-          <article class="card reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/sketch.mp4" poster="assets/clips/sketch.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="map.sketch.t">Think on the canvas</h3><p data-i18n="map.sketch.p">Sketch and leave notes on the map, next to your agents.</p></div>
-          </article>
-          <article class="card wide reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/theme.mp4" poster="assets/clips/theme.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="map.theme.t">Themes and settings</h3><p data-i18n="map.theme.p">Eight themes, your own accent color, terminal font size, English or French.</p></div>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- Les liens -->
-    <section class="section" id="links">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker" data-i18n="links.kicker">Agent links</p>
-          <h2 id="links-title" data-i18n-html="links.title">Agents can <em>send work to each other</em></h2>
-          <p class="section-lead" data-i18n="links.lead">Draw a link between two tiles and choose how they work together. A turn limit on every link keeps conversations from looping forever.</p>
-        </div>
-        <div class="tabs reveal" role="tablist" id="link-tabs" aria-labelledby="links-title">
-          <button role="tab" id="tab-relay" aria-selected="true" aria-controls="panel-relay" data-tab="relay"><span class="tab-dot"></span><span data-i18n="links.relay.t">Relay</span></button>
-          <button role="tab" id="tab-delegation" aria-selected="false" aria-controls="panel-delegation" tabindex="-1" data-tab="delegation"><span class="tab-dot"></span><span data-i18n="links.delegation.t">Delegation</span></button>
-          <button role="tab" id="tab-terminal" aria-selected="false" aria-controls="panel-terminal" tabindex="-1" data-tab="terminal"><span class="tab-dot"></span><span data-i18n="links.terminal.t">Terminal link</span></button>
-          <button role="tab" id="tab-link" aria-selected="false" aria-controls="panel-link" tabindex="-1" data-tab="link"><span class="tab-dot"></span><span data-i18n="links.setup.t">Setup</span></button>
-        </div>
-        <div class="showcase reveal">
-          <div class="showcase-media" aria-hidden="true">
-            <video id="link-video" data-src="assets/clips/relay.mp4" poster="assets/clips/relay.jpg" muted loop playsinline></video>
-          </div>
-          <div class="showcase-text">
-            <div class="panel" role="tabpanel" id="panel-relay" aria-labelledby="tab-relay" tabindex="0" data-panel="relay">
-              <h3 data-i18n="links.relay.t">Relay</h3>
-              <p data-i18n="links.relay.p">When the source finishes, its last answer goes to the target with your instruction. Dev fixes the bug, Reviewer reviews the fix, automatically.</p>
-              <code class="snippet">Review this fix in 3 short bullet points: <b>{response}</b></code>
-            </div>
-            <div class="panel" role="tabpanel" id="panel-delegation" aria-labelledby="tab-delegation" tabindex="0" data-panel="delegation" hidden>
-              <h3 data-i18n="links.delegation.t">Delegation</h3>
-              <p data-i18n="links.delegation.p">The source decides by itself when to talk to the others, through Orchestra's MCP tools, then waits for their replies. Here one agent asks Claude and Codex for ideas and picks the best one.</p>
-              <code class="snippet">list_agents · send_to_agent · wait_for_replies</code>
-            </div>
-            <div class="panel" role="tabpanel" id="panel-terminal" aria-labelledby="tab-terminal" tabindex="0" data-panel="terminal" hidden>
-              <h3 data-i18n="links.terminal.t">Terminal link</h3>
-              <p data-i18n="links.terminal.p">Hand an agent a terminal you can see. With your permission, it starts a command there, like npm start, and reads its output. It can also interrupt it.</p>
-              <code class="snippet">run_in_terminal · read_terminal · interrupt_terminal</code>
-            </div>
-            <div class="panel" role="tabpanel" id="panel-link" aria-labelledby="tab-link" tabindex="0" data-panel="link" hidden>
-              <h3 data-i18n="links.setup.t">Setup</h3>
-              <p data-i18n="links.setup.p">Pick the Link tool, click one tile, then another. Choose the link type and its instruction, and set the turn limit. A link can also be reversed or made two-way.</p>
-              <code class="snippet">L · click A · click B</code>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Git -->
-    <section class="section" id="git">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker" data-i18n="git.kicker">Git</p>
-          <h2 data-i18n-html="git.title">Each agent can work <em>on its own branch</em></h2>
-          <p class="section-lead" data-i18n="git.lead">Drop the Branch square on an agent: it restarts in its own git worktree, so agents working in parallel never edit the same files.</p>
-        </div>
-        <div class="bento two">
-          <article class="card reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/branch.mp4" poster="assets/clips/branch.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="git.branch.t">Branches as worktrees</h3><p data-i18n="git.branch.p">Pick a local or remote branch and the agent restarts in it. A notch on the tile shows which branch it works on.</p></div>
-          </article>
-          <article class="card reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/changes.mp4" poster="assets/clips/changes.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="git.changes.t">Review every change</h3><p data-i18n="git.changes.p">See the files an agent touched with a colored diff, and open them in VS Code in one click.</p></div>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- Contrôle -->
-    <section class="section" id="control">
-      <div class="container">
-        <div class="section-head reveal">
-          <p class="kicker" data-i18n="control.kicker">Control</p>
-          <h2 data-i18n-html="control.title">Know when an agent <em>needs you</em></h2>
-        </div>
-        <div class="bento three">
-          <article class="card reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/role.mp4" poster="assets/clips/role.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="control.role.t">Roles that stick</h3><p data-i18n="control.role.p">"You are the reviewer, you never edit files." Given at the start of every session, even after /clear.</p></div>
-          </article>
-          <article class="card reveal">
-            <div class="clip" aria-hidden="true"><video data-src="assets/clips/log.mp4" poster="assets/clips/log.jpg" muted loop playsinline></video></div>
-            <div class="card-text"><h3 data-i18n="control.log.t">The exchange log</h3><p data-i18n="control.log.p">Every message, reply, command and refusal that went through a link. Click a name to find its tile.</p></div>
-          </article>
-          <article class="card reveal">
-            <div class="status-demo" aria-hidden="true">
-              <div class="sd-row"><i class="sd-dot idle"></i><span data-i18n="control.status.idle">Idle</span></div>
-              <div class="sd-row"><i class="sd-dot working"></i><span data-i18n="control.status.working">Working</span></div>
-              <div class="sd-row"><i class="sd-dot waiting"></i><span data-i18n="control.status.waiting">Waiting for your permission</span></div>
-              <div class="sd-row done"><i class="sd-dot ok"></i><span data-i18n="control.status.done">Done</span></div>
-              <p class="sd-toast"><img src="assets/agents/claude-code.svg" alt="" /><span data-i18n="control.status.toast">Reviewer finished its task</span></p>
-            </div>
-            <div class="card-text"><h3 data-i18n="control.status.t">Status at a glance</h3><p data-i18n="control.status.p">When an agent finishes, its tile turns green and your system shows a notification with a sound, even when Orchestra is in the background.</p></div>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <!-- Prérequis et ce qu'Orchestra écrit sur le PC (vérifié dans ../Orchestra : README « Privacy and safety », electron/claudeHooks.cjs, claudeTrust.cjs, codexProfile.cjs) -->
-    <section class="section" id="requirements">
-      <div class="container">
-        <div class="section-head reveal">
-          <h2 data-i18n-html="req.title"><em>Requirements</em></h2>
-        </div>
-        <div class="req">
-          <ul class="req-list reveal">
-            <li data-i18n-html="req.r1"><b>Windows 10 or 11</b> (64-bit), or <b>macOS</b> on Apple Silicon or Intel.</li>
-            <li data-i18n-html="req.r2"><b>The agent CLIs you want to use</b>, installed and logged in: <code>claude</code> or <code>codex</code> must already work in a normal terminal.</li>
-            <li data-i18n-html="req.r3"><b>Your existing subscriptions.</b> Orchestra starts the CLIs logged in with your own accounts.</li>
-            <li data-i18n-html="req.r4"><b>Git</b>, for branches: an agent moved to a branch runs in its own git worktree.</li>
-            <li data-i18n-html="req.r5"><b>MIT license.</b> No Orchestra account to create.</li>
+        <aside class="plays" aria-label="Agents">
+          <p class="plays-title" data-i18n="plays.title">In the dock</p>
+          <ul class="plays-grid" id="plays">
+            <li class="full" title="Claude Code"><img src="assets/agents/claude-code.svg" alt="Claude Code" /></li>
+            <li class="full" title="Codex"><img src="assets/agents/codex.svg" alt="Codex" /></li>
+            <li title="Gemini CLI"><img src="assets/agents/gemini.svg" alt="Gemini CLI" /></li>
+            <li title="Antigravity"><img src="assets/agents/antigravity.svg" alt="Antigravity" /></li>
+            <li title="Aider"><img src="assets/agents/aider.png" alt="Aider" /></li>
+            <li title="Qwen Code"><img src="assets/agents/qwen.svg" alt="Qwen Code" /></li>
+            <li title="OpenCode"><img src="assets/agents/opencode.svg" alt="OpenCode" /></li>
+            <li title="GitHub Copilot CLI"><img src="assets/agents/copilot.svg" alt="GitHub Copilot CLI" /></li>
+            <li title="Cursor CLI"><img src="assets/agents/cursor.svg" alt="Cursor CLI" /></li>
+            <li title="Goose"><img src="assets/agents/goose.svg" alt="Goose" /></li>
+            <li title="Amp"><img src="assets/agents/amp.svg" alt="Amp" /></li>
+            <li title="Kimi CLI"><img src="assets/agents/kimi.svg" alt="Kimi CLI" /></li>
+            <li title="Hermes Agent"><img src="assets/agents/hermes.svg" alt="Hermes Agent" /></li>
+            <li title="Terminal"><img src="assets/agents/shell.svg" alt="Terminal" /></li>
+            <li class="yours" data-i18n="plays.yours">yours</li>
           </ul>
-          <div class="req-box reveal">
-            <h3 data-i18n="req.fp.t">What Orchestra writes on your computer</h3>
-            <ul>
-              <li data-i18n-html="req.fp1"><code>%APPDATA%\Orchestra</code> (on macOS: <code>~/Library/Application Support/Orchestra</code>): settings, boards, custom agent logos (<code>logos</code>), the per-session hook files of Claude Code (<code>hooks</code>), and <code>usage-probe</code>, a folder where Orchestra runs Claude Code in the background to read your usage. The exchange log stays in memory.</li>
-              <li data-i18n-html="req.fp2"><code>~/.claude.json</code>: a folder opened with Claude Code is marked as trusted, so Claude does not ask again (can be turned off in Settings › General). Hooks and the MCP server are passed to each Claude Code session at launch; your Claude settings files are not changed.</li>
-              <li data-i18n-html="req.fp3"><code>~/.codex/orchestra.config.toml</code>, a separate Codex profile with Orchestra's MCP server (your <code>config.toml</code> is never changed), and Orchestra's own entries in <code>~/.codex/hooks.json</code>. Both are written when the app starts and do nothing when Codex runs outside Orchestra.</li>
-              <li data-i18n="req.fp4">The hooks and the MCP server only talk to the app on 127.0.0.1, with a token that changes at every launch.</li>
-            </ul>
-            <h3 data-i18n="req.un.t">Uninstall</h3>
-            <p data-i18n-html="req.un.p">Windows: Settings › Apps › Installed apps (Windows 11) or Apps & features (Windows 10) › Orchestra › Uninstall. macOS: drag Orchestra from Applications to the Trash. Your data stays: to remove everything, also delete <code>%APPDATA%\Orchestra</code> (on macOS: <code>~/Library/Application Support/Orchestra</code>), <code>~/.codex/orchestra.config.toml</code> and the entries of <code>~/.codex/hooks.json</code> that contain <code>ORCHESTRA_HOOK_URL</code>. The trusted-folder entries written to <code>~/.claude.json</code> also stay; they belong to Claude Code's own list of trusted folders.</p>
+          <p class="plays-note" data-i18n="plays.note"><b>Claude Code</b> and <b>Codex</b> get the full integration: links, roles, exact status. Any other CLI runs in a tile and can receive relayed messages.</p>
+        </aside>
+      </div>
+
+      <!-- Mini-tableau jouable (board.js) -->
+      <div class="wrap">
+        <div class="app" id="board">
+          <div class="app-bar">
+            <img class="app-logo" src="assets/brand/orchestra-lockup.svg" alt="" />
+            <span class="app-tab on" data-i18n="app.tab1">Landing page</span>
+            <span class="app-tab">API</span>
+            <span class="app-folder"><span data-i18n="app.folder">Active folder:</span> <b>~/acme/landing-page</b></span>
+            <button class="app-inbox" type="button" data-inbox aria-label="Inbox" tabindex="-1"><svg><use href="#i-inbox" /></svg><b hidden>1</b></button>
+          </div>
+          <div class="app-body">
+            <div class="app-dock" data-dock>
+              <button type="button" data-agent="claude" title="Claude Code"><img src="assets/agents/claude-code.svg" alt="Claude Code" draggable="false" /></button>
+              <button type="button" data-agent="codex" title="Codex"><img src="assets/agents/codex.svg" alt="Codex" draggable="false" /></button>
+              <button type="button" data-agent="gemini" title="Gemini CLI"><img src="assets/agents/gemini.svg" alt="Gemini CLI" draggable="false" /></button>
+              <button type="button" data-agent="shell" title="Terminal"><img src="assets/agents/shell.svg" alt="Terminal" draggable="false" /></button>
+              <span class="app-dock-sep"></span>
+              <span class="app-dock-branch" title="Branch"><svg><use href="#i-branch" /></svg></span>
+            </div>
+            <div class="app-map" data-map>
+              <svg class="app-edges" data-edges aria-hidden="true">
+                <defs>
+                  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 9 5 1 8.5" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></marker>
+                </defs>
+              </svg>
+              <div class="app-tools" role="toolbar" aria-label="Tools">
+                <button type="button" data-tool="select" class="on" aria-pressed="true" title="Select (V)"><svg><use href="#i-pointer" /></svg></button>
+                <button type="button" data-tool="link" aria-pressed="false" title="Link (L)"><svg><use href="#i-spline" /></svg></button>
+              </div>
+            </div>
+            <aside class="app-log">
+              <p class="app-log-title" data-i18n="app.log">Log</p>
+              <ol data-log></ol>
+              <p class="app-log-empty" data-i18n="app.logEmpty">Messages that travel through a link show up here.</p>
+            </aside>
           </div>
         </div>
+        <div class="board-bar">
+          <button class="btn btn-accent" type="button" id="board-run"><svg><use href="#i-play" /></svg><span data-i18n="board.run">Run the board</span></button>
+          <button class="btn btn-line" type="button" id="board-reset"><svg><use href="#i-reset" /></svg><span data-i18n="board.reset">Reset</span></button>
+          <p class="board-hint" id="board-hint" aria-live="polite"></p>
+        </div>
+        <p class="board-foot" data-i18n="board.foot">A small copy of the real thing, running in your browser. The terminals here are scripted. In the app they are real.</p>
+      </div>
+    </section>
+
+    <!-- Liens -->
+    <section class="sec" id="links">
+      <div class="wrap">
+        <div class="wire" aria-hidden="true"><span><i></i><b data-i18n="wire.links">Links</b><em>4</em></span></div>
+        <div class="sec-head">
+          <h2 data-i18n="links.title">A line between two tiles decides how they work together.</h2>
+          <p data-i18n="links.lead">Pick the Link tool, click one tile, then another. Every Relay and Delegation link has a turn limit, three by default, so two agents can't talk forever.</p>
+        </div>
+        <div class="lk">
+          <div class="lk-list" role="tablist" aria-label="Link types">
+            <button class="lk-item on" role="tab" aria-selected="true" data-lk="relay" type="button">
+              <span class="lk-name"><i class="lk-dot"></i><b data-i18n="lk.relay.n">Relay</b></span>
+              <span class="lk-what" data-i18n="lk.relay.p">When A finishes, its last reply is pasted into B together with your instruction.</span>
+              <span class="lk-for" data-i18n="lk.relay.f">Developer to reviewer. Writer to translator.</span>
+            </button>
+            <button class="lk-item" role="tab" aria-selected="false" data-lk="delegation" type="button" tabindex="-1">
+              <span class="lk-name"><i class="lk-dot"></i><b data-i18n="lk.del.n">Delegation</b></span>
+              <span class="lk-what" data-i18n="lk.del.p">A decides by itself when to send a task to B, waits, and gets the reply back. Requests to a busy agent queue up in order.</span>
+              <span class="lk-for" data-i18n="lk.del.f">A lead that splits the work.</span>
+            </button>
+            <button class="lk-item" role="tab" aria-selected="false" data-lk="terminal" type="button" tabindex="-1">
+              <span class="lk-name"><i class="lk-dot"></i><b data-i18n="lk.term.n">Terminal</b></span>
+              <span class="lk-what" data-i18n="lk.term.p">A runs commands in a terminal tile you can watch, reads the output and can stop it. It asks you first, every time.</span>
+              <span class="lk-for" data-i18n="lk.term.f">Dev servers, tests, builds.</span>
+            </button>
+            <button class="lk-item" role="tab" aria-selected="false" data-lk="note" type="button" tabindex="-1">
+              <span class="lk-name"><i class="lk-dot note"></i><b data-i18n="lk.note.n">Note</b></span>
+              <span class="lk-what" data-i18n="lk.note.p">A reads and rewrites a sticky note on the map. You see the changes and can edit it too.</span>
+              <span class="lk-for" data-i18n="lk.note.f">Shared plans, checklists, findings.</span>
+            </button>
+          </div>
+          <div class="lk-stage">
+            <div class="lk-pane on" data-pane="relay">
+              <div class="frame"><video data-src="assets/clips/relay.mp4" poster="assets/clips/relay.jpg" muted loop playsinline></video></div>
+              <code class="snip" data-i18n="lk.relay.snip">Review this change and list any bug: <b>{response}</b></code>
+            </div>
+            <div class="lk-pane" data-pane="delegation" hidden>
+              <div class="frame"><video data-src="assets/clips/delegation.mp4" poster="assets/clips/delegation.jpg" muted loop playsinline></video></div>
+              <code class="snip">list_agents · send_to_agent · wait_for_replies</code>
+            </div>
+            <div class="lk-pane" data-pane="terminal" hidden>
+              <div class="frame"><video data-src="assets/clips/terminal.mp4" poster="assets/clips/terminal.jpg" muted loop playsinline></video></div>
+              <code class="snip">run_in_terminal · read_terminal · interrupt_terminal</code>
+            </div>
+            <div class="lk-pane" data-pane="note" hidden>
+              <div class="frame frame-note">
+                <div class="mini-tile"><span><img src="assets/agents/claude-code.svg" alt="" />Lead</span><p>● write_note("Launch plan")</p></div>
+                <svg class="note-wire" viewBox="0 0 120 20" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10h120" /></svg>
+                <div class="sticky">
+                  <b data-i18n="note.t">Launch plan</b>
+                  <span class="done" data-i18n="note.1">Hero copy</span>
+                  <span class="doing" data-i18n="note.2">Pricing section</span>
+                  <span data-i18n="note.3">Accessibility pass</span>
+                </div>
+              </div>
+              <code class="snip">list_notes · read_note · write_note</code>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fonctions -->
+    <section class="sec" id="features">
+      <div class="wrap">
+        <div class="wire" aria-hidden="true"><span><i></i><b data-i18n="wire.features">Around the board</b></span></div>
+        <div class="sec-head">
+          <h2 data-i18n="feat.title">The rest of the app is there so you can leave them alone.</h2>
+        </div>
+        <div class="tiles">
+          <article class="ft w7">
+            <header><b data-i18n="ft.tasks.n">Tasks</b><span data-i18n="ft.new">new in 0.1.3</span></header>
+            <div class="ft-media shot"><img src="assets/shots/tasks.png" alt="" loading="lazy" width="1080" height="820" /></div>
+            <div class="ft-text"><h3 data-i18n="ft.tasks.t">Queue the prompts, go do something else</h3><p data-i18n="ft.tasks.p">Save ordered steps for Claude Code and Codex. Orchestra sends the next prompt when the previous agent finishes. A step can attach the previous answer, or wait for your approval.</p></div>
+          </article>
+          <article class="ft w5">
+            <header><b data-i18n="ft.teams.n">Team templates</b><span data-i18n="ft.new">new in 0.1.3</span></header>
+            <div class="ft-media shot"><img src="assets/shots/team-templates.png" alt="" loading="lazy" width="1000" height="720" /></div>
+            <div class="ft-text"><h3 data-i18n="ft.teams.t">A whole team in one click</h3><p data-i18n="ft.teams.p">Developer + reviewer, Lead + two workers, Developer + terminal. Or save your own board, roles and links included.</p></div>
+          </article>
+          <article class="ft w4">
+            <header><b data-i18n="ft.role.n">Roles</b></header>
+            <div class="ft-media"><video data-src="assets/clips/role.mp4" poster="assets/clips/role.jpg" muted loop playsinline></video></div>
+            <div class="ft-text"><h3 data-i18n="ft.role.t">“You never edit files.”</h3><p data-i18n="ft.role.p">A lasting instruction per tile, given again at every session start and after /clear.</p></div>
+          </article>
+          <article class="ft w4">
+            <header><b data-i18n="ft.branch.n">Git branches</b></header>
+            <div class="ft-media"><video data-src="assets/clips/branch.mp4" poster="assets/clips/branch.jpg" muted loop playsinline></video></div>
+            <div class="ft-text"><h3 data-i18n="ft.branch.t">One worktree per agent</h3><p data-i18n="ft.branch.p">Drop the Branch square on a tile. The agent restarts on that branch, in its own git worktree.</p></div>
+          </article>
+          <article class="ft w4">
+            <header><b data-i18n="ft.changes.n">Changes</b></header>
+            <div class="ft-media"><video data-src="assets/clips/changes.mp4" poster="assets/clips/changes.jpg" muted loop playsinline></video></div>
+            <div class="ft-text"><h3 data-i18n="ft.changes.t">See what it touched</h3><p data-i18n="ft.changes.p">The changed files of a tile's worktree with a colored diff. One click opens them in VS Code.</p></div>
+          </article>
+          <article class="ft w5">
+            <header><b data-i18n="ft.log.n">Log</b></header>
+            <div class="ft-media"><video data-src="assets/clips/log.mp4" poster="assets/clips/log.jpg" muted loop playsinline></video></div>
+            <div class="ft-text"><h3 data-i18n="ft.log.t">Who said what to whom</h3><p data-i18n="ft.log.p">Every message, reply, command and refusal that went through a link. Filter by board, tile or type, follow one task by its ID, export as JSON.</p></div>
+          </article>
+          <article class="ft w7">
+            <header><b data-i18n="ft.sketch.n">Pen and notes</b></header>
+            <div class="ft-media"><video data-src="assets/clips/sketch.mp4" poster="assets/clips/sketch.jpg" muted loop playsinline></video></div>
+            <div class="ft-text"><h3 data-i18n="ft.sketch.t">It's a whiteboard too</h3><p data-i18n="ft.sketch.p">Draw on the map, drop sticky notes and text next to the terminals, group tiles and lay them out as a grid, rows or columns.</p></div>
+          </article>
+        </div>
+        <div class="small-things">
+          <p data-i18n="small.title">And the small things</p>
+          <ul>
+            <li data-i18n="small.1">Several boards in tabs. Agents on the other boards keep running.</li>
+            <li data-i18n="small.2">Each Claude Code and Codex tile resumes its exact session after a restart.</li>
+            <li data-i18n="small.3">A glow, a sound and a system notification when an agent finishes. <button class="sound" id="sound" type="button"><svg><use href="#i-sound" /></svg><span>Hear it</span></button></li>
+            <li data-i18n="small.4">Usage of your Claude and Codex plans, as a drawer or as a tile on the map.</li>
+            <li data-i18n="small.5">Find any tile on any board with <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd>. Blow one terminal up over the whole map with <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>M</kbd>.</li>
+            <li data-i18n="small.6">Undo and redo for positions and groups. Up to ten board backups.</li>
+            <li data-i18n="small.7">Eight themes, your own accent color, English and French.</li>
+            <li data-i18n="small.8">Diagnostics: where each agent's command was found, its version, its hooks.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Permissions : notch -->
+    <section class="sec" id="control">
+      <div class="wrap">
+        <div class="wire" aria-hidden="true"><span><i class="warn"></i><b data-i18n="wire.control">Waiting for you</b></span></div>
+        <div class="ctl">
+          <div class="ctl-copy">
+            <h2 data-i18n="ctl.title">Agents ask. You answer from wherever you are.</h2>
+            <p data-i18n="ctl.p1">When an agent needs a permission, a notch slides out of the inbox in the top bar. For a plain yes or no, you answer right there, without hunting for the tile. For a question or a plan, it takes you to the terminal.</p>
+            <p data-i18n="ctl.p2">Orchestra never approves anything on its own. The notch only passes on your click.</p>
+            <ul class="status">
+              <li><i class="st idle"></i><span data-i18n="st.idle">Idle</span></li>
+              <li><i class="st working"></i><span data-i18n="st.working">Working</span></li>
+              <li><i class="st waiting"></i><span data-i18n="st.waiting">Waiting for you</span></li>
+              <li><i class="st done"></i><span data-i18n="st.done">Done</span></li>
+            </ul>
+          </div>
+          <div class="app app-small" id="notch-demo">
+            <div class="app-bar">
+              <img class="app-logo" src="assets/brand/orchestra-lockup.svg" alt="" />
+              <span class="app-tab on" data-i18n="app.tab1">Landing page</span>
+              <button class="app-inbox" type="button" data-inbox aria-label="Inbox" tabindex="-1"><svg><use href="#i-inbox" /></svg><b hidden>1</b></button>
+            </div>
+            <div class="app-map" data-map>
+              <div class="tile" data-tile>
+                <div class="tile-head"><img src="assets/agents/codex.svg" alt="" /><b>Frontend</b><span class="tile-folder">· landing-page</span><i class="st idle" data-status></i></div>
+                <div class="tile-term" data-term></div>
+              </div>
+              <button class="btn btn-line btn-sm notch-replay" type="button" data-replay hidden><svg><use href="#i-reset" /></svg><span data-i18n="ctl.replay">Play it again</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Vidéo -->
+    <section class="sec" id="tour">
+      <div class="wrap">
+        <div class="wire" aria-hidden="true"><span><i></i><b data-i18n="wire.tour">Video</b><em>2:40</em></span></div>
+        <div class="sec-head">
+          <h2 data-i18n="tour.title">Or watch someone else do it.</h2>
+          <p data-i18n="tour.lead">The whole app in under three minutes, recorded on a real board. It was shot on the first release, so a few things have moved since.</p>
+        </div>
+        <div class="frame video">
+          <video id="promo" src="assets/video/orchestra-promo.mp4" poster="assets/video/poster.jpg" preload="none" playsinline controls></video>
+          <button class="play" id="play" type="button"><svg><use href="#i-play" /></svg><span data-i18n="tour.play">Play the tour</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Confidentialité -->
+    <section class="sec" id="privacy">
+      <div class="wrap">
+        <div class="wire" aria-hidden="true"><span><i></i><b data-i18n="wire.privacy">On your machine</b></span></div>
+        <div class="sec-head">
+          <h2 data-i18n="priv.title">Everything Orchestra touches, listed.</h2>
+          <p data-i18n="priv.lead">It starts the CLIs you already use, with your own accounts. No Orchestra account, no API key, no server of ours in the middle.</p>
+        </div>
+        <dl class="touch">
+          <div><dt>127.0.0.1</dt><dd data-i18n="touch.1">A small local server that agents use to reach Orchestra. Random port, secret token that changes at every launch.</dd></div>
+          <div><dt>%APPDATA%\Orchestra</dt><dd data-i18n="touch.2">Settings, boards, tasks, templates. On macOS: <code>~/Library/Application Support/Orchestra</code>. The log and the inbox stay in memory.</dd></div>
+          <div><dt>~/.claude.json</dt><dd data-i18n="touch.3">Marks a folder as trusted before launching Claude Code in it, so it doesn't ask again. Can be turned off.</dd></div>
+          <div><dt>~/.codex/</dt><dd data-i18n="touch.4"><code>orchestra.config.toml</code>, a separate profile, and Orchestra's entries in <code>hooks.json</code>. Your <code>config.toml</code> is never changed, and both do nothing outside Orchestra.</dd></div>
+          <div><dt>git</dt><dd data-i18n="touch.5"><code>fetch</code>, <code>worktree add</code> when you pick a branch, and read-only commands. It never commits and never pushes.</dd></div>
+          <div><dt>api.github.com</dt><dd data-i18n="touch.6">One request at startup to check for a new version. The only network access of the app itself, and it can be turned off.</dd></div>
+        </dl>
       </div>
     </section>
 
     <!-- Installation -->
-    <section class="section" id="install">
-      <div class="container">
-        <div class="steps reveal">
-          <h2 class="steps-title" data-i18n-html="steps.title">Install <em>Orchestra</em></h2>
-          <ol>
-            <li><span class="step-num">1</span><div><b data-i18n="steps.s1.t">Download</b><p data-i18n="steps.s1.p">Get the installer from the latest release: Orchestra-Setup-&lt;version&gt;.exe on Windows, or the .dmg on macOS (arm64 for Apple Silicon) and drag Orchestra to Applications.</p></div></li>
-            <li><span class="step-num">2</span><div><b data-i18n="steps.s2.t">Allow it once</b><p data-i18n="steps.s2.p">The app isn't code-signed yet. On Windows, if it says "Windows protected your PC", click More info, then Run anyway. On macOS, right-click Orchestra in Applications and choose Open the first time. The source code is public on GitHub.</p></div></li>
-            <li><span class="step-num">3</span><div><b data-i18n="steps.s3.t">Drop an agent</b><p data-i18n="steps.s3.p">Make sure claude or codex works in a terminal, then drag it onto the map. A guided tour shows you the rest.</p></div></li>
+    <section class="sec" id="install">
+      <div class="wrap">
+        <div class="wire" aria-hidden="true"><span><i class="ok"></i><b data-i18n="wire.install">Install</b><em class="version">v0.1.3</em></span></div>
+        <div class="sec-head">
+          <h2 data-i18n="inst.title">Three steps, about two minutes.</h2>
+        </div>
+        <div class="inst">
+          <ol class="steps">
+            <li><b data-i18n="inst.s1.t">Have an agent that works</b><p data-i18n="inst.s1.p"><code>claude</code> or <code>codex</code> must already run in a normal terminal, logged in with your account. Git too, if you want branches.</p></li>
+            <li><b data-i18n="inst.s2.t">Install Orchestra</b><p data-i18n="inst.s2.p">Windows: run the installer. macOS: open the <code>.dmg</code> and drag Orchestra to Applications.</p></li>
+            <li><b data-i18n="inst.s3.t">Pick a folder, drop an agent</b><p data-i18n="inst.s3.p">Click your project in the file explorer, then drag an agent from the dock. A one-minute tour shows the rest on your own board.</p></li>
           </ol>
+          <div class="dl">
+            <a class="dl-row" data-asset="win" href="https://github.com/Adoraay/Orchestra-Board/releases/latest"><svg><use href="#i-win" /></svg><span><b>Windows 10 / 11</b><small data-i18n="dl.win">64-bit installer</small></span><em></em><svg class="dl-go"><use href="#i-down" /></svg></a>
+            <a class="dl-row" data-asset="macArm" href="https://github.com/Adoraay/Orchestra-Board/releases/latest"><svg><use href="#i-mac" /></svg><span><b>macOS</b><small data-i18n="dl.arm">Apple Silicon (arm64)</small></span><em></em><svg class="dl-go"><use href="#i-down" /></svg></a>
+            <a class="dl-row" data-asset="macIntel" href="https://github.com/Adoraay/Orchestra-Board/releases/latest"><svg><use href="#i-mac" /></svg><span><b>macOS</b><small data-i18n="dl.intel">Intel (x64)</small></span><em></em><svg class="dl-go"><use href="#i-down" /></svg></a>
+            <details class="sha" id="sha" hidden>
+              <summary data-i18n="dl.verify">Check the download (SHA-256)</summary>
+              <ul id="sha-list"></ul>
+            </details>
+            <div class="sticky sticky-warn">
+              <b data-i18n="warn.t">Not code-signed yet</b>
+              <p data-i18n="warn.p">Windows will say “Windows protected your PC”: click <i>More info</i>, then <i>Run anyway</i>. On macOS, right-click Orchestra and choose <i>Open</i> the first time.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- FAQ -->
-    <section class="section" id="faq">
-      <div class="container narrow">
-        <div class="section-head center reveal">
-          <h2 data-i18n-html="faq.title"><em>FAQ</em></h2>
-        </div>
-        <div class="faq" id="faq-list">
-          <details class="reveal"><summary data-i18n="faq.q2">Which agents can I use?</summary><p data-i18n="faq.a2">Any agent that runs in a terminal: Claude Code, Codex, Gemini CLI, Antigravity, Aider, Qwen Code, OpenCode, Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI, Hermes Agent… or your own command. Relay, delegation, roles and precise status are built for Claude Code and Codex. Other agents get a status from terminal activity and can receive relayed messages.</p></details>
-          <details class="reveal"><summary data-i18n="faq.q3">Do I need an API key?</summary><p data-i18n="faq.a3">No. Orchestra launches the CLIs you already installed and logged in, with your own subscriptions.</p></details>
-          <details class="reveal"><summary data-i18n="faq.q4">Does my code leave my machine?</summary><p data-i18n="faq.a4">Orchestra itself sends nothing anywhere. Your agents talk to their own providers exactly as they do in a normal terminal.</p></details>
-          <details class="reveal"><summary data-i18n="faq.q5">Can two agents loop forever?</summary><p data-i18n="faq.a5">No. Every link has a turn limit (3 by default, up to 20), and you can switch any link off in one click. Every exchange shows up in the log.</p></details>
-          <details class="reveal"><summary data-i18n="faq.q8">Will it use up my subscription faster?</summary><p data-i18n="faq.a8">It can. Every tile uses your own plan, and linked agents that keep handing work to each other add up quickly. Keep turn limits low and switch links off when you don't need them.</p></details>
-          <details class="reveal"><summary data-i18n="faq.q9">What can the agents do on my computer?</summary><p data-i18n="faq.a9">The same as in your own terminal: each tile runs the real CLI in the folder you picked, with that CLI's usual permission settings. Orchestra never approves a permission request for an agent. Its own tools are pre-approved, except running a command in a linked terminal, which always asks first.</p></details>
-          <details class="reveal"><summary data-i18n="faq.q6">Mac or Linux?</summary><p data-i18n-html="faq.a6">Orchestra runs on Windows 10 and 11 and on macOS (Apple Silicon and Intel). Linux is not supported yet: <a href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener">follow the project on GitHub</a> to hear when that changes.</p></details>
-          <details class="reveal"><summary data-i18n="faq.q7">Windows says "Windows protected your PC".</summary><p data-i18n-html="faq.a7">See <a href="#install">step 2 of the install</a>.</p></details>
+    <section class="sec" id="faq">
+      <div class="wrap">
+        <div class="wire" aria-hidden="true"><span><i></i><b>FAQ</b></span></div>
+        <div class="faq">
+          <h2 data-i18n="faq.title">Questions people ask first.</h2>
+          <div class="faq-list">
+            <details><summary data-i18n="faq.q1">Do I need an API key?</summary><p data-i18n="faq.a1">No. Orchestra launches the CLIs you already installed and logged into, with your own subscriptions.</p></details>
+            <details><summary data-i18n="faq.q2">Which agents can use links?</summary><p data-i18n="faq.a2">Claude Code and Codex can relay, delegate, drive a terminal, use linked notes and run task sequences. Other CLIs (Gemini CLI, Aider, your own…) run in a tile and can receive relayed messages. Their status comes from terminal activity.</p></details>
+            <details><summary data-i18n="faq.q3">Does my code leave my machine?</summary><p data-i18n="faq.a3">Not through Orchestra. Your agents talk to their own providers exactly as they do in a normal terminal.</p></details>
+            <details><summary data-i18n="faq.q4">Will it eat my subscription faster?</summary><p data-i18n="faq.a4">It can. Every tile uses your own plan, and linked agents that keep handing work to each other add up. Keep turn limits low and switch off the links you don't need. The Usage panel shows where you stand.</p></details>
+            <details><summary data-i18n="faq.q5">What can agents do on my computer?</summary><p data-i18n="faq.a5">The same as in your own terminal: each tile runs the real CLI in the folder you picked, with that CLI's permission settings. Orchestra's own tools are pre-approved, except running a command in a linked terminal, which always asks.</p></details>
+            <details><summary data-i18n="faq.q6">Codex asks me to approve “5 hooks”.</summary><p data-i18n="faq.a6">Those are Orchestra's status hooks (working, done). Choose <i>Trust all and continue</i> once and Codex remembers it.</p></details>
+            <details><summary data-i18n="faq.q7">Can I add another CLI?</summary><p data-i18n="faq.a7">Yes, in Settings › Agents. Pick a known one or add your own command, logo and color. <i>Test</i> checks that the command exists.</p></details>
+            <details><summary data-i18n="faq.q8">Linux?</summary><p data-i18n="faq.a8">Not yet. Orchestra is built and tested on Windows and macOS (Apple Silicon and Intel).</p></details>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Appel final -->
-    <section class="final">
-      <div class="final-glow" aria-hidden="true"></div>
-      <div class="container center">
-        <svg class="final-mark reveal" aria-hidden="true"><use href="#mark-static" /></svg>
-        <h2 class="reveal" data-i18n-html="final.title">Put your agents <em>on the map.</em></h2>
-        <div class="cta center reveal">
-          <a class="btn btn-primary btn-lg download-link" href="https://github.com/Adoraay/Orchestra-Board/releases/latest">
-            <svg class="os-icon os-win" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.4v7.1H3zm0 13 7.5 1.1v-7H3zm8.5 1.3L21 21.2V12.6h-9.5zm0-15.6v7.3H21V2.8z"/></svg>
-            <svg class="os-icon os-mac" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>
-            <span data-i18n="cta.download">Download for Windows</span>
+    <!-- Fin -->
+    <section class="end">
+      <div class="hero-grid" aria-hidden="true"></div>
+      <div class="wrap end-in">
+        <h2 data-i18n="end.title">Your agents are already installed. Give them a board.</h2>
+        <div class="cta">
+          <a class="btn btn-accent btn-lg dl-primary" href="https://github.com/Adoraay/Orchestra-Board/releases/latest">
+            <svg class="os os-win"><use href="#i-win" /></svg><svg class="os os-mac"><use href="#i-mac" /></svg>
+            <span data-dl-label data-i18n="cta.win">Download for Windows</span>
           </a>
+          <a class="btn btn-line btn-lg" href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener"><svg><use href="#i-github" /></svg><span data-i18n="cta.star">Star it on GitHub</span></a>
         </div>
-        <p class="meta also" data-also hidden></p>
-        <a class="text-link reveal" href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener"><span data-i18n="cta.star">Star Orchestra on GitHub</span> <span aria-hidden="true">→</span></a>
       </div>
     </section>
   </main>
 
-  <footer class="footer">
-    <div class="container footer-inner">
-      <div class="footer-brand">
-        <img src="assets/brand/orchestra-lockup.svg" alt="Orchestra" />
-        <p data-i18n="footer.tagline">Be the maestro of your AI orchestra.</p>
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <div>
+        <img src="assets/brand/orchestra-lockup.svg" alt="Orchestra" width="153" height="28" />
+        <p data-i18n="foot.by">Made by <a href="https://github.com/Adoraay" target="_blank" rel="noopener">Adoraay</a>. MIT license.</p>
       </div>
-      <div class="footer-cols">
-        <div>
-          <h4 data-i18n="footer.product">Product</h4>
-          <a href="#map" data-i18n="nav.map">Map</a>
-          <a href="#links" data-i18n="nav.links">Agent links</a>
-          <a href="#git" data-i18n="nav.git">Git</a>
-          <a href="#install" data-i18n="nav.install">Install</a>
-          <a class="download-link" href="https://github.com/Adoraay/Orchestra-Board/releases/latest" data-i18n="nav.download">Download</a>
-        </div>
-        <div>
-          <h4 data-i18n="footer.project">Project</h4>
-          <a href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://github.com/Adoraay/Orchestra-Board/releases" target="_blank" rel="noopener" data-i18n="footer.releases">Releases</a>
-          <a href="https://github.com/Adoraay/Orchestra-Board/issues/new/choose" target="_blank" rel="noopener" data-i18n="footer.issue">Report a bug</a>
-          <a href="https://github.com/Adoraay/Orchestra-Board/issues" target="_blank" rel="noopener" data-i18n="footer.issues">Issues</a>
-        </div>
-      </div>
-    </div>
-    <div class="container footer-bottom">
-      <p>© 2026 <a href="https://github.com/Adoraay" target="_blank" rel="noopener">Adoraay</a> · <span data-i18n="footer.license">MIT license</span></p>
-      <p class="disclaimer" data-i18n="footer.disclaimer">Claude Code, Codex and the other agent names are trademarks of their owners. Orchestra is an independent project, not affiliated with any of the vendors whose tools are shown.</p>
+      <nav aria-label="Project">
+        <a href="https://github.com/Adoraay/Orchestra-Board" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/Adoraay/Orchestra-Board/releases" target="_blank" rel="noopener" data-i18n="foot.releases">Releases</a>
+        <a href="https://github.com/Adoraay/Orchestra-Board/issues/new/choose" target="_blank" rel="noopener" data-i18n="foot.bug">Report a bug</a>
+        <a href="https://github.com/Adoraay/Orchestra-Board/discussions" target="_blank" rel="noopener" data-i18n="foot.talk">Discussions</a>
+      </nav>
+      <p class="foot-legal" data-i18n="foot.legal">Orchestra is an independent project, not affiliated with Anthropic, OpenAI, Google or any other vendor whose tool appears here. Their names and logos belong to them.</p>
     </div>
   </footer>
 
   <script src="i18n.js"></script>
+  <script src="board.js"></script>
   <script src="main.js"></script>
 </body>
 </html>
