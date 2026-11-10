@@ -98,14 +98,14 @@
     })
     .catch(() => {});
 
-  // --- Langue : choix gardé, sinon celle du navigateur ---
+  // --- Langue : choix gardé, sinon anglais ---
   let saved = null;
   try { saved = localStorage.getItem('orchestra-lang'); } catch {}
   document.addEventListener('langchange', () => {
     $('#lang').setAttribute('aria-label', t('lang.switch'));
     renderRelease();
   });
-  setLang(saved ?? (/^fr/i.test(navigator.language) ? 'fr' : 'en'), false);
+  setLang(saved ?? 'en', false);
   $('#lang').addEventListener('click', () => setLang(root.lang === 'fr' ? 'en' : 'fr', true));
 
   // --- Clips : chargés et lus seulement à l'écran ---
