@@ -60,6 +60,12 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode === 'conductor-bar') {
+        await require('./ui-conductor-bar.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI conductor-bar: shortcut, folder check, streamed actions, live map changes, CLI error, reset');
+        app.quit();
+        return;
+      }
       if (mode === 'conductor') {
         await require('./ui-conductor.cjs')({ win, evaluate, until, sleep, data, errors });
         console.log('PASS UI conductor: tools create, link, update and remove tiles on the live map, log them and open the right board');

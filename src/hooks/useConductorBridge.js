@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { autoPlace } from '../lib/autoPlace.js';
+import { arrangeShape, autoPlace, centeredRow } from '../lib/autoPlace.js';
 import { NODE_SIZE, NOTE_SIZE } from './useBoardOps.js';
 
 const COMMIT_WAIT = 300; // ms : un changement sans effet sur la map (lien en double…) ne bloque pas la réponse
+const DRAW_DURATION = 1200; // ms : un lien créé se trace (classe edge-draw, jamais sauvegardée)
 
 // Chef d'orchestre (PLAN.md §3.25), côté app : Node demande un changement pour un tableau précis.
 // Le tableau ouvert l'applique ; sinon l'app ouvre ce tableau d'abord (ses agents ne se lancent que montés).
@@ -41,7 +42,8 @@ export function useConductorRouter(boards) {
 // Dans un tableau : applique les changements avec les opérations de l'utilisateur (useBoardOps), un à la fois,
 // puis répond à Node une fois la map rendue et sauvegardée (le changement suivant voit le précédent).
 // À appeler après l'effet qui remonte le contenu du tableau (onChange) : la sauvegarde lit ce contenu.
-export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, setNodes, origin }) {
+// reveal(ids) : la caméra montre les cases créées (et leur voisine).
+export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, setNodes, setEdges, origin, reveal }) {
   const waiters = useRef([]);
   useEffect(() => {
     const ready = waiters.current;
@@ -53,8 +55,10 @@ export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, 
     setTimeout(resolve, COMMIT_WAIT);
   });
 
-  const latest = useRef({ ops, getNodes, setNodes, origin });
-  latest.current = { ops, getNodes, setNodes, origin };
+  const latest = useRef({ ops, edges, getNodes, setNodes, setEdges, origin, reveal });
+  latest.current = { ops, edges, getNodes, setNodes, setEdges, origin, reveal };
+  // Agents placés sous chaque case (near) pendant cette session de la map : leur rangée reste centrée sous elle.
+  const children = useRef(new Map());
 
   const run = async (op) => {
     const { ops: o, getNodes: get, setNodes: set } = latest.current;
@@ -68,17 +72,44 @@ export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, 
       case 'addAgent': {
         if (exists(op.id)) return { error: 'exists' };
         const data = { label: op.label, createdBy: 'conductor', ...(op.role && { role: op.role }), ...(op.branch && op.worktree && { branch: op.branch, worktree: op.worktree }) };
-        return { id: o.addTerminal({ id: op.id, agentId: op.agentId, cwd: op.cwd, center: place(NODE_SIZE), data }) };
+        // Sous une case qui a déjà des agents : la rangée entière est recentrée (un chef, deux agents = pyramide).
+        const siblings = op.near ? (children.current.get(op.near) ?? []).filter(exists) : [];
+        const row = siblings.length ? centeredRow(all, op.near, siblings, NODE_SIZE) : null;
+        let center = place(NODE_SIZE);
+        if (row) {
+          const moved = new Map(row.filter((box) => box.id).map((box) => [box.id, { x: box.x, y: box.y }]));
+          set((nds) => nds.map((n) => (moved.has(n.id) ? { ...n, position: moved.get(n.id) } : n)));
+          const fresh = row.find((box) => !box.id);
+          center = { x: fresh.x + NODE_SIZE.width / 2, y: fresh.y + NODE_SIZE.height / 2 };
+        }
+        const id = o.addTerminal({ id: op.id, agentId: op.agentId, cwd: op.cwd, center, data });
+        if (op.near) children.current.set(op.near, [...siblings, id]);
+        latest.current.reveal([id, op.near]);
+        return { id };
       }
-      case 'addSticky':
-        return { id: o.addAnnotation({ type: 'note', point: place(NOTE_SIZE), text: op.text, label: op.label, autoEdit: false, select: false }) };
+      case 'addSticky': {
+        const id = o.addAnnotation({ type: 'note', point: place(NOTE_SIZE), text: op.text, label: op.label, autoEdit: false, select: false });
+        latest.current.reveal([id, op.near]);
+        return { id };
+      }
       case 'updateSticky':
         if (!exists(op.id)) return { error: 'notFound' };
         set((nds) => nds.map((n) => (n.id === op.id ? { ...n, data: { ...n.data, text: op.text } } : n)));
         return {};
       case 'addLink': {
         const id = o.addLink(op.source, op.target, op.data);
-        return id ? { id } : { error: 'impossible' };
+        if (!id) return { error: 'impossible' };
+        const draw = (className) => latest.current.setEdges((eds) => eds.map((e) => (e.id === id ? { ...e, className } : e)));
+        draw('edge-draw');
+        setTimeout(() => draw(undefined), DRAW_DURATION);
+        return { id };
+      }
+      case 'arrange': {
+        const positions = arrangeShape(all, latest.current.edges, op.ids, op.layout, op.top);
+        if (!positions.size) return { error: 'notFound' };
+        set((nds) => nds.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id) } : n)));
+        latest.current.reveal([...positions.keys()]);
+        return {};
       }
       case 'updateLink':
         o.updateLink(op.id, op.patch);

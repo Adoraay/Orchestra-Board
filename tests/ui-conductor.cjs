@@ -68,6 +68,21 @@ module.exports = async ({ evaluate, until, sleep, data, errors }) => {
   assert.equal(entries.length, 5);
   assert.ok(entries.every((e) => e.fromName === 'Lead'));
 
+  // Deux agents sous le même chef : la rangée est recentrée, le chef au milieu au-dessus (pyramide).
+  for (const name of ['Left', 'Right']) assert.equal((await tool('lead', 'create_agent', { type: 'terminal', name, near: 'Lead' })).isError, false);
+  await until("[...document.querySelectorAll('.react-flow__node-terminal')].filter((n) => /Left|Right/.test(n.textContent)).length === 2");
+  const tile = (label) => saved().boards[0].nodes.find((n) => n.data.label === label);
+  for (let i = 0; i < 30 && !(tile('Left') && tile('Right')); i++) await sleep(100);
+  const width = (n) => n.style?.width ?? 640;
+  const [l, r, top] = [tile('Left'), tile('Right'), tile('Lead')];
+  assert.equal(l.position.y, r.position.y);
+  assert.equal((Math.min(l.position.x, r.position.x) + Math.max(l.position.x + width(l), r.position.x + width(r))) / 2, top.position.x + width(top) / 2);
+  // Disposition demandée : colonne.
+  assert.equal((await tool('lead', 'arrange', { layout: 'column', tiles: ['Lead', 'Left', 'Right'] })).isError, false);
+  for (let i = 0; i < 30 && tile('Left').position.x !== tile('Lead').position.x; i++) await sleep(100);
+  assert.equal(tile('Left').position.x, tile('Lead').position.x);
+  assert.equal(tile('Right').position.x, tile('Lead').position.x);
+
   // Session du chef d'orchestre sur un autre tableau : ce tableau s'ouvre, le changement y est appliqué.
   conductor.openSession('conductor-other', { boardId: 'other', folder: data, preview: false });
   const remote = await tool('conductor-other', 'create_sticky', { text: 'Other board plan', name: 'Remote plan' });

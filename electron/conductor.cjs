@@ -11,10 +11,11 @@ const { t } = require('./i18n.cjs');
 // d'orchestre n'a jamais ces outils.
 // Aperçu : les actions sont gardées en attente avec des ids temporaires (pending-N), utilisables par les outils
 // suivants et visibles dans read_board ; commit() les applique dans l'ordre en remplaçant ces ids.
-const TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output'];
+const TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output', 'arrange'];
 const TYPES = { claude: 'claude-code', codex: 'codex', terminal: 'shell' };
 const TYPE_NAMES = Object.fromEntries(Object.entries(TYPES).map(([type, agentId]) => [agentId, type]));
 const LINK_MODES = ['relay', 'delegate'];
+const LAYOUTS = ['pyramid', 'row', 'column', 'grid'];
 const MAX_NAME = 40;
 const MAX_ROLE = 2000; // = workspaceStore.cjs
 const MAX_TEXT = 20000;
@@ -340,6 +341,23 @@ function plan(ctx, name, args = {}) {
       if (!agent) return { error: fail('conductor.notFound', { ref: args.agent }) };
       return { action: { type: 'remove_agent', target: agent.id } };
     }
+    case 'arrange': {
+      if (!LAYOUTS.includes(args.layout)) return { error: fail('conductor.badLayout') };
+      const kinds = ['agent', 'terminal', 'sticky'];
+      const refs = Array.isArray(args.tiles)
+        ? args.tiles
+        : [...ctx.board.nodes.filter((n) => ['agent', 'terminal'].includes(kindOf(n))).map((n) => n.id), ...ctx.session.pending.filter((p) => p.type === 'create_agent').map((p) => p.tempId)];
+      const ids = [];
+      for (const ref of refs) {
+        const tile = resolve(ctx, ref, kinds);
+        if (!tile) return { error: fail('conductor.notFound', { ref }) };
+        if (!ids.includes(tile.id)) ids.push(tile.id);
+      }
+      if (ids.length < 2) return { error: fail('conductor.arrangeFew') };
+      const top = args.top ? resolve(ctx, args.top, kinds) : null;
+      if (args.top && (!top || !ids.includes(top.id))) return { error: fail('conductor.notFound', { ref: args.top }) };
+      return { action: { type: 'arrange', targets: ids, top: top?.id ?? null, layout: args.layout } };
+    }
   }
   return { error: fail('conductor.notAllowed') };
 }
@@ -380,6 +398,7 @@ function describe(ctx, action) {
     case 'set_role': return t('conductor.log.role', { name: name(action.target), role: short(action.role) });
     case 'remove_agent': return t('conductor.log.removed', { name: name(action.target) });
     case 'send_to': return `${name(action.target)} ← ${short(action.message)}`;
+    case 'arrange': return t('conductor.log.arrange', { count: action.targets.length, layout: t(`conductor.layout.${action.layout}`) });
     default: {
       const edge = resolveLink(ctx, { link: action.target });
       const [from, to] = edge ? linkEnds(ctx, edge) : ['?', '?'];
@@ -466,6 +485,15 @@ async function execute(ctx, action) {
       sendMessage(action.target, action.message, caller);
       return result(t('conductor.sent', { name }));
     }
+    case 'arrange': {
+      const ids = action.targets.filter((id) => findNode(id));
+      if (ids.length < 2) return fail('conductor.arrangeFew');
+      const vars = { count: ids.length, layout: t(`conductor.layout.${action.layout}`) };
+      const response = await deps.requestOp(board.id, { type: 'arrange', ids, layout: action.layout, top: action.top });
+      if (response?.error) return opError(response);
+      log(null, t('conductor.log.arrange', vars));
+      return result(t('conductor.arranged', vars));
+    }
     case 'remove_agent': {
       const name = nameOf(action.target);
       if (['working', 'waiting'].includes(deps.info(action.target)?.status)) return fail('conductor.busy', { name });
@@ -548,7 +576,8 @@ async function commit(caller) {
       const board = boards.find((b) => b.id === session.boardId);
       if (!board) return fail('conductor.noBoard');
       const { tempId, summary, node, ...action } = item;
-      for (const key of ['source', 'target', 'near']) if (key in action) action[key] = map(action[key]);
+      for (const key of ['source', 'target', 'near', 'top']) if (key in action) action[key] = map(action[key]);
+      if (action.targets) action.targets = action.targets.map(map).filter((id) => !id.startsWith('pending-'));
       if ([action.source, action.target, action.near].some((id) => id?.startsWith('pending-'))) return fail('conductor.notFound', { ref: summary });
       return execute({ caller, board, session }, action);
     });

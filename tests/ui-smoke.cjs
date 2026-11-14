@@ -8,7 +8,7 @@ const artifacts = path.join(root, 'out', 'ui-smoke');
 fs.mkdirSync(artifacts, { recursive: true });
 const original = { version: 2, activeBoardId: 'board-1', boards: [{ id: 'board-1', name: 'Original', nodes: [{ id: 'note-1', type: 'note', position: { x: 100, y: 100 }, data: { label: 'Plan', text: 'Restored original note' } }], edges: [], strokes: [], viewport: { x: 0, y: 0, zoom: 1 } }] };
 const requested = process.argv.slice(2);
-const modes = ['normal', 'corrupt', 'no-backup', 'phase2', 'phase2-fr', 'phase3', 'phase3-fr', 'changes', 'phase4', 'phase4-fr', 'onboarding', 'onboarding-fr', 'panels', 'board-ops', 'conductor'].filter((mode) => !requested.length || requested.includes(mode));
+const modes = ['normal', 'corrupt', 'no-backup', 'phase2', 'phase2-fr', 'phase3', 'phase3-fr', 'changes', 'phase4', 'phase4-fr', 'onboarding', 'onboarding-fr', 'panels', 'board-ops', 'conductor', 'conductor-bar'].filter((mode) => !requested.length || requested.includes(mode));
 if (!modes.length) throw new Error('Choose a mode from tests/ui-smoke.cjs');
 for (const mode of modes) {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-ui-'));
@@ -62,8 +62,18 @@ for (const mode of modes) {
     { id: 'main', name: 'Main', edges: [], strokes: [], viewport: { x: 0, y: 0, zoom: 0.4 }, nodes: [{ ...liveTerminal, id: 'lead', data: { agentId: 'shell', label: 'Lead', cwd: data } }] },
     { id: 'other', name: 'Other', edges: [], strokes: [], viewport: null, nodes: [] },
   ] };
-  fs.writeFileSync(path.join(data, 'workspace.json'), mode === 'conductor' ? JSON.stringify(conductorBoards) : mode === 'board-ops' ? JSON.stringify(boardOps) : mode.startsWith('onboarding') || mode === 'panels' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [] }] }) : mode.startsWith('phase4') ? JSON.stringify(phase4) : mode === 'changes' ? JSON.stringify(changes) : mode.startsWith('phase3') ? JSON.stringify(phase3) : mode.startsWith('phase2') ? JSON.stringify(phase2) : mode === 'normal' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], name: 'Latest', nodes: [liveTerminal] }] }) : '{ broken');
+  fs.writeFileSync(path.join(data, 'workspace.json'), mode === 'conductor-bar' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [], edges: [] }] }) : mode === 'conductor' ? JSON.stringify(conductorBoards) : mode === 'board-ops' ? JSON.stringify(boardOps) : mode.startsWith('onboarding') || mode === 'panels' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [] }] }) : mode.startsWith('phase4') ? JSON.stringify(phase4) : mode === 'changes' ? JSON.stringify(changes) : mode.startsWith('phase3') ? JSON.stringify(phase3) : mode.startsWith('phase2') ? JSON.stringify(phase2) : mode === 'normal' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], name: 'Latest', nodes: [liveTerminal] }] }) : '{ broken');
   const env = { ...process.env, ORCHESTRA_SMOKE_DATA: data, ORCHESTRA_SMOKE_MODE: mode, ORCHESTRA_SMOKE_ARTIFACTS: artifacts };
+  if (mode === 'conductor-bar') {
+    // Faux claude en tête du PATH : la bulle le lance comme le vrai (aucun modèle sollicité).
+    const bin = path.join(data, 'fake-bin');
+    fs.mkdirSync(bin);
+    fs.mkdirSync(path.join(data, 'project'));
+    fs.writeFileSync(path.join(bin, 'claude.cmd'), `@"${process.execPath}" "${path.join(__dirname, 'fake-claude.cjs')}" %*
+`);
+    const pathKey = Object.keys(env).find((name) => name.toUpperCase() === 'PATH') ?? 'PATH';
+    env[pathKey] = `${bin}${path.delimiter}${env[pathKey] ?? ''}`;
+  }
   delete env.ELECTRON_RUN_AS_NODE;
   const branded = process.env.ORCHESTRA_SMOKE_BRANDED === '1';
   const result = spawnSync(branded ? path.join(root, 'node_modules', 'electron', 'dist', 'Orchestra.exe') : process.execPath, branded ? [data] : [path.join(root, 'node_modules', 'electron', 'cli.js'), data], { cwd: root, env, encoding: 'utf8', timeout: 90000, windowsHide: true });

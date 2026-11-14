@@ -16,6 +16,7 @@ export const SHORTCUT_GROUPS = [
       { keys: ['Ctrl', 'Shift', 'J'], label: 'shortcut.toggleLog' },
       { keys: ['Ctrl', 'Shift', 'F'], label: 'shortcut.search' },
       { keys: ['Ctrl', 'Shift', 'M'], label: 'shortcut.maximize' },
+      { keys: ['Ctrl', 'Shift', 'O'], label: 'shortcut.conductor' },
     ],
   },
   {

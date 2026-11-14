@@ -304,6 +304,24 @@ const CONDUCTOR_TOOLS = [
     },
   },
 ];
+CONDUCTOR_TOOLS.push({
+  name: 'arrange',
+  annotations: CHANGE,
+  description:
+    'Moves tiles into the shape the user asked for. "pyramid": rows centered under each other, the top tile in the middle above ' +
+    'the next row (rows follow the links from the top, e.g. a lead above two workers); "row", "column", "grid": a line, a column ' +
+    'or a near-square grid. Call it after creating the tiles, and after their links for a pyramid.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      layout: { type: 'string', enum: ['pyramid', 'row', 'column', 'grid'] },
+      tiles: { type: 'array', items: { type: 'string' }, description: 'Ids or names of the tiles to arrange. Default: all agents and terminals of the board.' },
+      top: REF('Pyramid only: the tile at the top'),
+    },
+    required: ['layout'],
+    additionalProperties: false,
+  },
+});
 const TOOLSET = process.env.ORCHESTRA_TOOLSET;
 const SERVED = TOOLSET === 'conductor' ? CONDUCTOR_TOOLS : TOOLSET === 'all' ? [...TOOLS, ...CONDUCTOR_TOOLS] : TOOLS;
 

@@ -39,6 +39,7 @@ import Toast from './components/Toast.jsx';
 import WorkspaceRecovery from './components/WorkspaceRecovery.jsx';
 import TeamTemplates from './components/TeamTemplates.jsx';
 import BlockersInbox from './components/BlockersInbox.jsx';
+import ConductorBar from './components/ConductorBar.jsx';
 import TopBar from './components/TopBar.jsx';
 import TileSearch from './components/TileSearch.jsx';
 import TaskSequencesDialog from './components/TaskSequencesDialog.jsx';
@@ -143,6 +144,8 @@ function Workspace({ saved }) {
   // Panneau posé sur la map : son tiroir n'a plus besoin de rester ouvert.
   const closePanelDrawer = useCallback((panel) => (panel === 'usage' ? setUsageOpen(false) : setLogOpen(false)), []);
   const [explorerOpen, setExplorerOpen] = useState(true);
+  const [conductorOpen, setConductorOpen] = useState(false);
+  const toggleConductor = useCallback(() => setConductorOpen((o) => !o), []);
   const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
   const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
   const clearLaunch = useCallback(() => setLaunchRequest(null), []);
@@ -180,6 +183,7 @@ function Workspace({ saved }) {
     toggleUsage,
     toggleLog,
     toggleSearch: () => setSearchOpen((o) => !o),
+    toggleConductor,
   });
 
   // Démarrage : une seule question pour reprendre (ou non) les conversations de tous les agents restaurés.
@@ -254,6 +258,8 @@ function Workspace({ saved }) {
           <Board
             boardId={activeId}
             conductor={conductor}
+            conductorOpen={conductorOpen}
+            onToggleConductor={toggleConductor}
             initial={content[activeId]}
             onChange={onBoardChange}
             focusRequest={focusRequest}
@@ -302,7 +308,7 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ boardId, conductor, initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced }) {
+function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
@@ -482,7 +488,22 @@ function Board({ boardId, conductor, initial, onChange, focusRequest, onFocusDon
     const rect = boardRef.current?.getBoundingClientRect();
     return rect ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }) : { x: 0, y: 0 };
   }, [screenToFlowPosition]);
-  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, origin: viewCenter });
+  // Cases créées depuis peu par le chef d'orchestre : la caméra les montre ensemble, au fil de leur création.
+  const revealed = useRef([]);
+  const reveal = useCallback((ids) => {
+    const now = Date.now();
+    revealed.current = [...revealed.current.filter((entry) => now - entry.at < 60000), ...ids.filter(Boolean).map((id) => ({ id, at: now }))];
+    setTimeout(() => fitView({ nodes: revealed.current.map(({ id }) => ({ id })), duration: 500, padding: 0.25, maxZoom: 1 }), 120);
+  }, [fitView]);
+  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, setEdges, origin: viewCenter, reveal });
+  const tileName = useCallback(
+    (ref) => {
+      const node = ref && nodes.find((n) => n.id === ref);
+      if (!node) return ref ?? '';
+      return node.data.label || (node.type === 'note' ? t('note.defaultName') : agentById(node.data.agentId).name);
+    },
+    [nodes, agentById, t],
+  );
 
   // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
   // only : un seul élément, depuis son menu du clic droit (la sélection n'est alors pas touchée).
@@ -805,6 +826,7 @@ function Board({ boardId, conductor, initial, onChange, focusRequest, onFocusDon
           </ReactFlow>
         </BoardContext.Provider>
         <BoardToolbar tool={tool} onChange={setTool} />
+        <ConductorBar boardId={boardId} open={conductorOpen} onToggle={onToggleConductor} nameOf={tileName} />
         {tool === 'select' && selectedCount >= 2 && <LayoutToolbar
           count={selectedCount}
           groupCount={liveGroups.length}

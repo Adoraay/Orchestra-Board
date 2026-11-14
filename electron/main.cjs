@@ -19,6 +19,7 @@ const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
 const conductor = require('./conductor.cjs');
+const conductorSession = require('./conductorSession.cjs');
 const activityLog = require('./activityLog.cjs');
 const diagnostics = require('./diagnostics.cjs');
 const tasksHandlers = require('./tasksHandlers.cjs');
@@ -270,6 +271,24 @@ conductor.init({
   logEntries: activityLog.list,
   log: activityLog.add,
 });
+
+// Session cachée du chef d'orchestre, une par tableau, lancée à chaque message de la bulle.
+conductorSession.init({
+  dir: () => app.getPath('userData'),
+  settings: () => settingsStore.load().conductor,
+  findClaude: () => agentsHandlers.testCommand(settingsStore.load().agents.find((a) => a.id === 'claude-code')?.command ?? 'claude'),
+  toolUrl: hookServer.toolUrl,
+  mcpServerPath: claudeHooks.mcpServerPath,
+  tools: conductor.TOOLS,
+  openSession: conductor.openSession,
+  closeSession: conductor.closeSession,
+  boardExists: (boardId) => workspaceStore.get().boards.some((b) => b.id === boardId),
+  emit: (boardId, event) => send('conductorSession:event', boardId, event),
+});
+ipcMain.handle('conductorSession:get', (_e, boardId) => conductorSession.get(boardId));
+ipcMain.handle('conductorSession:send', (_e, boardId, message, folder) => conductorSession.send(boardId, message, folder));
+ipcMain.handle('conductorSession:reset', (_e, boardId) => conductorSession.reset(boardId));
+ipcMain.on('conductorSession:stop', (_e, boardId) => conductorSession.stop(boardId));
 
 // Outils du serveur MCP d'une case : lien Note, lien Terminal, Délégation, ou chef d'orchestre.
 function callTool(caller, name, args, signal) {
@@ -525,6 +544,7 @@ workspaceStore.register((workspace) => {
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
   noteLink.setWorkspace(workspace);
   conductor.setWorkspace(workspace);
+  conductorSession.prune(workspace.boards.map((b) => b.id));
 }, () => {
   for (const id of ptyManager.ids()) {
     ptyManager.kill(id);
@@ -588,6 +608,7 @@ app.whenReady().then(async () => {
 
 // Pas de processus orphelins : on tue tous les agents en quittant.
 app.on('before-quit', () => {
+  conductorSession.stopAll();
   taskSequences?.dispose();
   linkRelay.dispose();
   ptyManager.killAll();

@@ -1167,7 +1167,7 @@ kbd {
 
 .board-hint {
   position: absolute;
-  top: 14px;
+  top: 58px; /* sous la pastille du chef d'orchestre */
   left: 50%;
   z-index: 6;
   display: flex;
@@ -2287,7 +2287,7 @@ kbd {
 .board-group.inactive .board-group-header { pointer-events: none; }
 .board-group-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border: none; background: none; color: inherit; font: inherit; cursor: inherit; }
 .board-group-header input { width: 160px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); font: inherit; }
-.layout-toolbar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; max-width: calc(100% - 110px); padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 4px 14px var(--shadow); }
+.layout-toolbar { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px; max-width: calc(100% - 110px); padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 4px 14px var(--shadow); }
 .layout-toolbar select, .layout-toolbar input { max-width: 160px; padding: 4px 6px; color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); font: inherit; font-size: 12px; }
 .layout-toolbar form { display: flex; align-items: center; gap: 4px; }
 .layout-toggle, .layout-group-toggle { display: inline-flex; align-items: center; gap: 5px; }
@@ -2423,3 +2423,141 @@ h2.task-heading { margin: 0; font-size: 16px; font-weight: 600; }
   .sequence-step-tools { flex-wrap: wrap; }
 }
 
+
+/* Chef d'orchestre (PLAN.md §3.25) : pastille puis bulle en haut au centre de la map. */
+.conductor-pill,
+.conductor-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 8;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 6px 18px var(--shadow);
+  color: var(--text);
+}
+.conductor-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.conductor-pill svg { color: var(--accent); }
+.conductor-pill:hover { border-color: var(--accent); }
+.conductor-pill.running { border-color: var(--accent); }
+.conductor-bar {
+  display: flex;
+  flex-direction: column;
+  width: min(620px, calc(100% - 140px));
+  max-height: min(70%, 640px);
+  border-radius: var(--radius-md);
+  animation: conductor-in 160ms ease-out;
+}
+@keyframes conductor-in { from { opacity: 0; transform: translate(-50%, -6px); } }
+.conductor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.conductor-icon { color: var(--accent); flex-shrink: 0; }
+.conductor-title { font-weight: 600; font-size: 13px; }
+.conductor-folder {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conductor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 60px;
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+.conductor-empty { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.conductor-msg { font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.conductor-msg.user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.conductor-msg.assistant { align-self: stretch; }
+.conductor-msg.live::after { content: '▍'; color: var(--accent); animation: conductor-blink 1s steps(2) infinite; }
+@keyframes conductor-blink { 50% { opacity: 0; } }
+.conductor-msg.error { color: var(--danger); }
+.conductor-msg.info { color: var(--text-muted); font-size: 12px; }
+.conductor-tool,
+.conductor-thinking {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.conductor-tool svg { color: var(--accent); flex-shrink: 0; }
+.conductor-tool.error svg,
+.conductor-tool-error { color: var(--danger); }
+.conductor-tool-error { flex-basis: 100%; padding-left: 19px; }
+.conductor-spin { animation: usage-spin 1s linear infinite; }
+.conductor-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border);
+}
+.conductor-form textarea {
+  flex: 1;
+  min-height: 38px;
+  max-height: 160px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.conductor-form textarea:focus { border-color: var(--accent); outline: none; }
+.conductor-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+.conductor-send:hover:not(:disabled) { background: var(--accent-hover); }
+.conductor-send:disabled { opacity: 0.4; cursor: default; }
+.conductor-send.stop { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.conductor-error { margin: 0; padding: 0 12px 10px; color: var(--danger); font-size: 12px; }
+/* Lien créé par le chef d'orchestre : il se trace de la source vers la cible. */
+.react-flow__edge.edge-draw .react-flow__edge-path {
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: edge-draw 1s ease-out forwards;
+}
+@keyframes edge-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .conductor-bar, .conductor-msg.live::after, .react-flow__edge.edge-draw .react-flow__edge-path { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
+}

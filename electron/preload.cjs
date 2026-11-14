@@ -169,6 +169,19 @@ contextBridge.exposeInMainWorld('conductor', {
   done: (reqId, response) => ipcRenderer.send('conductor:done', reqId, response),
 });
 
+// Conversation avec le chef d'orchestre (bulle), une par tableau.
+contextBridge.exposeInMainWorld('conductorSession', {
+  get: (boardId) => ipcRenderer.invoke('conductorSession:get', boardId),
+  send: (boardId, message, folder) => ipcRenderer.invoke('conductorSession:send', boardId, message, folder),
+  reset: (boardId) => ipcRenderer.invoke('conductorSession:reset', boardId),
+  stop: (boardId) => ipcRenderer.send('conductorSession:stop', boardId),
+  onEvent: (cb) => {
+    const listener = (_e, boardId, event) => cb(boardId, event);
+    ipcRenderer.on('conductorSession:event', listener);
+    return () => ipcRenderer.removeListener('conductorSession:event', listener);
+  },
+});
+
 // Journal des échanges entre agents (PLAN.md §3.18).
 contextBridge.exposeInMainWorld('activityLog', {
   export: (filter) => ipcRenderer.invoke('log:export', filter),

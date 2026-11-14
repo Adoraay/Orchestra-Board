@@ -345,3 +345,60 @@ test('ensureWorktree with create makes a new branch worktree from HEAD with real
   const again = await git.ensureWorktree(repo, 'maestro/api', { create: true });
   assert.equal(fs.realpathSync(again.path), fs.realpathSync(created.path), 'a second agent on the same branch reuses the worktree');
 });
+
+test('a lead with two workers forms a symmetric pyramid, and arrangeShape follows the asked layout', async () => {
+  const { autoPlace, centeredRow, arrangeShape } = await esm('autoPlace.js');
+  const size = { width: 640, height: 400 };
+  const lead = { id: 'lead', position: { x: 0, y: 0 }, style: { ...size } };
+  const leadCenter = 320;
+  // Premier agent : sous le chef ; deuxième : la rangée est recentrée.
+  const first = { id: 'a', position: autoPlace([lead], size, { near: 'lead' }), style: { ...size } };
+  assert.equal(first.position.x + 320, leadCenter);
+  const row = centeredRow([lead, first], 'lead', ['a'], size);
+  const [left, right] = row;
+  assert.equal(left.id, 'a');
+  assert.equal(right.id, null);
+  assert.equal((left.x + right.x + 640) / 2, leadCenter, 'the lead is centered above its two workers');
+  assert.equal(left.y, right.y);
+  // Une case qui gêne : pas de recentrage (repli sur la place libre).
+  const blocker = { id: 'b', position: { x: right.x, y: right.y }, style: { ...size } };
+  assert.equal(centeredRow([lead, first, blocker], 'lead', ['a'], size), null);
+
+  // arrange : pyramide suivant les liens depuis le haut, quel que soit l'ordre de départ.
+  const nodes = ['lead', 'w1', 'w2', 'w3'].map((id, i) => ({ id, position: { x: i * 700, y: 0 }, style: { ...size } }));
+  const edges = [{ source: 'lead', target: 'w1' }, { source: 'lead', target: 'w2' }, { source: 'w2', target: 'w3' }];
+  const pyramid = arrangeShape(nodes, edges, ['w3', 'w1', 'lead', 'w2'], 'pyramid', 'lead');
+  const p = (id) => pyramid.get(id);
+  assert.equal(p('w1').y, p('w2').y);
+  assert.ok(p('w3').y > p('w1').y && p('w1').y > p('lead').y);
+  assert.equal((p('w1').x + p('w2').x) / 2, p('lead').x, 'second row centered under the top');
+  assert.equal(p('w3').x, p('lead').x);
+  const line = arrangeShape(nodes, [], ['lead', 'w1', 'w2'], 'row');
+  assert.equal(new Set([...line.values()].map((v) => v.y)).size, 1);
+  const column = arrangeShape(nodes, [], ['lead', 'w1', 'w2'], 'column');
+  assert.equal(new Set([...column.values()].map((v) => v.x)).size, 1);
+  const grid = arrangeShape(nodes, [], ['lead', 'w1', 'w2', 'w3'], 'grid');
+  assert.equal(new Set([...grid.values()].map((v) => v.y)).size, 2);
+});
+
+test('arrange is validated, logged, and kept with remapped ids in preview', async (t) => {
+  const s = setup(t);
+  await s.call('create_agent', { type: 'terminal', name: 'A' });
+  assert.equal((await s.call('arrange', { layout: 'circle' })).isError, true);
+  assert.equal((await s.call('arrange', { layout: 'row', tiles: ['Lead'] })).isError, true, 'at least two tiles');
+  assert.equal((await s.call('arrange', { layout: 'pyramid', tiles: ['Lead', 'A'], top: 'Nobody' })).isError, true);
+  assert.equal((await s.call('arrange', { layout: 'pyramid', top: 'Lead' })).isError, false);
+  const op = s.ops.at(-1);
+  assert.deepEqual({ type: op.type, layout: op.layout, top: op.top, count: op.ids.length }, { type: 'arrange', layout: 'pyramid', top: 'lead', count: 2 });
+  assert.match(s.logs.at(-1).text, /conductor.log.arrange 2/);
+
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  const call = (name, args) => s.conductor.callTool('conductor-main', name, args);
+  await call('create_agent', { type: 'terminal', name: 'B' });
+  await call('arrange', { layout: 'row', tiles: ['Lead', 'pending-1'] });
+  const before = s.ops.length;
+  await s.conductor.commit('conductor-main');
+  const arrange = s.ops.slice(before).find((o) => o.type === 'arrange');
+  const b = s.board().nodes.find((n) => n.data.label === 'B');
+  assert.deepEqual(arrange.ids, ['lead', b.id]);
+});
