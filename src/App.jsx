@@ -6,7 +6,6 @@ import {
   Controls,
   MiniMap,
   ReactFlowProvider,
-  addEdge,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -60,25 +59,16 @@ import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useAppShortcuts from './hooks/useAppShortcuts.js';
 import useBoards from './hooks/useBoards.js';
+import useBoardOps, { NODE_SIZE } from './hooks/useBoardOps.js';
 import useT from './hooks/useT.js';
-import { DEFAULT_LINK } from './lib/links.js';
+import { numberedName } from './lib/boardOps.js';
 import { PANELS, draggedPanel } from './lib/panels.js';
 
 const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode };
 const DUPLICATE_OFFSET = 40; // px : une copie apparaît en décalé de l'original
-const NOTE_SIZE = { width: 270, height: 180 }; // plus large que haut : les lignes écrites par un agent restent lisibles
 const edgeTypes = { floating: FloatingEdge };
 const BOARD_HINTS = ['pen', 'note', 'text', 'link']; // outils avec un bandeau d'aide (board.hint.<outil>)
-const NODE_SIZE = { width: 640, height: 400 };
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
-
-// Nom par défaut d'une nouvelle case : « Claude Code 1 », « Claude Code 2 »… (plus petit numéro libre du tableau).
-function numberedName(agentName, nodes) {
-  const used = new Set(nodes.map((n) => n.data?.label));
-  let n = 1;
-  while (used.has(`${agentName} ${n}`)) n++;
-  return `${agentName} ${n}`;
-}
 
 // Les tableaux sauvegardés sont chargés avant l'affichage : chaque map part de son état sauvegardé
 // (et pas d'une étape que Ctrl+Z pourrait annuler).
@@ -314,7 +304,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [viewport, setViewport] = useState(initial.viewport);
   const [formationRequest, setFormationRequest] = useState(null);
   const [formationPreview, setFormationPreview] = useState(null);
-  const { screenToFlowPosition, fitView, deleteElements } = useReactFlow();
+  const { screenToFlowPosition, fitView } = useReactFlow();
+  const ops = useBoardOps({ setNodes, setEdges });
   useEffect(() => {
     if (!formationRequest) return;
     const frame = requestAnimationFrame(() => fitView({ nodes: formationRequest.map((id) => ({ id })), duration: 200, padding: 0.25, maxZoom: 1 }));
@@ -355,8 +346,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [maxSlot, setMaxSlot] = useState(null);
   const pendingMessages = usePendingMessages();
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot, boardList, focusAgent }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot, boardList, focusAgent],
+    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot, boardList, focusAgent, ops }),
+    [tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot, boardList, focusAgent, ops],
   );
 
   // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
@@ -451,29 +442,11 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         setLinkSource(linkSource ? null : node.id);
         return;
       }
-      const sourceNode = nodes.find((n) => n.id === linkSource);
-      // Un agent relié à un post-it : lien Note, toujours de l'agent vers le post-it. Pas de lien entre deux
-      // post-it, ni avec une case Terminal (elle n'a pas d'outils).
-      const isNote = (n) => n?.type === 'note';
-      if (isNote(sourceNode) || isNote(node)) {
-        const [agentNode, noteNode] = isNote(node) ? [sourceNode, node] : [node, sourceNode];
-        setLinkSource(null);
-        if (isNote(agentNode) || agentNode?.data.agentId === 'shell') return;
-        if (!noteNode.data.label) {
-          setNodes((nds) => nds.map((n) => (n.id === noteNode.id ? { ...n, data: { ...n.data, label: numberedName(t('note.defaultName'), nds) } } : n)));
-        }
-        setEdges((eds) => addEdge({ source: agentNode.id, target: noteNode.id, type: 'floating', data: { ...DEFAULT_LINK, mode: 'note' } }, eds));
-        return;
-      }
-      // Un agent relié à une case Terminal : lien Terminal, toujours de l'agent vers le terminal (PLAN.md §3.17).
-      const isShell = (n) => n?.data.agentId === 'shell';
-      const terminal = isShell(sourceNode) !== isShell(node);
-      const [source, target] = terminal && isShell(sourceNode) ? [node.id, linkSource] : [linkSource, node.id];
-      const mode = terminal ? 'terminal' : settings.general.linkMode;
-      setEdges((eds) => addEdge({ source, target, type: 'floating', data: { ...DEFAULT_LINK, mode } }, eds));
+      // Règles du lien (Note, Terminal ou type par défaut) dans useBoardOps, partagées avec le chef d'orchestre.
+      ops.addLink(linkSource, node.id);
       setLinkSource(null);
     },
-    [tool, linkSource, nodes, setNodes, setEdges, settings.general.linkMode, t],
+    [tool, linkSource, ops],
   );
 
   // Post-it de ce tableau réécrit par un agent (lien Note).
@@ -488,16 +461,6 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).
   const selectedEdges = edges.filter((e) => e.selected);
   const panelEdge = tool === 'select' && selectedEdges.length === 1 ? selectedEdges[0] : null;
-  const updateLink = useCallback(
-    (id, patch) =>
-      setEdges((eds) =>
-        eds.map((e) => {
-          if (e.id !== id) return e;
-          return { ...e, data: { ...DEFAULT_LINK, ...e.data, ...patch } };
-        }),
-      ),
-    [setEdges],
-  );
 
   const liveGroups = useMemo(() => cleanGroups(groups, nodes), [groups, nodes]);
   const selectedCount = nodes.filter((node) => node.selected).length;
@@ -532,9 +495,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     if (terminals.length || selection.links || selection.notes || selection.texts || selection.panels || selection.strokes) setDeleteRequest(selection);
   };
   const confirmDelete = () => {
-    for (const t of deleteRequest.terminals) window.pty.kill(t.id);
-    // deleteElements retire aussi les liens attachés aux cases supprimées.
-    deleteElements({ nodes: deleteRequest.nodeIds.map((id) => ({ id })), edges: deleteRequest.edgeIds.map((id) => ({ id })) });
+    ops.removeElements({ nodeIds: deleteRequest.nodeIds, edgeIds: deleteRequest.edgeIds });
     if (deleteRequest.stroke) {
       setStrokes((all) => all.filter((s) => s.id !== deleteRequest.stroke));
       setSelectedStroke(null);
@@ -620,23 +581,10 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       setLinkSource(null);
       if (tool !== 'note' && tool !== 'text') return;
 
-      const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      const note = tool === 'note';
-      setNodes((nds) =>
-        nds
-          .map((n) => (n.selected ? { ...n, selected: false } : n))
-          .concat({
-            id: crypto.randomUUID(),
-            type: tool,
-            position: note ? { x: p.x - NOTE_SIZE.width / 2, y: p.y - NOTE_SIZE.height / 2 } : { x: p.x, y: p.y - 14 },
-            style: note ? { ...NOTE_SIZE } : undefined,
-            selected: true,
-            data: { text: '', autoEdit: true, ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
-          }),
-      );
+      ops.addAnnotation({ type: tool, point: screenToFlowPosition({ x: event.clientX, y: event.clientY }) });
       setTool('select');
     },
-    [tool, screenToFlowPosition, setNodes, t],
+    [tool, screenToFlowPosition, ops],
   );
 
   // getData n'est pas lisible pendant dragover : on garde l'agent glissé ici.
@@ -698,21 +646,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [nodes],
   );
 
-  // Nouvelle case terminal centrée sur « center » (coordonnées de la map).
-  const addTerminal = useCallback(
-    (agentId, cwd, center) =>
-      setNodes((nds) =>
-        nds.concat({
-          id: crypto.randomUUID(),
-          type: 'terminal',
-          position: { x: center.x - NODE_SIZE.width / 2, y: center.y - NODE_SIZE.height / 2 },
-          dragHandle: '.drag-handle',
-          style: { ...NODE_SIZE },
-          data: { agentId, cwd, label: numberedName(agentById(agentId).name, nds), ...(settings.models[agentId] && { model: settings.models[agentId] }) },
-        }),
-      ),
-    [setNodes, agentById, settings.models],
-  );
+  const { addTerminal } = ops;
 
   // Languette lâchée sur la map : case Utilisation ou Journal centrée sous la souris, déjà choisie.
   const addPanel = useCallback(
@@ -741,7 +675,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   useEffect(() => {
     if (!launchRequest || !boardRef.current) return;
     const rect = boardRef.current.getBoundingClientRect();
-    addTerminal(launchRequest.agentId, launchRequest.cwd, screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }));
+    addTerminal({ agentId: launchRequest.agentId, cwd: launchRequest.cwd, center: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }) });
     onLaunchDone();
   }, [launchRequest, addTerminal, screenToFlowPosition, onLaunchDone]);
 
@@ -769,7 +703,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       const cwd = activeFolder ?? homeDir;
       if (!activeFolder) setToast({ id: Date.now(), text: t('board.noFolder') });
 
-      addTerminal(agentId, cwd, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+      addTerminal({ agentId, cwd, center: screenToFlowPosition({ x: event.clientX, y: event.clientY }) });
     },
     [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, addPanel, activeFolder, homeDir, agentById, t],
   );
@@ -810,7 +744,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             onEdgeContextMenu={(event, edge) => {
               // Outil Lien : clic droit sur un lien = le supprimer (comme les traits du stylo).
               event.preventDefault();
-              if (tool === 'link') setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+              if (tool === 'link') ops.removeLink(edge.id);
             }}
             onMoveEnd={(_event, v) => setViewport(v)}
             defaultViewport={initial.viewport ?? undefined}
@@ -880,11 +814,9 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             edge={panelEdge}
             nodes={nodes}
             event={linkEvents[panelEdge.id]}
-            onChange={(patch) => updateLink(panelEdge.id, patch)}
-            onDelete={() => setEdges((eds) => eds.filter((e) => e.id !== panelEdge.id))}
-            onSwap={() =>
-              setEdges((eds) => eds.map((e) => (e.id === panelEdge.id ? { ...e, source: e.target, target: e.source } : e)))
-            }
+            onChange={(patch) => ops.updateLink(panelEdge.id, patch)}
+            onDelete={() => ops.removeLink(panelEdge.id)}
+            onSwap={() => ops.swapLink(panelEdge.id)}
             onClose={() => setEdges((eds) => eds.map((e) => (e.selected ? { ...e, selected: false } : e)))}
           />
         )}

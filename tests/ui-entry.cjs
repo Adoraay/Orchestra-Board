@@ -60,6 +60,12 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode === 'board-ops') {
+        await require('./ui-board-ops.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI board-ops: link tool, link panel, notes, texts and deletion through shared board operations');
+        app.quit();
+        return;
+      }
       if (mode === 'panels') {
         await require('./ui-panels.cjs')({ win, evaluate, until, sleep, data, errors });
         console.log('PASS UI panels: tabs dragged onto the map, saved, moved, removed and restored');

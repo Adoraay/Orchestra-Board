@@ -26,7 +26,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
   const t = useT();
-  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest, maximized, setMaximized, maxSlot } = useBoard();
+  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest, maximized, setMaximized, maxSlot, ops } = useBoard();
   const bodyRef = useRef(null);
   const { theme, accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
@@ -39,7 +39,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const [resumeError, setResumeError] = useState('');
   const launching = useRef(false);
   const [roleState, setRoleState] = useState(null);
-  const { deleteElements, updateNodeData } = useReactFlow();
+  const { updateNodeData } = useReactFlow();
   const store = useStoreApi();
   const floating = useFloatingDrag(dragging, positionAbsoluteX);
   const { resizing, headerProps, stopResizing } = useResizeMode(selected);
@@ -231,10 +231,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     if (dir !== runDir) respawn(dir, false);
   };
 
-  const close = () => {
-    window.pty.kill(id);
-    deleteElements({ nodes: [{ id }] });
-  };
+  const close = () => ops.removeElements({ nodeIds: [id] });
 
   // Double-clic sur le titre : nom propre à cette case (vide = nom de l'agent), repris par les notifications.
   const rename = (label) => {
@@ -297,12 +294,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
           role={data.role}
           state={roleState}
           running={roleState?.running ?? (!exited && !askResume)}
-          onSave={async (role) => {
-            const result = await window.roles.set(id, role);
-            if (result.error) throw new Error(result.error);
-            updateNodeData(id, { role: role || undefined });
-            setRoleState(result.value);
-          }}
+          onSave={async (role) => setRoleState(await ops.setRole(id, role))}
           onRelaunch={() => respawn(runDir, true)}
           onClose={() => setEditingRole(false)}
         />
