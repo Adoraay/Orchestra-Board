@@ -39,6 +39,7 @@ let deps = {
   isRepo: async () => ({ error: 'unavailable' }),
   logEntries: () => [],
   log: () => {},
+  onPending: () => {}, // (appelant, actions en attente) : l'aperçu a changé
 };
 let boards = [];
 const sessions = new Map(); // appelant -> { boardId, folder, preview, pending, next }
@@ -108,7 +109,8 @@ function tileTools(id) {
 // Session du chef d'orchestre (étape 2) : tableau, dossier de travail, aperçu ou non.
 function openSession(id, { boardId, folder, preview }) {
   const previous = sessions.get(id);
-  sessions.set(id, { boardId, folder, preview: Boolean(preview), pending: previous?.boardId === boardId ? previous.pending : [], next: previous?.next ?? 1 });
+  // runStickies : post-it créés depuis le dernier message de l'utilisateur (rangés avec les agents par arrange).
+  sessions.set(id, { boardId, folder, preview: Boolean(preview), pending: previous?.boardId === boardId ? previous.pending : [], next: previous?.next ?? 1, runStickies: [] });
 }
 function closeSession(id) {
   sessions.delete(id);
@@ -126,7 +128,7 @@ function contextOf(caller) {
     return { error: fail('conductor.notAllowed') };
   }
   const folder = found.node.data.worktree ?? found.node.data.cwd;
-  return { caller, board: found.board, session: { boardId: found.board.id, folder, preview: false, pending: [], next: 1 } };
+  return { caller, board: found.board, session: { boardId: found.board.id, folder, preview: false, pending: [], next: 1, runStickies: [] } };
 }
 
 // Élément du tableau désigné par son id ou son nom (sans casse), y compris en attente d'aperçu.
@@ -356,7 +358,11 @@ function plan(ctx, name, args = {}) {
       if (ids.length < 2) return { error: fail('conductor.arrangeFew') };
       const top = args.top ? resolve(ctx, args.top, kinds) : null;
       if (args.top && (!top || !ids.includes(top.id))) return { error: fail('conductor.notFound', { ref: args.top }) };
-      return { action: { type: 'arrange', targets: ids, top: top?.id ?? null, layout: args.layout } };
+      // Post-it qui accompagnent le groupe : reliés à ses cases (lien Note) ou écrits pendant ce message.
+      const noteLinks = [...ctx.board.edges, ...ctx.session.pending.filter((p) => p.type === 'create_link')].filter((e) => (e.data?.mode === 'note') && ids.includes(e.source));
+      const fresh = [...(ctx.session.runStickies ?? []), ...ctx.session.pending.filter((p) => p.type === 'create_sticky').map((p) => p.tempId)];
+      const companions = [...new Set([...noteLinks.map((e) => e.target), ...fresh])].filter((id) => !ids.includes(id));
+      return { action: { type: 'arrange', targets: ids, top: top?.id ?? null, layout: args.layout, companions } };
     }
   }
   return { error: fail('conductor.notAllowed') };
@@ -365,6 +371,12 @@ function plan(ctx, name, args = {}) {
 // Une action proposée : les créations reçoivent un id temporaire et une case fictive (pour les règles de
 // lien et read_board) ; retirer un élément encore en aperçu l'efface de l'aperçu, avec ses liens.
 function propose(ctx, action) {
+  const answer = addProposal(ctx, action);
+  notify(ctx.caller);
+  return answer;
+}
+
+function addProposal(ctx, action) {
   const { session } = ctx;
   if (action.type === 'remove_agent' && action.target.startsWith('pending-')) {
     session.pending = session.pending.filter((p) => p.tempId !== action.target && p.source !== action.target && p.target !== action.target && p.near !== action.target);
@@ -388,21 +400,22 @@ function propose(ctx, action) {
   return result(t('conductor.proposedChange', { what }));
 }
 
+// Résumé d'une action proposée, à l'infinitif (« Créer l'agent… ») : ligne du plan à valider.
 function describe(ctx, action) {
   const name = (id) => resolve(ctx, id, ['agent', 'terminal', 'sticky'])?.name ?? id;
   switch (action.type) {
-    case 'create_agent': return t(action.kind === 'agent' ? 'conductor.log.agent' : 'conductor.log.terminal', { name: action.name });
-    case 'create_sticky': return t('conductor.log.sticky', { name: action.name });
-    case 'create_link': return t('conductor.log.link', { from: name(action.source), to: name(action.target), mode: t(`conductor.mode.${action.data.mode}`) });
-    case 'update_sticky': return t('conductor.log.stickyUpdated', { name: name(action.target) });
-    case 'set_role': return t('conductor.log.role', { name: name(action.target), role: short(action.role) });
-    case 'remove_agent': return t('conductor.log.removed', { name: name(action.target) });
-    case 'send_to': return `${name(action.target)} ← ${short(action.message)}`;
-    case 'arrange': return t('conductor.log.arrange', { count: action.targets.length, layout: t(`conductor.layout.${action.layout}`) });
+    case 'create_agent': return t(action.kind === 'agent' ? 'conductor.do.agent' : 'conductor.do.terminal', { name: action.name });
+    case 'create_sticky': return t('conductor.do.sticky', { name: action.name });
+    case 'create_link': return t('conductor.do.link', { from: name(action.source), to: name(action.target), mode: t(`conductor.mode.${action.data.mode}`) });
+    case 'update_sticky': return t('conductor.do.stickyUpdated', { name: name(action.target) });
+    case 'set_role': return t('conductor.do.role', { name: name(action.target), role: short(action.role) });
+    case 'remove_agent': return t('conductor.do.removed', { name: name(action.target) });
+    case 'send_to': return t('conductor.do.send', { name: name(action.target), message: short(action.message) });
+    case 'arrange': return t('conductor.do.arrange', { count: action.targets.length, layout: t(`conductor.layout.${action.layout}`) });
     default: {
       const edge = resolveLink(ctx, { link: action.target });
       const [from, to] = edge ? linkEnds(ctx, edge) : ['?', '?'];
-      return t(action.type === 'remove_link' ? 'conductor.log.linkRemoved' : 'conductor.log.linkUpdated', { from, to });
+      return t(action.type === 'remove_link' ? 'conductor.do.linkRemoved' : 'conductor.do.linkUpdated', { from, to });
     }
   }
 }
@@ -436,11 +449,13 @@ async function execute(ctx, action) {
     case 'create_sticky': {
       const response = await deps.requestOp(board.id, { type: 'addSticky', label: action.name, text: action.text, near: action.near });
       if (response?.error || !response?.id) return opError(response);
+      ctx.session.runStickies?.push(response.id);
       log(response.id, t('conductor.log.sticky', { name: action.name }));
       return { ...result(t('conductor.stickyCreated', { name: action.name, id: response.id })), id: response.id };
     }
     case 'create_link': {
-      const text = describe(ctx, action);
+      const name = (id) => resolve(ctx, id, ['agent', 'terminal', 'sticky'])?.name ?? id;
+      const text = t('conductor.log.link', { from: name(action.source), to: name(action.target), mode: t(`conductor.mode.${action.data.mode}`) });
       const response = await deps.requestOp(board.id, { type: 'addLink', source: action.source, target: action.target, data: action.data });
       if (response?.error || !response?.id) return opError(response);
       log(action.target, text);
@@ -489,7 +504,8 @@ async function execute(ctx, action) {
       const ids = action.targets.filter((id) => findNode(id));
       if (ids.length < 2) return fail('conductor.arrangeFew');
       const vars = { count: ids.length, layout: t(`conductor.layout.${action.layout}`) };
-      const response = await deps.requestOp(board.id, { type: 'arrange', ids, layout: action.layout, top: action.top });
+      const companions = (action.companions ?? []).filter((id) => findNode(id));
+      const response = await deps.requestOp(board.id, { type: 'arrange', ids, layout: action.layout, top: action.top, companions });
       if (response?.error) return opError(response);
       log(null, t('conductor.log.arrange', vars));
       return result(t('conductor.arranged', vars));
@@ -568,6 +584,7 @@ async function commit(caller) {
   if (!session) return [];
   const pending = session.pending;
   session.pending = [];
+  notify(caller);
   const ids = new Map();
   const map = (id) => (id && ids.has(id) ? ids.get(id) : id);
   const results = [];
@@ -577,7 +594,7 @@ async function commit(caller) {
       if (!board) return fail('conductor.noBoard');
       const { tempId, summary, node, ...action } = item;
       for (const key of ['source', 'target', 'near', 'top']) if (key in action) action[key] = map(action[key]);
-      if (action.targets) action.targets = action.targets.map(map).filter((id) => !id.startsWith('pending-'));
+      for (const key of ['targets', 'companions']) if (action[key]) action[key] = action[key].map(map).filter((id) => !id.startsWith('pending-'));
       if ([action.source, action.target, action.near].some((id) => id?.startsWith('pending-'))) return fail('conductor.notFound', { ref: summary });
       return execute({ caller, board, session }, action);
     });
@@ -592,9 +609,12 @@ async function commit(caller) {
 function discard(caller) {
   const session = sessions.get(caller);
   if (session) session.pending = [];
+  notify(caller);
 }
 
+// Actions en attente (aperçu), sans les cases fictives : pour l'interface et les tests.
 const pendingOf = (caller) => sessions.get(caller)?.pending.map(({ node, ...item }) => item) ?? [];
+const notify = (caller) => deps.onPending(caller, pendingOf(caller));
 const isCreated = (id) => created.has(id) || findNode(id)?.node.data.createdBy === 'conductor';
 
 module.exports = {

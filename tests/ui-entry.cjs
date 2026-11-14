@@ -62,7 +62,7 @@ app.on('browser-window-created', (_event, win) => {
       }
       if (mode === 'conductor-bar') {
         await require('./ui-conductor-bar.cjs')({ win, evaluate, until, sleep, data, errors });
-        console.log('PASS UI conductor-bar: shortcut, folder check, streamed actions, live map changes, CLI error, reset');
+        console.log('PASS UI conductor-bar: shortcut, default folder, streamed actions, preview ghosts, correction, cancel, approve, CLI error, reset');
         app.quit();
         return;
       }

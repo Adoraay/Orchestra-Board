@@ -1,6 +1,7 @@
 // Faux `claude -p --output-format stream-json` pour les tests du chef d'orchestre (aucun modèle sollicité).
 // Lit le message sur stdin. « FAIL » : erreur et code 2 ; « SLOW » : attend (test d'arrêt) ;
-// « BUILD » : appelle les vrais outils d'Orchestra par l'adresse de la config MCP, comme le ferait Claude.
+// « BUILD » : appelle les vrais outils d'Orchestra par l'adresse de la config MCP, comme le ferait Claude, et
+// répond en Markdown ; « PAUSE » : 1,5 s entre deux outils (pour voir l'encart de construction).
 // FAKE_CLAUDE_LOG : fichier où sont ajoutés les arguments reçus (une ligne JSON par appel).
 const fs = require('fs');
 const http = require('http');
@@ -47,9 +48,11 @@ process.stdin.on('end', async () => {
       const id = `tool-${++n}`;
       out({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name: `mcp__orchestra__${name}`, input }] } });
       const result = await tool(url, name, input);
+      if (message.includes('PAUSE')) await new Promise((r) => setTimeout(r, 1500));
       out({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: [{ type: 'text', text: result.text }], is_error: result.isError }] } });
     }
   }
-  out({ type: 'assistant', message: { content: [{ type: 'text', text: `Fait : ${message.trim()}` }] } });
+  const markdown = message.includes('BUILD') ? '\n\n- **Worker** builds\n- `Plan` tracks' : '';
+  out({ type: 'assistant', message: { content: [{ type: 'text', text: `Fait : ${message.trim()}${markdown}` }] } });
   out({ type: 'result', subtype: 'success', is_error: false, result: 'ok', session_id: sessionId });
 });

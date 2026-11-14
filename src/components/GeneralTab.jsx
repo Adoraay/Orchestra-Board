@@ -109,6 +109,11 @@ export default function GeneralTab({ onStartTutorial, onStartSetup }) {
           <input type="checkbox" checked={settings.conductor.tileTools} onChange={(e) => updateSettings('conductor', { tileTools: e.target.checked })} />
           {t('general.conductorTileTools')}
         </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={settings.conductor.autoApply} onChange={(e) => updateSettings('conductor', { autoApply: e.target.checked })} />
+          {t('general.conductorAutoApply')}
+        </label>
+        <span className="hint">{t('general.conductorAutoHint')}</span>
         <span className="hint">{t('general.conductorHint')}</span>
       </div>
 

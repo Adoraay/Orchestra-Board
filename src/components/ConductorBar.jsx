@@ -1,21 +1,23 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, CircleAlert, LoaderCircle, RotateCcw, Square, WandSparkles, X } from 'lucide-react';
+import { ArrowUp, Check, CircleAlert, Eye, LoaderCircle, RotateCcw, Square, WandSparkles, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
-import useConductorSession from '../hooks/useConductorSession.js';
 import useT from '../hooks/useT.js';
 import { displayPath } from '../lib/paths.js';
-
-const KNOWN_TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output', 'arrange'];
+import { toolLabel } from '../lib/conductorLabels.js';
+import MarkdownText from './MarkdownText.jsx';
 
 // Bulle du chef d'orchestre (PLAN.md §3.25), en haut de la map : l'utilisateur décrit ce qu'il veut, le chef
 // d'orchestre construit et dirige l'orchestre. Fermée, une pastille ; ouverte, la conversation du tableau,
 // ses actions au fil de l'eau et la zone de saisie. Il n'agit que quand on lui écrit.
-export default function ConductorBar({ boardId, open, onToggle, nameOf }) {
+// En aperçu, ses changements attendent : la carte du plan propose Valider, Annuler, ou une correction à écrire.
+export default function ConductorBar({ boardId, session, open, onToggle, nameOf }) {
   const t = useT();
   const { activeFolder, rootPath, homeDir } = useWorkspace();
   // Sans dossier choisi dans l'explorateur : sa racine, sinon le dossier personnel.
   const folder = activeFolder ?? rootPath ?? homeDir;
-  const { history, running, live } = useConductorSession(boardId);
+  const { history, running, live, pending } = session;
+  const [deciding, setDeciding] = useState(false);
+  const planned = pending.length > 0 && !running;
   const [text, setText] = useState('');
   const [error, setError] = useState('');
   const inputRef = useRef(null);
@@ -39,6 +41,13 @@ export default function ConductorBar({ boardId, open, onToggle, nameOf }) {
     if (result?.error) setError(result.error);
     else setText('');
   };
+  const decide = async (action) => {
+    setDeciding(true);
+    const result = await window.conductorSession[action](boardId);
+    setDeciding(false);
+    setError(result?.error ?? '');
+    stick.current = true;
+  };
   const reset = async () => {
     const result = await window.conductorSession.reset(boardId);
     setError(result?.error ?? '');
@@ -46,26 +55,14 @@ export default function ConductorBar({ boardId, open, onToggle, nameOf }) {
 
   if (!open) {
     return (
-      <button className={`conductor-pill ${running ? 'running' : ''}`} onClick={onToggle} title={t('conductor.openTitle')}>
-        {running ? <LoaderCircle size={14} className="conductor-spin" /> : <WandSparkles size={14} />}
-        {running ? t('conductor.working') : t('conductor.title')}
+      <button className={`conductor-pill ${running || planned ? 'running' : ''}`} onClick={onToggle} title={t('conductor.openTitle')}>
+        {running ? <LoaderCircle size={14} className="conductor-spin" /> : planned ? <Eye size={14} /> : <WandSparkles size={14} />}
+        {running ? t('conductor.working') : planned ? t('conductor.planReady') : t('conductor.title')}
       </button>
     );
   }
 
-  const label = (entry) => {
-    const input = entry.input ?? {};
-    const vars = {
-      name: input.name ?? '',
-      type: input.type ? t(`conductor.type.${input.type}`) : '',
-      from: nameOf(input.from),
-      to: nameOf(input.to),
-      agent: nameOf(input.agent),
-      sticky: nameOf(input.sticky),
-      layout: input.layout ? t(`conductor.layout.${input.layout}`) : '',
-    };
-    return KNOWN_TOOLS.includes(entry.tool) ? t(`conductor.tool.${entry.tool}`, vars) : t('conductor.tool.other', { tool: entry.tool });
-  };
+  const label = (entry) => toolLabel(t, entry, nameOf);
 
   return (
     <section
@@ -97,12 +94,29 @@ export default function ConductorBar({ boardId, open, onToggle, nameOf }) {
               {entry.error && <span className="conductor-tool-error">{entry.error}</span>}
             </div>
           ) : (
-            <div key={index} className={`conductor-msg ${entry.kind}`}>{entry.text}</div>
+            <div key={index} className={`conductor-msg ${entry.kind}`}>{entry.kind === 'assistant' ? <MarkdownText text={entry.text} /> : entry.text}</div>
           ),
         )}
-        {live && <div className="conductor-msg assistant live">{live}</div>}
+        {live && <div className="conductor-msg assistant live"><MarkdownText text={live} /></div>}
         {running && !live && <div className="conductor-thinking"><LoaderCircle size={13} className="conductor-spin" />{t('conductor.thinking')}</div>}
       </div>
+
+      {planned && (
+        <div className="conductor-plan" role="group" aria-label={t('conductor.plan.title', { count: pending.length })}>
+          <div className="conductor-plan-title"><Eye size={14} />{t('conductor.plan.title', { count: pending.length })}</div>
+          <ul className="conductor-plan-list">
+            {pending.map((item, index) => <li key={item.tempId ?? index}>{item.summary}</li>)}
+          </ul>
+          <div className="conductor-plan-actions">
+            <span className="hint">{t('conductor.plan.hint')}</span>
+            <button className="text-button" disabled={deciding} onClick={() => decide('cancel')}>{t('conductor.plan.cancel')}</button>
+            <button className="text-button primary" disabled={deciding} onClick={() => decide('approve')}>
+              {deciding ? <LoaderCircle size={14} className="conductor-spin" /> : <Check size={14} />}
+              {t('conductor.plan.approve')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <form className="conductor-form" onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <textarea
@@ -110,7 +124,7 @@ export default function ConductorBar({ boardId, open, onToggle, nameOf }) {
           value={text}
           rows={2}
           maxLength={20000}
-          placeholder={history.length ? t('conductor.placeholderNext') : t('conductor.placeholder')}
+          placeholder={planned ? t('conductor.placeholderFix') : history.length ? t('conductor.placeholderNext') : t('conductor.placeholder')}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }

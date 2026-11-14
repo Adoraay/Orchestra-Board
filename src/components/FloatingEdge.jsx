@@ -4,56 +4,12 @@ import LinkLabel from './LinkLabel.jsx';
 import { useBoard } from '../context/BoardContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK } from '../lib/links.js';
+import { arrowPath, pickSides, sidePoint } from '../lib/edgeGeometry.js';
 import useT from '../hooks/useT.js';
 
 const PULSE_DURATION = 1200; // ms : un point lumineux parcourt le lien à chaque transmission
 const SENDING_FOR = 2000; // ms pendant lesquels le lien reste « en cours de transfert » après un envoi
 const LABEL_ROOM = { horizontal: 320, vertical: 90 }; // écart minimal entre les cases pour l'étiquette
-const ARROW = { length: 9, half: 5 };
-
-// Milieu du côté demandé de la case.
-function sidePoint(node, side) {
-  const { x, y } = node.internals.positionAbsolute;
-  const w = node.measured.width;
-  const h = node.measured.height;
-  switch (side) {
-    case Position.Top: return { x: x + w / 2, y };
-    case Position.Bottom: return { x: x + w / 2, y: y + h };
-    case Position.Left: return { x, y: y + h / 2 };
-    default: return { x: x + w, y: y + h / 2 };
-  }
-}
-
-// Côtés à relier selon la position des deux cases : côte à côte = gauche/droite,
-// l'une au-dessus de l'autre = haut/bas. Recalculé à chaque déplacement.
-function pickSides(source, target) {
-  const center = (n) => ({
-    x: n.internals.positionAbsolute.x + n.measured.width / 2,
-    y: n.internals.positionAbsolute.y + n.measured.height / 2,
-  });
-  const s = center(source);
-  const t = center(target);
-  const dx = t.x - s.x;
-  const dy = t.y - s.y;
-
-  // On compare en tenant compte de la forme des cases (plus larges que hautes).
-  const horizontal = Math.abs(dx) / (source.measured.width + target.measured.width) >
-    Math.abs(dy) / (source.measured.height + target.measured.height);
-
-  if (horizontal) return dx > 0 ? [Position.Right, Position.Left] : [Position.Left, Position.Right];
-  return dy > 0 ? [Position.Bottom, Position.Top] : [Position.Top, Position.Bottom];
-}
-
-// Pointe de flèche qui entre dans la case cible par le côté choisi.
-function arrowPath(tip, side) {
-  const d = { [Position.Left]: [1, 0], [Position.Right]: [-1, 0], [Position.Top]: [0, 1], [Position.Bottom]: [0, -1] }[side];
-  const bx = tip.x - d[0] * ARROW.length;
-  const by = tip.y - d[1] * ARROW.length;
-  const px = -d[1] * ARROW.half;
-  const py = d[0] * ARROW.half;
-  return `M ${bx + px} ${by + py} L ${tip.x} ${tip.y} L ${bx - px} ${by - py}`;
-}
-
 // État affiché : réglages du lien d'abord (pause, Transmission sans consigne), puis dernier événement.
 // Au repos, une Délégation est « delegate », un lien Terminal « terminal », un lien Note « note », une Transmission configurée « ready ».
 function linkState(link, event) {

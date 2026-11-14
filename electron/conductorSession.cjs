@@ -9,6 +9,9 @@ const { t } = require('./i18n.cjs');
 // --resume. Ses seuls outils sont ceux du chef d'orchestre (serveur MCP d'Orchestra) : aucun outil intégré,
 // il ne lit ni n'écrit de fichier, il délègue. Aucune clé d'API : le CLI déjà connecté de l'utilisateur.
 // Conversation gardée dans userData/conductor.json (messages et actions affichés dans la bulle).
+// Aperçu (par défaut, sauf Paramètres › mode auto) : ses changements restent en attente, montrés en fantômes sur
+// la map ; Valider les applique, Annuler les efface, un nouveau message les remplace par un nouveau plan. Le
+// chef d'orchestre l'apprend au message suivant (notes ajoutées devant le message de l'utilisateur).
 const MAX_MESSAGE = 20000;
 const MAX_HISTORY = 300;
 const MAX_ENTRY = 8000;
@@ -53,6 +56,9 @@ let deps = {
   closeSession: () => {},
   boardExists: () => false,
   emit: () => {},
+  pendingOf: () => [],
+  commit: async () => [],
+  discard: () => {},
 };
 let conversations = null; // boardId -> { sessionId, started, history }
 const runs = new Map(); // boardId -> { child, live, stopped, result, stderr, tools }
@@ -76,7 +82,8 @@ function load() {
     const data = JSON.parse(fs.readFileSync(file(), 'utf8'));
     for (const [boardId, entry] of Object.entries(data?.boards ?? {})) {
       if (!ID.test(boardId) || typeof entry?.sessionId !== 'string' || !Array.isArray(entry.history)) continue;
-      conversations.set(boardId, { sessionId: entry.sessionId, started: entry.started === true, history: entry.history.slice(-MAX_HISTORY) });
+      const notes = Array.isArray(entry.notes) ? entry.notes.filter((n) => typeof n === 'string').slice(-10) : [];
+      conversations.set(boardId, { sessionId: entry.sessionId, started: entry.started === true, history: entry.history.slice(-MAX_HISTORY), notes });
     }
   } catch {}
   return conversations;
@@ -98,13 +105,13 @@ function save() {
 
 function conversation(boardId) {
   const all = load();
-  if (!all.has(boardId)) all.set(boardId, { sessionId: randomUUID(), started: false, history: [] });
+  if (!all.has(boardId)) all.set(boardId, { sessionId: randomUUID(), started: false, history: [], notes: [] });
   return all.get(boardId);
 }
 
 function snapshot(boardId) {
   const run = runs.get(boardId);
-  return { history: load().get(boardId)?.history ?? [], running: Boolean(run), live: run?.live ?? '' };
+  return { history: load().get(boardId)?.history ?? [], running: Boolean(run), live: run?.live ?? '', pending: deps.pendingOf(callerOf(boardId)) };
 }
 const publish = (boardId) => deps.emit(boardId, { type: 'snapshot', ...snapshot(boardId) });
 
@@ -224,7 +231,14 @@ async function send(boardId, message, folder) {
 
   const conv = conversation(boardId);
   const settings = deps.settings();
-  deps.openSession(callerOf(boardId), { boardId, folder, preview: false });
+  // Un message pendant un aperçu = une correction : l'ancien plan est effacé, un nouveau est proposé.
+  if (deps.pendingOf(callerOf(boardId)).length) {
+    deps.discard(callerOf(boardId));
+    note(boardId, 'The user rejected your proposed plan (nothing was applied) and asks for the changes below. Propose the whole corrected plan again.');
+  }
+  deps.openSession(callerOf(boardId), { boardId, folder, preview: !settings.autoApply });
+  const input = [...(conv.notes ?? []).map((text) => `[Orchestra] ${text}`), message.trim()].join('\n\n');
+  conv.notes = [];
   const { mcp, prompt } = writeFiles(boardId);
   const args = [
     '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
@@ -273,8 +287,48 @@ async function send(boardId, message, folder) {
     publish(boardId);
   });
   child.stdin.on('error', () => {});
-  child.stdin.end(message.trim());
+  child.stdin.end(input);
   return { ok: true };
+}
+
+function note(boardId, text) {
+  const conv = conversation(boardId);
+  conv.notes = [...(conv.notes ?? []), text].slice(-10);
+  save();
+}
+
+// Valider l'aperçu : les actions s'appliquent dans l'ordre (conductor.commit), le résultat est noté.
+async function approve(boardId) {
+  if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
+  if (runs.has(boardId)) return { error: t('conductorSession.busy') };
+  if (!deps.pendingOf(callerOf(boardId)).length) return { error: t('conductorSession.nothingPending') };
+  const results = await deps.commit(callerOf(boardId));
+  const failed = results.filter((r) => r.isError);
+  addEntry(boardId, { kind: 'info', text: t('conductorSession.applied', { ok: results.length - failed.length, total: results.length }) });
+  for (const r of failed) addEntry(boardId, { kind: 'error', text: clip(`${r.summary} : ${r.text}`, 1000) });
+  note(boardId, failed.length
+    ? `The user approved your plan. Applied, except: ${failed.map((r) => `${r.summary} (${r.text})`).join('; ')}.`
+    : 'The user approved your plan: everything was applied.');
+  publish(boardId);
+  return { ok: true };
+}
+
+// Annuler l'aperçu : rien n'est appliqué.
+function cancel(boardId) {
+  if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
+  if (runs.has(boardId)) return { error: t('conductorSession.busy') };
+  if (!deps.pendingOf(callerOf(boardId)).length) return { error: t('conductorSession.nothingPending') };
+  deps.discard(callerOf(boardId));
+  addEntry(boardId, { kind: 'info', text: t('conductorSession.cancelled') });
+  note(boardId, 'The user cancelled your proposed plan: nothing was applied.');
+  publish(boardId);
+  return { ok: true };
+}
+
+// Aperçu changé (outil proposé, validé ou annulé) : la bulle et les fantômes de la map suivent.
+function onPending(caller, items) {
+  const boardId = caller.startsWith('conductor-') ? caller.slice('conductor-'.length) : null;
+  if (boardId) deps.emit(boardId, { type: 'pending', items });
 }
 
 // Arrêt demandé par l'utilisateur : le processus et ses enfants (serveur MCP compris).
@@ -290,7 +344,8 @@ function stop(boardId) {
 function reset(boardId) {
   if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
   if (runs.has(boardId)) return { error: t('conductorSession.busy') };
-  load().set(boardId, { sessionId: randomUUID(), started: false, history: [] });
+  deps.discard(callerOf(boardId));
+  load().set(boardId, { sessionId: randomUUID(), started: false, history: [], notes: [] });
   deps.closeSession(callerOf(boardId));
   save();
   publish(boardId);
@@ -315,7 +370,7 @@ function stopAll() {
 }
 
 function get(boardId) {
-  return typeof boardId === 'string' && ID.test(boardId) ? snapshot(boardId) : { history: [], running: false, live: '' };
+  return typeof boardId === 'string' && ID.test(boardId) ? snapshot(boardId) : { history: [], running: false, live: '', pending: [] };
 }
 
-module.exports = { init, send, stop, reset, prune, stopAll, get, callerOf, onLine, SYSTEM_PROMPT };
+module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, callerOf, onLine, SYSTEM_PROMPT };

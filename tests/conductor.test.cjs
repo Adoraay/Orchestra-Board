@@ -402,3 +402,98 @@ test('arrange is validated, logged, and kept with remapped ids in preview', asyn
   const b = s.board().nodes.find((n) => n.data.label === 'B');
   assert.deepEqual(arrange.ids, ['lead', b.id]);
 });
+
+test('the preview puts ghosts exactly where approval will place the tiles', async () => {
+  const { previewLayout, placeAgent, autoPlace, arrangeShape } = await esm('autoPlace.js');
+  const agentSize = { width: 640, height: 400 };
+  const noteSize = { width: 270, height: 180 };
+  const origin = { x: 0, y: 0 };
+  const nodes = [
+    { id: 'lead', position: { x: 0, y: 0 }, style: { ...agentSize } },
+    { id: 'old', position: { x: 2000, y: 0 }, style: { ...agentSize } },
+  ];
+  const pending = [
+    { type: 'create_agent', tempId: 'pending-1', kind: 'agent', agentId: 'claude-code', name: 'A', near: 'lead', role: 'r', prompt: 'p' },
+    { type: 'create_agent', tempId: 'pending-2', kind: 'agent', agentId: 'codex', name: 'B', near: 'lead' },
+    { type: 'create_sticky', tempId: 'pending-3', kind: 'sticky', name: 'Plan', text: '- [ ] x' },
+    { type: 'create_link', tempId: 'pending-4', source: 'lead', target: 'pending-1', data: { mode: 'delegate' } },
+    { type: 'remove_agent', target: 'old' },
+  ];
+  const view = previewLayout(nodes, [], pending, { origin, agentSize, noteSize });
+
+  // Même suite d'opérations qu'à la validation (useConductorOps) : placeAgent, puis autoPlace pour le post-it.
+  let work = nodes.map((n) => ({ ...n }));
+  const a = placeAgent(work, [], 'lead', agentSize, origin);
+  work.push({ id: 'A', position: a.position, style: { ...agentSize } });
+  const b = placeAgent(work, ['A'], 'lead', agentSize, origin);
+  work = work.map((n) => (b.moved.has(n.id) ? { ...n, position: b.moved.get(n.id) } : n));
+  work.push({ id: 'B', position: b.position, style: { ...agentSize } });
+  const note = autoPlace(work, noteSize, { origin });
+  const ghost = (id) => view.ghosts.find((g) => g.id === id);
+  assert.deepEqual(ghost('pending-1').position, work.find((n) => n.id === 'A').position);
+  assert.deepEqual(ghost('pending-2').position, b.position);
+  assert.deepEqual(ghost('pending-3').position, note);
+  assert.equal(ghost('pending-1').data.role, 'r');
+  assert.equal(ghost('pending-3').kind, 'sticky');
+  assert.deepEqual(view.links, [{ id: 'pending-4', source: 'lead', target: 'pending-1', mode: 'delegate' }]);
+  assert.deepEqual([...view.removing], ['old']);
+  assert.equal(view.ghosts.some((g) => g.kind === 'move'), false, 'nothing real moves here');
+
+  // arrange qui déplace une case existante : sa nouvelle place est montrée.
+  const arranged = previewLayout(nodes, [], [{ type: 'arrange', targets: ['lead', 'old'], layout: 'column', top: null }], { origin, agentSize, noteSize });
+  const expected = arrangeShape(nodes, [], ['lead', 'old'], 'column', null);
+  const moves = arranged.ghosts.filter((g) => g.kind === 'move');
+  assert.ok(moves.length >= 1);
+  for (const m of moves) assert.deepEqual(m.position, expected.get(m.of));
+});
+
+test('pending changes are announced on proposal, approval and cancellation', async (t) => {
+  const s = setup(t);
+  const seen = [];
+  s.conductor.init({ onPending: (caller, items) => seen.push({ caller, count: items.length }) });
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  await s.conductor.callTool('conductor-main', 'create_sticky', { text: 'a' });
+  await s.conductor.callTool('conductor-main', 'create_sticky', { text: 'b' });
+  assert.deepEqual(seen.map((e) => e.count), [1, 2]);
+  assert.ok(seen.every((e) => e.caller === 'conductor-main'));
+  s.conductor.discard('conductor-main');
+  assert.equal(seen.at(-1).count, 0);
+  await s.conductor.callTool('conductor-main', 'create_sticky', { text: 'c' });
+  await s.conductor.commit('conductor-main');
+  assert.equal(seen.at(-1).count, 0);
+  assert.ok(s.board().nodes.some((n) => n.data.text === 'c'));
+});
+
+test('sticky notes written in the same message, or linked to the group, follow it when it is arranged', async (t) => {
+  const s = setup(t);
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: false });
+  const call = (name, args) => s.conductor.callTool('conductor-main', name, args);
+  await call('create_sticky', { text: 'old', name: 'Old' });
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: false }); // message suivant
+  await call('create_agent', { type: 'terminal', name: 'A' });
+  await call('create_sticky', { text: '- [ ] plan', name: 'Plan' });
+  await call('arrange', { layout: 'row', tiles: ['Lead', 'A'] });
+  const arrange = s.ops.at(-1);
+  const plan = s.board().nodes.find((n) => n.data.label === 'Plan').id;
+  assert.deepEqual(arrange.companions, [plan], 'only the note written during this message');
+  // Un post-it relié à une case du groupe la suit aussi.
+  const old = s.board().nodes.find((n) => n.data.label === 'Old').id;
+  await call('create_link', { from: 'Lead', to: 'Old' });
+  await call('arrange', { layout: 'column', tiles: ['Lead', 'A'] });
+  assert.deepEqual(s.ops.at(-1).companions.sort(), [old, plan].sort());
+
+  const { besideGroup, previewLayout, arrangeShape } = await esm('autoPlace.js');
+  const size = { width: 640, height: 400 };
+  const nodes = [
+    { id: 'a', position: { x: 0, y: 0 }, style: { ...size } },
+    { id: 'b', position: { x: 700, y: 0 }, style: { ...size } },
+    { id: 'n', position: { x: 5000, y: 3000 }, style: { width: 270, height: 180 } },
+  ];
+  const shape = arrangeShape(nodes, [{ source: 'a', target: 'b' }], ['a', 'b'], 'pyramid', 'a');
+  const beside = besideGroup(nodes, shape, ['n']).get('n');
+  const right = Math.max(...['a', 'b'].map((id) => shape.get(id).x + 640));
+  assert.ok(beside.x > right && beside.x - right <= 200, 'right next to the group');
+  assert.equal(beside.y, Math.min(...['a', 'b'].map((id) => shape.get(id).y)));
+  const view = previewLayout(nodes, [], [{ type: 'arrange', targets: ['a', 'b'], layout: 'pyramid', top: 'a', companions: ['n'] }], { origin: { x: 0, y: 0 }, agentSize: size, noteSize: { width: 270, height: 180 } });
+  assert.deepEqual(view.ghosts.find((g) => g.of === 'n').position, besideGroup(nodes, arrangeShape(nodes, [], ['a', 'b'], 'pyramid', 'a'), ['n']).get('n'));
+});

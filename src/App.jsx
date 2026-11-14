@@ -40,6 +40,9 @@ import WorkspaceRecovery from './components/WorkspaceRecovery.jsx';
 import TeamTemplates from './components/TeamTemplates.jsx';
 import BlockersInbox from './components/BlockersInbox.jsx';
 import ConductorBar from './components/ConductorBar.jsx';
+import ConductorComposing from './components/ConductorComposing.jsx';
+import GhostEdge from './components/GhostEdge.jsx';
+import GhostNode from './components/GhostNode.jsx';
 import TopBar from './components/TopBar.jsx';
 import TileSearch from './components/TileSearch.jsx';
 import TaskSequencesDialog from './components/TaskSequencesDialog.jsx';
@@ -60,15 +63,17 @@ import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useAppShortcuts from './hooks/useAppShortcuts.js';
 import useBoards from './hooks/useBoards.js';
-import useBoardOps, { NODE_SIZE } from './hooks/useBoardOps.js';
-import { useConductorOps, useConductorRouter } from './hooks/useConductorBridge.js';
+import useBoardOps, { NODE_SIZE, NOTE_SIZE } from './hooks/useBoardOps.js';
+import useConductorSession from './hooks/useConductorSession.js';
+import { previewLayout } from './lib/autoPlace.js';
+import { PLAN_ORIGIN, useConductorOps, useConductorRouter } from './hooks/useConductorBridge.js';
 import useT from './hooks/useT.js';
 import { numberedName } from './lib/boardOps.js';
 import { PANELS, draggedPanel } from './lib/panels.js';
 
-const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode };
+const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode, ghost: GhostNode };
 const DUPLICATE_OFFSET = 40; // px : une copie apparaît en décalé de l'original
-const edgeTypes = { floating: FloatingEdge };
+const edgeTypes = { floating: FloatingEdge, ghost: GhostEdge };
 const BOARD_HINTS = ['pen', 'note', 'text', 'link']; // outils avec un bandeau d'aide (board.hint.<outil>)
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
 
@@ -314,7 +319,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   const [viewport, setViewport] = useState(initial.viewport);
   const [formationRequest, setFormationRequest] = useState(null);
   const [formationPreview, setFormationPreview] = useState(null);
-  const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNodes, setViewport: moveCamera } = useReactFlow();
   const ops = useBoardOps({ setNodes, setEdges });
   useEffect(() => {
     if (!formationRequest) return;
@@ -482,20 +487,100 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   }, [nodes, edges, strokes, liveGroups, viewport, onChange]);
 
   // Changements demandés par le chef d'orchestre (après l'effet ci-dessus : sa sauvegarde lit ce contenu).
-  // Une case sans place indiquée sur une map vide va au centre de la vue.
+  // Sur une map vide, ses cases partent du point (0, 0) de la map (jamais du centre de la vue, qui bouge avec la
+  // caméra : l'aperçu et la validation doivent tomber au même endroit), puis la caméra les montre.
   const boardRef = useRef(null);
-  const viewCenter = useCallback(() => {
-    const rect = boardRef.current?.getBoundingClientRect();
-    return rect ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }) : { x: 0, y: 0 };
-  }, [screenToFlowPosition]);
-  // Cases créées depuis peu par le chef d'orchestre : la caméra les montre ensemble, au fil de leur création.
+  // Cadrage des cases du chef d'orchestre : dans la partie de la map visible sous sa bulle quand elle est ouverte.
+  const frameNodes = useCallback((ids) => {
+    const board = boardRef.current;
+    const bar = board?.querySelector('.conductor-bar');
+    if (!bar) return fitView({ nodes: ids.map((id) => ({ id })), duration: 500, padding: 0.25, maxZoom: 1 });
+    const chosen = new Set(ids);
+    const boxes = getNodes().filter((n) => chosen.has(n.id)).map((n) => ({
+      x: n.position.x, y: n.position.y, width: n.measured?.width ?? n.style?.width ?? 0, height: n.measured?.height ?? n.style?.height ?? 0,
+    }));
+    if (!boxes.length) return;
+    const left = Math.min(...boxes.map((b) => b.x));
+    const top = Math.min(...boxes.map((b) => b.y));
+    const width = Math.max(...boxes.map((b) => b.x + b.width)) - left;
+    const height = Math.max(...boxes.map((b) => b.y + b.height)) - top;
+    const area = board.getBoundingClientRect();
+    const margin = 60;
+    const y0 = bar.getBoundingClientRect().bottom - area.top + 24;
+    const w = area.width - 2 * margin;
+    const h = area.height - y0 - margin;
+    if (w <= 0 || h <= 0 || !width || !height) return;
+    const zoom = Math.max(0.1, Math.min(1, w / width, h / height));
+    moveCamera({ x: margin + (w - width * zoom) / 2 - left * zoom, y: y0 + (h - height * zoom) / 2 - top * zoom, zoom }, { duration: 500 });
+  }, [fitView, getNodes, moveCamera]);
+  // Session du chef d'orchestre de ce tableau : conversation, exécution en cours, aperçu (PLAN.md §3.25).
+  const conductorSession = useConductorSession(boardId);
+  const conductorRunning = conductorSession.running;
+  const runningRef = useRef(conductorRunning);
+  runningRef.current = conductorRunning;
+  // Pendant qu'il construit, ses nouvelles cases restent cachées derrière l'encart « Composition… » et apparaissent
+  // ensemble, déjà disposées, à la fin. Hors exécution (validation d'un aperçu, case de test), la caméra les suit.
   const revealed = useRef([]);
-  const reveal = useCallback((ids) => {
+  const buildingRef = useRef([]);
+  const [building, setBuilding] = useState([]);
+  const [appearing, setAppearing] = useState([]);
+  const reveal = useCallback((ids, created) => {
     const now = Date.now();
     revealed.current = [...revealed.current.filter((entry) => now - entry.at < 60000), ...ids.filter(Boolean).map((id) => ({ id, at: now }))];
-    setTimeout(() => fitView({ nodes: revealed.current.map(({ id }) => ({ id })), duration: 500, padding: 0.25, maxZoom: 1 }), 120);
-  }, [fitView]);
-  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, setEdges, origin: viewCenter, reveal });
+    if (runningRef.current) {
+      if (created) setBuilding((buildingRef.current = [...buildingRef.current, created]));
+      return;
+    }
+    setTimeout(() => frameNodes(revealed.current.map(({ id }) => id)), 120);
+  }, [frameNodes]);
+  useEffect(() => {
+    if (conductorRunning || !buildingRef.current.length) return;
+    setAppearing(buildingRef.current);
+    buildingRef.current = [];
+    setBuilding([]);
+    setTimeout(() => frameNodes(revealed.current.map(({ id }) => id)), 120);
+    setTimeout(() => setAppearing([]), 700);
+  }, [conductorRunning, frameNodes]);
+  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, setEdges, reveal });
+
+  // Aperçu : ses propositions en fantômes, ajoutées à l'affichage seulement (jamais à l'état du tableau : ni
+  // sauvegardées, ni dans Ctrl+Z), montrées une fois le plan fini ; les cases à retirer en pointillés rouges.
+  const preview = useMemo(
+    () => (conductorSession.pending.length && !conductorRunning ? previewLayout(nodes, edges, conductorSession.pending, { origin: PLAN_ORIGIN, agentSize: NODE_SIZE, noteSize: NOTE_SIZE }) : null),
+    [conductorSession.pending, conductorRunning, nodes, edges],
+  );
+  const shownNodes = useMemo(() => {
+    if (!preview && !building.length && !appearing.length) return nodes;
+    const hidden = new Set(building);
+    const fresh = new Set(appearing);
+    const shown = nodes.map((n) => {
+      const className = hidden.has(n.id) ? 'conductor-hidden' : fresh.has(n.id) ? 'conductor-appear' : preview?.removing.has(n.id) ? 'pending-removal' : null;
+      return className ? { ...n, className } : n;
+    });
+    if (!preview) return shown;
+    const ghosts = preview.ghosts.map((g) => ({
+      id: g.id, type: 'ghost', position: g.position, style: { width: g.size.width, height: g.size.height },
+      draggable: false, selectable: false, connectable: false, focusable: false, data: { kind: g.kind, ...g.data },
+    }));
+    return [...shown, ...ghosts];
+  }, [nodes, preview, building, appearing]);
+  const shownEdges = useMemo(() => {
+    const hidden = new Set(building);
+    const shown = hidden.size
+      ? edges.map((e) => (hidden.has(e.source) || hidden.has(e.target) ? { ...e, className: `${e.className ?? ''} conductor-hidden` } : e))
+      : edges;
+    if (!preview) return shown;
+    return [...shown, ...preview.links.map((l) => ({ id: `ghost-${l.id}`, source: l.source, target: l.target, type: 'ghost', selectable: false, focusable: false, data: { mode: l.mode } }))];
+  }, [edges, preview, building]);
+  // Un nouveau plan proposé : la caméra le montre, dans la partie de la map visible sous la bulle.
+  const ghostKey = preview?.ghosts.map((g) => g.id).join(',') ?? '';
+  useEffect(() => {
+    if (!ghostKey) return;
+    const timer = setTimeout(() => frameNodes(ghostKey.split(',')), 150);
+    return () => clearTimeout(timer);
+  }, [ghostKey, frameNodes]);
+  const composing = conductorRunning && (conductorSession.pending.length > 0 || building.length > 0);
+  const lastAction = composing ? conductorSession.history.filter((e) => e.kind === 'tool').at(-1) : null;
   const tileName = useCallback(
     (ref) => {
       const node = ref && nodes.find((n) => n.id === ref);
@@ -764,8 +849,8 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
       >
         <BoardContext.Provider value={board}>
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={shownNodes}
+            edges={shownEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
@@ -826,7 +911,8 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
           </ReactFlow>
         </BoardContext.Provider>
         <BoardToolbar tool={tool} onChange={setTool} />
-        <ConductorBar boardId={boardId} open={conductorOpen} onToggle={onToggleConductor} nameOf={tileName} />
+        <ConductorBar boardId={boardId} session={conductorSession} open={conductorOpen} onToggle={onToggleConductor} nameOf={tileName} />
+        {composing && <ConductorComposing boardRef={boardRef} action={lastAction} nameOf={tileName} />}
         {tool === 'select' && selectedCount >= 2 && <LayoutToolbar
           count={selectedCount}
           groupCount={liveGroups.length}

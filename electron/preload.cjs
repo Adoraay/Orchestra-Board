@@ -174,6 +174,8 @@ contextBridge.exposeInMainWorld('conductorSession', {
   get: (boardId) => ipcRenderer.invoke('conductorSession:get', boardId),
   send: (boardId, message, folder) => ipcRenderer.invoke('conductorSession:send', boardId, message, folder),
   reset: (boardId) => ipcRenderer.invoke('conductorSession:reset', boardId),
+  approve: (boardId) => ipcRenderer.invoke('conductorSession:approve', boardId),
+  cancel: (boardId) => ipcRenderer.invoke('conductorSession:cancel', boardId),
   stop: (boardId) => ipcRenderer.send('conductorSession:stop', boardId),
   onEvent: (cb) => {
     const listener = (_e, boardId, event) => cb(boardId, event);

@@ -77,6 +77,72 @@ export function centeredRow(nodes, anchorId, siblingIds, size) {
   return placed.map(({ id, x: px, y: py }) => ({ id, x: px, y: py }));
 }
 
+// Place d'un agent créé par le chef d'orchestre : rangée recentrée sous « near » s'il y a déjà des agents
+// (siblingIds), sinon une place libre. Renvoie { position, moved: Map(id -> position des agents recentrés) }.
+export function placeAgent(nodes, siblingIds, near, size, origin) {
+  const row = near && siblingIds.length ? centeredRow(nodes, near, siblingIds, size) : null;
+  if (!row) return { position: autoPlace(nodes, size, { near, origin }), moved: new Map() };
+  const fresh = row.find((box) => !box.id);
+  return { position: { x: fresh.x, y: fresh.y }, moved: new Map(row.filter((box) => box.id).map((box) => [box.id, { x: box.x, y: box.y }])) };
+}
+
+// Aperçu d'un plan du chef d'orchestre (actions en attente, dans l'ordre) : mêmes calculs que leur application,
+// pour que les fantômes soient là où les cases arriveront. Renvoie les cases fantômes (créations, et nouvelle
+// place des cases existantes déplacées), les liens proposés et les cases à retirer.
+export function previewLayout(nodes, edges, pending, { origin, agentSize, noteSize }) {
+  let work = nodes.map(({ id, position, style, measured, width, height }) => ({ id, position, style, measured, width, height }));
+  const children = new Map();
+  const ghosts = new Map();
+  const links = [];
+  const removing = new Set();
+  const move = (moved) => { work = work.map((n) => (moved.has(n.id) ? { ...n, position: moved.get(n.id) } : n)); };
+  for (const item of pending) {
+    if (item.type === 'create_agent') {
+      const siblings = item.near ? children.get(item.near) ?? [] : [];
+      const { position, moved } = placeAgent(work, siblings, item.near, agentSize, origin);
+      move(moved);
+      work.push({ id: item.tempId, position, style: { ...agentSize } });
+      if (item.near) children.set(item.near, [...siblings, item.tempId]);
+      ghosts.set(item.tempId, { kind: item.kind, data: { agentId: item.agentId, label: item.name, role: item.role, prompt: item.prompt, branch: item.branch } });
+    } else if (item.type === 'create_sticky') {
+      work.push({ id: item.tempId, position: autoPlace(work, noteSize, { near: item.near, origin }), style: { ...noteSize } });
+      ghosts.set(item.tempId, { kind: 'sticky', data: { label: item.name, text: item.text } });
+    } else if (item.type === 'create_link') {
+      links.push({ id: item.tempId, source: item.source, target: item.target, mode: item.data.mode });
+    } else if (item.type === 'remove_agent') {
+      removing.add(item.target);
+    } else if (item.type === 'arrange') {
+      const positions = arrangeShape(work, [...edges, ...links], item.targets, item.layout, item.top);
+      move(new Map([...positions, ...besideGroup(work, positions, item.companions ?? [])]));
+    }
+  }
+  const real = new Map(nodes.map((n) => [n.id, n]));
+  const result = [];
+  for (const n of work) {
+    if (ghosts.has(n.id)) result.push({ id: n.id, ...ghosts.get(n.id), position: n.position, size: sizeOf(n) });
+    else if (real.has(n.id) && (real.get(n.id).position.x !== n.position.x || real.get(n.id).position.y !== n.position.y)) {
+      result.push({ id: `move-${n.id}`, kind: 'move', of: n.id, data: {}, position: n.position, size: sizeOf(n) });
+    }
+  }
+  return { ghosts: result, links, removing };
+}
+
+// Post-it qui accompagnent un groupe disposé (companionIds) : en colonne à sa droite, alignés sur son haut.
+// positions : nouvelles places du groupe (arrangeShape). Renvoie Map(id -> position) des post-it.
+export function besideGroup(nodes, positions, companionIds) {
+  const placed = new Map();
+  const group = nodes.filter((n) => positions.has(n.id));
+  const notes = companionIds.map((id) => nodes.find((n) => n.id === id)).filter(Boolean);
+  if (!group.length || !notes.length) return placed;
+  const right = Math.max(...group.map((n) => positions.get(n.id).x + sizeOf(n).width));
+  let y = Math.min(...group.map((n) => positions.get(n.id).y));
+  for (const note of notes) {
+    placed.set(note.id, { x: right + GAP_Y, y });
+    y += sizeOf(note).height + MARGIN;
+  }
+  return placed;
+}
+
 // Disposition demandée par le chef d'orchestre pour des cases du tableau (ids) :
 // - pyramid : rangées centrées les unes sous les autres ; en haut « top » (ou les cases sans lien entrant dans le
 //   groupe), puis chaque rangée = les cases reliées à la précédente ; un chef et deux agents = un triangle symétrique ;

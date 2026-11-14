@@ -2561,3 +2561,115 @@ h2.task-heading { margin: 0; font-size: 16px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   .conductor-bar, .conductor-msg.live::after, .react-flow__edge.edge-draw .react-flow__edge-path { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
 }
+
+/* Aperçu du chef d'orchestre : cases et liens proposés, cases à retirer. */
+.react-flow__node-ghost { pointer-events: none; }
+.ghost-node {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--text);
+  opacity: 0.72;
+  font-size: 12px;
+  animation: ghost-in 260ms ease-out;
+}
+@keyframes ghost-in { from { opacity: 0; transform: scale(0.97); } }
+.ghost-node p { margin: 0; color: var(--text-muted); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ghost-header { display: flex; align-items: center; gap: 8px; }
+.ghost-header strong { font-size: 13px; }
+.ghost-type { color: var(--text-muted); }
+.ghost-badge {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+}
+.ghost-label { display: block; color: var(--text); font-weight: 600; }
+.ghost-branch { display: flex; align-items: center; gap: 5px; }
+.ghost-sticky { border-color: var(--warning); background: color-mix(in srgb, var(--note-bg) 55%, transparent); color: var(--note-text); }
+.ghost-sticky p { color: var(--note-text); }
+.ghost-sticky .ghost-badge { align-self: flex-end; margin: 0; background: var(--warning); }
+.ghost-move { align-items: center; justify-content: center; border-color: var(--text-muted); background: transparent; color: var(--text-muted); }
+.ghost-edge { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 8 6; animation: link-flow 0.8s linear infinite; }
+.ghost-arrow { fill: none; stroke-dasharray: none; animation: none; }
+.react-flow__node.pending-removal { opacity: 0.45; }
+.react-flow__node.pending-removal::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border: 2px dashed var(--danger);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+}
+.conductor-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.conductor-plan-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.conductor-plan-title svg { color: var(--accent); }
+.conductor-plan-list { max-height: 140px; margin: 0; padding-left: 18px; overflow-y: auto; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.conductor-plan-actions { display: flex; align-items: center; gap: 8px; }
+.conductor-plan-actions .hint { flex: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .ghost-node, .ghost-edge { animation: none; }
+}
+
+/* Construction en cours : cases nouvelles cachées, puis qui apparaissent ensemble ; encart au centre de la vue. */
+.react-flow__node.conductor-hidden, .react-flow__edge.conductor-hidden { opacity: 0; pointer-events: none; }
+.react-flow__node.conductor-appear { animation: conductor-appear 600ms ease-out; }
+@keyframes conductor-appear { from { opacity: 0; transform: scale(0.96); } }
+.conductor-composing {
+  position: absolute;
+  left: 50%;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: min(420px, calc(100% - 40px));
+  padding: 18px 26px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 10px 30px var(--shadow-lifted);
+  color: var(--text);
+  text-align: center;
+  pointer-events: none;
+  animation: fade-in 200ms ease-out;
+}
+.conductor-composing-icon { color: var(--accent); animation: conductor-wave 1.6s ease-in-out infinite; }
+@keyframes conductor-wave { 50% { transform: rotate(-14deg) scale(1.08); } }
+.conductor-composing strong { font-size: 14px; }
+.conductor-composing span { color: var(--text-muted); font-size: 12px; }
+/* Réponses du chef d'orchestre en Markdown. */
+.conductor-msg.assistant { white-space: normal; }
+.markdown > * { margin: 0 0 6px; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown ul, .markdown ol { padding-left: 20px; }
+.markdown li { margin: 2px 0; }
+.markdown .md-heading { font-weight: 600; }
+.markdown code { padding: 1px 4px; border-radius: 4px; background: var(--surface-2); font-family: var(--font-mono); font-size: 12px; }
+.markdown pre { padding: 8px 10px; overflow-x: auto; border-radius: var(--radius-sm); background: var(--terminal-bg); color: var(--terminal-fg); }
+.markdown pre code { padding: 0; background: none; }
+.conductor-msg.live::after { content: none; }
+.conductor-msg.live .markdown > :last-child::after { content: '▍'; color: var(--accent); animation: conductor-blink 1s steps(2) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node.conductor-appear, .conductor-composing, .conductor-composing-icon { animation: none; }
+}

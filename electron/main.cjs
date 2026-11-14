@@ -270,6 +270,7 @@ conductor.init({
   isRepo: gitHandlers.repoRoot,
   logEntries: activityLog.list,
   log: activityLog.add,
+  onPending: (caller, items) => conductorSession.onPending(caller, items),
 });
 
 // Session cachée du chef d'orchestre, une par tableau, lancée à chaque message de la bulle.
@@ -284,10 +285,15 @@ conductorSession.init({
   closeSession: conductor.closeSession,
   boardExists: (boardId) => workspaceStore.get().boards.some((b) => b.id === boardId),
   emit: (boardId, event) => send('conductorSession:event', boardId, event),
+  pendingOf: conductor.pendingOf,
+  commit: conductor.commit,
+  discard: conductor.discard,
 });
 ipcMain.handle('conductorSession:get', (_e, boardId) => conductorSession.get(boardId));
 ipcMain.handle('conductorSession:send', (_e, boardId, message, folder) => conductorSession.send(boardId, message, folder));
 ipcMain.handle('conductorSession:reset', (_e, boardId) => conductorSession.reset(boardId));
+ipcMain.handle('conductorSession:approve', (_e, boardId) => conductorSession.approve(boardId));
+ipcMain.handle('conductorSession:cancel', (_e, boardId) => conductorSession.cancel(boardId));
 ipcMain.on('conductorSession:stop', (_e, boardId) => conductorSession.stop(boardId));
 
 // Outils du serveur MCP d'une case : lien Note, lien Terminal, Délégation, ou chef d'orchestre.

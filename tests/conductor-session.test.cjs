@@ -41,7 +41,13 @@ function setup(t) {
     closeSession: (id) => sessions.push({ id, closed: true }),
     boardExists: (id) => id === 'main',
     emit: (boardId, event) => events.push({ boardId, ...event }),
+    pendingOf: () => pending.list,
+    commit: async () => { const done = pending.list.map((p) => ({ summary: p.summary, text: p.fail ? 'refused' : 'ok', isError: Boolean(p.fail) })); pending.list = []; return done; },
+    discard: () => { pending.list = []; },
   };
+  const pending = { list: [] };
+  const settings = {};
+  deps.settings = () => settings;
   const create = () => {
     const session = load('conductorSession.cjs', { './i18n.cjs': i18n });
     session.init(deps);
@@ -56,7 +62,7 @@ function setup(t) {
     throw new Error('the conductor run did not end');
   };
   const calls = () => (fs.existsSync(argsLog) ? fs.readFileSync(argsLog, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
-  return { dir, folder, session, create, events, sessions, idle, calls };
+  return { dir, folder, session, create, events, sessions, idle, calls, pending, settings };
 }
 
 test('a message runs claude -p with only the conductor tools, streams its text and keeps the session', async (t) => {
@@ -77,7 +83,7 @@ test('a message runs claude -p with only the conductor tools, streams its text a
   assert.equal(mcp.env.ORCHESTRA_TOOLSET, 'conductor');
   assert.equal(mcp.env.ORCHESTRA_URL, 'http://127.0.0.1:9/tool/conductor-main?t=x');
   assert.match(fs.readFileSync(args[args.indexOf('--append-system-prompt-file') + 1], 'utf8'), /You are the conductor of Orchestra/);
-  assert.deepEqual(s.sessions[0], { id: 'conductor-main', boardId: 'main', folder: s.folder, preview: false });
+  assert.deepEqual(s.sessions[0], { id: 'conductor-main', boardId: 'main', folder: s.folder, preview: true }, 'preview by default');
 
   const { history } = s.session.get('main');
   assert.deepEqual(history.map((e) => e.kind), ['user', 'assistant']);
@@ -150,4 +156,56 @@ test('tool calls are shown with their names and marked done or failed', async ()
   assert.equal(entry.error, 'limit reached');
   assert.equal(run.live, '');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('preview: approve, cancel and correction are applied and told to the conductor at the next message', async (t) => {
+  const s = setup(t);
+  const last = () => s.session.get('main').history.at(-1);
+  const reply = () => s.session.get('main').history.filter((e) => e.kind === 'assistant').at(-1).text;
+  assert.match((await s.session.approve('main')).error, /nothingPending/);
+  assert.match(s.session.cancel('main').error, /nothingPending/);
+
+  // Valider : résultats dans la conversation, échecs détaillés, et note pour le chef d'orchestre.
+  s.pending.list = [{ summary: 'Agent A' }, { summary: 'Link A → B', fail: true }];
+  assert.deepEqual(s.session.get('main').pending.length, 2);
+  assert.deepEqual(await s.session.approve('main'), { ok: true });
+  const history = s.session.get('main').history;
+  assert.match(history.at(-2).text, /conductorSession.applied 1 2/);
+  assert.match(history.at(-1).text, /Link A → B : refused/);
+  await s.session.send('main', 'Next', s.folder);
+  await s.idle();
+  assert.match(reply(), /^Fait : \[Orchestra\] The user approved your plan. Applied, except: Link A → B \(refused\)\.\n\nNext$/);
+
+  // Annuler.
+  s.pending.list = [{ summary: 'Agent C' }];
+  assert.deepEqual(s.session.cancel('main'), { ok: true });
+  assert.match(last().text, /conductorSession.cancelled/);
+  assert.deepEqual(s.pending.list, []);
+  await s.session.send('main', 'Other', s.folder);
+  await s.idle();
+  assert.match(reply(), /cancelled your proposed plan: nothing was applied\.\n\nOther$/);
+
+  // Un message pendant l'aperçu = une correction : plan effacé, nouveau plan demandé.
+  s.pending.list = [{ summary: 'Agent D' }];
+  await s.session.send('main', 'Use Codex instead', s.folder);
+  assert.deepEqual(s.pending.list, []);
+  await s.idle();
+  assert.match(reply(), /rejected your proposed plan .*\n\nUse Codex instead$/);
+  // La note ne sert qu'une fois.
+  await s.session.send('main', 'Plain', s.folder);
+  await s.idle();
+  assert.equal(reply(), 'Fait : Plain');
+
+  // Mode auto : pas d'aperçu.
+  s.settings.autoApply = true;
+  await s.session.send('main', 'Auto', s.folder);
+  await s.idle();
+  assert.equal(s.sessions.filter((e) => !e.closed).at(-1).preview, false);
+  // Valider pendant une exécution : refusé.
+  s.pending.list = [{ summary: 'E' }];
+  await s.session.send('main', 'SLOW', s.folder);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.match((await s.session.approve('main')).error, /busy/);
+  s.session.stop('main');
+  await s.idle();
 });
