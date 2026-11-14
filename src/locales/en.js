@@ -562,6 +562,7 @@ export default {
   'diag.quietHint': 'A missing or old hook does not necessarily mean a failure: the agent may simply be idle, or its session may not have started yet.',
   'diag.secondsAgo': ({ n }) => `${n} s ago`,
   'log.kind.note': "Note",
+  'log.kind.conductor': 'Conductor',
   'usage.toggle': ({ open }) => (open ? 'Hide usage (Ctrl+Shift+U)' : 'Show agent usage (Ctrl+Shift+U)'),
   'usage.refresh': 'Refresh (runs /usage in the background)',
   'usage.reading': 'Reading…',
@@ -706,6 +707,10 @@ export default {
   'general.notifyDesktop': "Windows notification when the app isn't in the foreground",
   'general.trustFolders': 'Trust folders opened by Orchestra',
   'general.trustHint': 'Claude Code no longer asks "Do you trust the files in this folder?" (setting saved in ~/.claude.json).',
+  'general.conductor': 'Conductor',
+  'general.conductorMaxAgents': 'Agents the conductor can create per board',
+  'general.conductorTileTools': 'Give the conductor tools to Claude Code tiles (test)',
+  'general.conductorHint': 'To try the conductor from a normal tile: check this box, then relaunch a Claude Code tile. It can then create agents, links and sticky notes on its board, in its folder. Tiles created by the conductor never get these tools.',
 
   // Raccourcis
   'shortcuts.everywhere': 'Everywhere',

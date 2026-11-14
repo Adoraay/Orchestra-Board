@@ -159,6 +159,16 @@ contextBridge.exposeInMainWorld('notes', {
   },
 });
 
+// Chef d'orchestre (PLAN.md §3.25) : changement de la map demandé par Node, et réponse une fois appliqué.
+contextBridge.exposeInMainWorld('conductor', {
+  onOp: (cb) => {
+    const listener = (_e, request) => cb(request);
+    ipcRenderer.on('conductor:op', listener);
+    return () => ipcRenderer.removeListener('conductor:op', listener);
+  },
+  done: (reqId, response) => ipcRenderer.send('conductor:done', reqId, response),
+});
+
 // Journal des échanges entre agents (PLAN.md §3.18).
 contextBridge.exposeInMainWorld('activityLog', {
   export: (filter) => ipcRenderer.invoke('log:export', filter),

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight, Ban, Check, CircleSlash, CornerDownLeft, Download, FilePen, Filter, Network, OctagonX, Send, SquareTerminal,
-  StickyNote, TextQuote, Trash2, X,
+  StickyNote, TextQuote, Trash2, WandSparkles, X,
 } from 'lucide-react';
 import PendingMessage from './PendingMessage.jsx';
 import LogExportDialog from './LogExportDialog.jsx';
@@ -11,7 +11,7 @@ import useT from '../hooks/useT.js';
 
 const KIND_ICONS = {
   relay: Send, delegate: Network, draft: FilePen, delivered: Check, reply: CornerDownLeft, cancelled: CircleSlash,
-  command: SquareTerminal, output: TextQuote, interrupt: OctagonX, refused: Ban, note: StickyNote,
+  command: SquareTerminal, output: TextQuote, interrupt: OctagonX, refused: Ban, note: StickyNote, conductor: WandSparkles,
 };
 const KINDS = Object.keys(KIND_ICONS);
 const MESSAGE_KINDS = ['relay', 'delegate', 'draft'];

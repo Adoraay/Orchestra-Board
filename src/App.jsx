@@ -60,6 +60,7 @@ import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useAppShortcuts from './hooks/useAppShortcuts.js';
 import useBoards from './hooks/useBoards.js';
 import useBoardOps, { NODE_SIZE } from './hooks/useBoardOps.js';
+import { useConductorOps, useConductorRouter } from './hooks/useConductorBridge.js';
 import useT from './hooks/useT.js';
 import { numberedName } from './lib/boardOps.js';
 import { PANELS, draggedPanel } from './lib/panels.js';
@@ -94,6 +95,7 @@ export default function App() {
 function Workspace({ saved }) {
   const boards = useBoards(saved);
   const { activeId, content, updateContent } = boards;
+  const conductor = useConductorRouter(boards);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -250,6 +252,8 @@ function Workspace({ saved }) {
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
           <Board
+            boardId={activeId}
+            conductor={conductor}
             initial={content[activeId]}
             onChange={onBoardChange}
             focusRequest={focusRequest}
@@ -298,13 +302,13 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced }) {
+function Board({ boardId, conductor, initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
   const [formationRequest, setFormationRequest] = useState(null);
   const [formationPreview, setFormationPreview] = useState(null);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
   const ops = useBoardOps({ setNodes, setEdges });
   useEffect(() => {
     if (!formationRequest) return;
@@ -470,6 +474,15 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   useEffect(() => {
     onChange({ nodes, edges, strokes, groups: liveGroups, viewport });
   }, [nodes, edges, strokes, liveGroups, viewport, onChange]);
+
+  // Changements demandés par le chef d'orchestre (après l'effet ci-dessus : sa sauvegarde lit ce contenu).
+  // Une case sans place indiquée sur une map vide va au centre de la vue.
+  const boardRef = useRef(null);
+  const viewCenter = useCallback(() => {
+    const rect = boardRef.current?.getBoundingClientRect();
+    return rect ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }) : { x: 0, y: 0 };
+  }, [screenToFlowPosition]);
+  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, origin: viewCenter });
 
   // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
   // only : un seul élément, depuis son menu du clic droit (la sélection n'est alors pas touchée).
@@ -670,7 +683,6 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   );
 
   // « Lancer un agent ici » (clic droit dans l'explorateur) : nouvelle case au centre de la vue.
-  const boardRef = useRef(null);
   useGridGlow(boardRef, glow && Boolean(GRID_VARIANTS[grid]), settings.appearance.glowSize);
   useEffect(() => {
     if (!launchRequest || !boardRef.current) return;

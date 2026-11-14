@@ -13,10 +13,12 @@ const claudeTrust = require('./claudeTrust.cjs');
 const codexProfile = require('./codexProfile.cjs');
 const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
+const { randomUUID } = require('crypto');
 const linkRelay = require('./linkRelay.cjs');
 const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
+const conductor = require('./conductor.cjs');
 const activityLog = require('./activityLog.cjs');
 const diagnostics = require('./diagnostics.cjs');
 const tasksHandlers = require('./tasksHandlers.cjs');
@@ -180,7 +182,7 @@ function notifyFinished(id, info) {
 agentStatus.init(sendStatus, notifyFinished);
 // Tableau de chaque case (filtres du journal), mis à jour à chaque sauvegarde de workspace.json.
 let caseBoards = new Map();
-const caseName = (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id;
+const caseName = (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || conductor.nameOf(id) || id;
 activityLog.init({
   nameOf: caseName,
   boardOf: (id) => caseBoards.get(id) ?? null,
@@ -231,8 +233,47 @@ noteLink.init({
   emit: emitLink,
 });
 
-// Outils du serveur MCP d'une case : lien Note, lien Terminal ou Délégation.
+// Changement de la map demandé par le chef d'orchestre : appliqué par l'interface (mêmes opérations que
+// l'utilisateur), qui répond une fois la map sauvegardée (PLAN.md §3.25).
+const OP_TIMEOUT = 15000;
+const opWaiters = new Map();
+function requestOp(boardId, op) {
+  return new Promise((resolve) => {
+    if (!win || win.isDestroyed()) return resolve({ error: 'window' });
+    const reqId = randomUUID();
+    const timer = setTimeout(() => { opWaiters.delete(reqId); resolve({ error: 'timeout' }); }, OP_TIMEOUT);
+    opWaiters.set(reqId, (response) => { clearTimeout(timer); resolve(response); });
+    send('conductor:op', { reqId, boardId, op });
+  });
+}
+ipcMain.on('conductor:done', (_e, reqId, response) => {
+  const done = opWaiters.get(reqId);
+  if (!done) return;
+  opWaiters.delete(reqId);
+  const valid = response && typeof response === 'object';
+  done({
+    id: valid && typeof response.id === 'string' ? response.id : null,
+    error: !valid ? 'invalid' : typeof response.error === 'string' ? response.error.slice(0, 200) : null,
+  });
+});
+
+conductor.init({
+  requestOp,
+  settings: () => settingsStore.load().conductor,
+  agents: () => settingsStore.load().agents,
+  info: agentStatus.info,
+  enqueue: linkRelay.enqueue,
+  buffer: ptyManager.buffer,
+  clean: terminalLink.clean,
+  ensureWorktree: gitHandlers.ensureWorktree,
+  isRepo: gitHandlers.repoRoot,
+  logEntries: activityLog.list,
+  log: activityLog.add,
+});
+
+// Outils du serveur MCP d'une case : lien Note, lien Terminal, Délégation, ou chef d'orchestre.
 function callTool(caller, name, args, signal) {
+  if (conductor.isTool(name)) return conductor.callTool(caller, name, args);
   if (noteLink.isTool(name)) return noteLink.callTool(caller, name, args);
   if (!terminalLink.isTool(name)) return delegation.callTool(caller, name, args, signal);
   if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
@@ -256,6 +297,7 @@ function trackSession(id, payload) {
 // (même format pour Claude Code et Codex). Ce contexte n'est pas affiché dans le terminal.
 function onHook(id, payload) {
   const turnOwner = linkRelay.onHook(id, payload);
+  conductor.onHook(id, payload);
   taskSequences?.onHook(id, payload);
   diagnostics.onHook(id, payload.hook_event_name);
   try { trackSession(id, payload); }
@@ -307,7 +349,8 @@ function buildCommand(id, agent, resume, model) {
     if (agent.hooks === 'codex') command += ` -m ${model}`;
   }
   if (agent.hooks === 'claude') {
-    command += ` --settings "${claudeHooks.writeSettings(id)}" --mcp-config "${claudeHooks.writeMcpConfig(id)}"`;
+    const options = { conductor: conductor.tileTools(id) };
+    command += ` --settings "${claudeHooks.writeSettings(id, options)}" --mcp-config "${claudeHooks.writeMcpConfig(id, options)}"`;
   }
   return command;
 }
@@ -350,6 +393,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
       send(`pty:data:${id}`, data);
     },
     (id, code) => {
+      conductor.onExit(id);
       agentStatus.unregister(id);
       caseAgents.delete(id);
       diagnostics.forget(id);
@@ -388,6 +432,7 @@ ipcMain.on('pty:rename', (_e, id, name) => {
   send('agent:status', id, agentStatus.info(id));
 });
 ipcMain.on('pty:kill', (_e, id) => {
+  conductor.onExit(id);
   ptyManager.kill(id);
   agentStatus.unregister(id);
   caseAgents.delete(id);
@@ -479,6 +524,7 @@ workspaceStore.register((workspace) => {
   roleState.setWorkspace(workspace);
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
   noteLink.setWorkspace(workspace);
+  conductor.setWorkspace(workspace);
 }, () => {
   for (const id of ptyManager.ids()) {
     ptyManager.kill(id);

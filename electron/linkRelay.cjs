@@ -50,7 +50,8 @@ function pendingList() {
 }
 
 const notify = () => deps.pending(pendingList());
-const emitItem = (item, event) => { if (item.owner !== 'sequence') deps.emit(item.id, event); };
+// Un message sans lien (chef d'orchestre) n'anime aucun trait.
+const emitItem = (item, event) => { if (item.owner !== 'sequence' && item.id) deps.emit(item.id, event); };
 
 // Appelé à chaque sauvegarde de workspace.json (déjà validé), tous tableaux confondus.
 // Seuls les liens en Transmission envoient tout seuls ; la Délégation passe par les outils MCP.

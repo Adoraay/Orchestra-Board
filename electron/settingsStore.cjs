@@ -34,7 +34,11 @@ const DEFAULTS = {
   // glow : points de la grille colorés autour de la souris, glowColor null = couleur d'accent, glowSize = rayon en px.
   appearance: { theme: 'standard', accent: null, terminalFontSize: 13, grid: 'dots', glow: true, glowColor: null, glowSize: 110, expandToolbarOnHover: false },
   general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true, pinned: {} },
+  // Chef d'orchestre (PLAN.md §3.25) : agents qu'il peut créer par tableau ; tileTools = ses outils donnés aussi
+  // aux cases Claude Code (pour le tester depuis une case normale).
+  conductor: { maxAgents: 6, tileTools: false },
 };
+const MAX_CONDUCTOR_AGENTS = 20;
 
 const THEMES = ['standard', 'light', 'chatgpt', 'gemini', 'vscode', 'github', 'dracula', 'nord'];
 const GRIDS = ['dots', 'lines', 'none'];
@@ -111,6 +115,8 @@ function sanitizeRoot(rootPath) {
 function sanitize(input) {
   const a = { ...DEFAULTS.appearance, ...(input?.appearance ?? {}) };
   const g = { ...DEFAULTS.general, ...(input?.general ?? {}) };
+  const c = { ...DEFAULTS.conductor, ...(input?.conductor ?? {}) };
+  const maxAgents = Number(c.maxAgents);
   const fontSize = Number(a.terminalFontSize);
   const glowSize = Number(a.glowSize);
   const agents = sanitizeAgents(input?.agents);
@@ -144,6 +150,10 @@ function sanitize(input) {
       checkUpdates: g.checkUpdates !== false,
       pinned: Object.fromEntries(PANELS.map((panel) => [panel, g.pinned?.[panel] === true])),
     },
+    conductor: {
+      maxAgents: Number.isInteger(maxAgents) && maxAgents >= 1 && maxAgents <= MAX_CONDUCTOR_AGENTS ? maxAgents : DEFAULTS.conductor.maxAgents,
+      tileTools: c.tileTools === true,
+    },
   };
 }
 
@@ -171,4 +181,4 @@ function register() {
   ipcMain.handle('agents:catalog', () => CATALOG_AGENTS);
 }
 
-module.exports = { register, load, logosDir, CUSTOM_ID, LOGO_FILE, MODEL };
+module.exports = { register, load, logosDir, CUSTOM_ID, LOGO_FILE, MODEL, MAX_CONDUCTOR_AGENTS };

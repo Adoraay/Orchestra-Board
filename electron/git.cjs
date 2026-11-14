@@ -96,7 +96,8 @@ async function listBranches(cwd, fetch) {
 
 // Dossier du worktree de la branche, créé si besoin dans <repo>-worktrees/<branche>.
 // Une branche distante sans branche locale devient une branche locale qui la suit.
-async function ensureWorktree(cwd, branch) {
+// create : une branche absente est créée depuis HEAD (chef d'orchestre, agents qui codent en parallèle).
+async function ensureWorktree(cwd, branch, { create = false } = {}) {
   if (typeof branch !== 'string' || !branch || branch.length > MAX_BRANCH) return { error: t('git.branchNotFound') };
   const { root, error } = await repoRoot(cwd);
   if (error) return { error };
@@ -105,10 +106,16 @@ async function ensureWorktree(cwd, branch) {
     const { local, remote } = await refs(root);
     let name = branch;
     let upstream = null;
+    let fresh = false;
     if (!local.includes(branch)) {
-      if (!remote.includes(branch)) return { error: t('git.branchNotFound') };
-      name = localNameOf(branch);
-      if (!local.includes(name)) upstream = branch;
+      if (create && !remote.includes(branch)) {
+        try { await git(root, ['check-ref-format', '--branch', branch]); } catch { return { error: t('git.badBranchName') }; }
+        fresh = true;
+      } else if (!remote.includes(branch)) return { error: t('git.branchNotFound') };
+      if (!fresh) {
+        name = localNameOf(branch);
+        if (!local.includes(name)) upstream = branch;
+      }
     }
 
     // Une branche déjà ouverte dans un worktree (y compris le dépôt principal) : on le réutilise.
@@ -118,7 +125,7 @@ async function ensureWorktree(cwd, branch) {
 
     const target = path.join(path.dirname(root), `${path.basename(root)}-worktrees`, ...name.split('/'));
     if (fs.existsSync(target) && fs.readdirSync(target).length) return { error: t('git.folderExists', { path: target }) };
-    const args = upstream ? ['worktree', 'add', '--track', '-b', name, target, upstream] : ['worktree', 'add', target, name];
+    const args = fresh ? ['worktree', 'add', '-b', name, target] : upstream ? ['worktree', 'add', '--track', '-b', name, target, upstream] : ['worktree', 'add', target, name];
     await git(root, args, 120000);
     return { path: target, branch: name };
   } catch (error) {
@@ -272,4 +279,4 @@ function register(getWorkspace = () => ({ boards: [] })) {
   ipcMain.handle('git:openInEditor', (_e, cwd, file) => openInEditor(cwd, file));
 }
 
-module.exports = { register };
+module.exports = { register, ensureWorktree, repoRoot };

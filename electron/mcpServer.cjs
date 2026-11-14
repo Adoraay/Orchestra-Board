@@ -145,6 +145,168 @@ const TOOLS = [
   },
 ];
 
+// Outils du chef d'orchestre (PLAN.md §3.25) : construire et diriger le tableau. Servis seulement si
+// ORCHESTRA_TOOLSET le demande ('conductor' : eux seuls, pour la session cachée ; 'all' : en plus des
+// outils d'une case, pour la tester depuis une case Claude Code). Orchestra revérifie l'appelant.
+const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const ADD = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+const CHANGE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+const REF = (what) => ({ type: 'string', description: `${what}: its id or its exact name, as given by read_board (a temporary pending-N id works too).` });
+const NEAR = REF('Existing tile to place the new one near (below it). Optional: without it Orchestra finds a free spot');
+const CONDUCTOR_TOOLS = [
+  {
+    name: 'read_board',
+    annotations: READ,
+    description:
+      'Returns the current Orchestra board as JSON: agents and terminals (id, name, type, status, folder, branch, role), sticky notes, ' +
+      'links (from, to, mode, instruction, turns), pending changes waiting for the user\'s approval, and the last exchanges of the log. ' +
+      'Call it first, and again before changing something you did not create.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'create_agent',
+    annotations: ADD,
+    description:
+      'Adds a tile to the board: a Claude Code or Codex agent (each in its own visible terminal), or a plain terminal. ' +
+      'role = lasting instructions given to the agent at the start of its session (who it is, what it must and must not do). ' +
+      'prompt = its first task, sent once it has started; write it self-contained, the agent does not see your conversation. ' +
+      'Agents that edit code in parallel must not share a folder: give each one its own worktree_branch. ' +
+      'Returns the new id, usable at once by create_link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['claude', 'codex', 'terminal'] },
+        name: { type: 'string', description: 'Short unique tile name (40 characters max), e.g. "Backend". Other agents address it by this name.' },
+        role: { type: 'string', description: 'Role of the agent (2,000 characters max). Claude and Codex only.' },
+        prompt: { type: 'string', description: 'First message sent to the agent. Claude and Codex only.' },
+        folder: { type: 'string', description: 'Existing subfolder of the working folder (relative path). Default: the working folder.' },
+        worktree_branch: { type: 'string', description: 'Run the agent in a Git worktree of this branch, created from HEAD if it does not exist (e.g. "maestro/backend"). The folder must be in a Git repository.' },
+        near: NEAR,
+      },
+      required: ['type'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_link',
+    annotations: ADD,
+    description:
+      'Links two tiles. Between agents: mode "delegate" lets the source agent talk to the target itself with its own tools ' +
+      '(list_agents, send_to_agent, wait_for_replies) and get its reply back; mode "relay" sends the source\'s final answer to the target ' +
+      'automatically each time the source finishes, with the instruction ({response} is replaced by that answer). ' +
+      'An agent linked to a terminal can run commands in it; an agent linked to a sticky note can read and rewrite it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from: REF('Source tile'),
+        to: REF('Target tile'),
+        mode: { type: 'string', enum: ['delegate', 'relay'], description: 'Between two agents. Default: delegate. Ignored for terminal and sticky-note links.' },
+        instruction: { type: 'string', description: 'Relay only: message sent to the target with the source\'s answer, e.g. "Review this code: {response}".' },
+        max_turns: { type: 'integer', minimum: 1, maximum: 20, description: 'How many times the link can be used in one chain (default 3), against endless loops.' },
+        bidirectional: { type: 'boolean', description: 'Both directions (default false).' },
+      },
+      required: ['from', 'to'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_link',
+    annotations: CHANGE,
+    description: 'Changes a link: its instruction, turn limit, mode, direction or whether it is enabled.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        link: { type: 'string', description: 'Link id from read_board. Or give from and to instead.' },
+        from: REF('Source tile'),
+        to: REF('Target tile'),
+        mode: { type: 'string', enum: ['delegate', 'relay'] },
+        instruction: { type: 'string' },
+        max_turns: { type: 'integer', minimum: 1, maximum: 20 },
+        bidirectional: { type: 'boolean' },
+        enabled: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'remove_link',
+    annotations: CHANGE,
+    description: 'Removes a link between two tiles.',
+    inputSchema: {
+      type: 'object',
+      properties: { link: { type: 'string', description: 'Link id. Or give from and to instead.' }, from: REF('Source tile'), to: REF('Target tile') },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_sticky',
+    annotations: ADD,
+    description:
+      'Adds a sticky note to the board, e.g. to write the plan. Status lines are shown with icons: "- [x] Done", "- [~] In progress", "- [ ] To do". ' +
+      'Link an agent to it (create_link) if that agent should update it.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' }, name: { type: 'string', description: 'Short unique name, e.g. "Plan".' }, near: NEAR },
+      required: ['text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_sticky',
+    annotations: CHANGE,
+    description: 'Replaces the whole text of a sticky note. The user may have edited it: read_board first.',
+    inputSchema: {
+      type: 'object',
+      properties: { sticky: REF('Sticky note'), text: { type: 'string' } },
+      required: ['sticky', 'text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'set_role',
+    annotations: CHANGE,
+    description: 'Sets the role of a Claude or Codex agent. A running agent applies it from its next session.',
+    inputSchema: {
+      type: 'object',
+      properties: { agent: REF('Agent'), role: { type: 'string', description: 'New role; empty to remove it.' } },
+      required: ['agent', 'role'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'send_to',
+    annotations: ADD,
+    description:
+      'Sends a message to a running Claude or Codex agent, as if the user typed it (queued until the agent is free). ' +
+      'Use it to give a new task or to unblock an agent. Its answer is not returned to you: check later with read_board or read_agent_output.',
+    inputSchema: {
+      type: 'object',
+      properties: { agent: REF('Agent'), message: { type: 'string', description: 'Self-contained message.' } },
+      required: ['agent', 'message'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'remove_agent',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    description: 'Closes an agent or terminal tile and removes it with its links. Refused while the agent is working.',
+    inputSchema: { type: 'object', properties: { agent: REF('Agent or terminal') }, required: ['agent'], additionalProperties: false },
+  },
+  {
+    name: 'read_agent_output',
+    annotations: READ,
+    description: 'Returns the last lines shown in an agent\'s or terminal\'s screen (ANSI codes removed, 80 lines at most), e.g. to see why it is stuck.',
+    inputSchema: {
+      type: 'object',
+      properties: { agent: REF('Agent or terminal'), lines: { type: 'integer', minimum: 1, maximum: 80, description: 'Default 40.' } },
+      required: ['agent'],
+      additionalProperties: false,
+    },
+  },
+];
+const TOOLSET = process.env.ORCHESTRA_TOOLSET;
+const SERVED = TOOLSET === 'conductor' ? CONDUCTOR_TOOLS : TOOLSET === 'all' ? [...TOOLS, ...CONDUCTOR_TOOLS] : TOOLS;
+
 function callOrchestra(name, args) {
   return new Promise((resolve) => {
     const failed = () => resolve({ text: 'Orchestra is not responding (the app may have been closed).', isError: true });
@@ -187,7 +349,7 @@ async function handle(message) {
     case 'ping':
       return send({ id, result: {} });
     case 'tools/list':
-      return send({ id, result: { tools: TOOLS } });
+      return send({ id, result: { tools: SERVED } });
     case 'tools/call': {
       const { text, isError } = await callOrchestra(params?.name, params?.arguments ?? {});
       return send({ id, result: { content: [{ type: 'text', text }], isError } });

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 const { hookUrl, toolUrl } = require('./hookServer.cjs');
+const { TOOLS: CONDUCTOR_TOOLS } = require('./conductor.cjs');
 
 // Fichiers propres à chaque case Claude Code :
 // - <id>.json, passé avec `claude --settings` : hooks qui préviennent Orchestra via curl (fourni avec
@@ -17,13 +18,15 @@ const dir = () => path.join(app.getPath('userData'), 'hooks');
 const fileFor = (id) => path.join(dir(), `${id}.json`);
 const mcpFileFor = (id) => path.join(dir(), `${id}.mcp.json`);
 
-function writeSettings(id) {
+// conductor : la case reçoit aussi les outils du chef d'orchestre (réglage de test, PLAN.md §3.25).
+function writeSettings(id, { conductor = false } = {}) {
   const command = `curl -s -m 3 -X POST -H "Content-Type: application/json" --data-binary @- "${hookUrl(id)}"`;
   const hook = { hooks: [{ type: 'command', command, timeout: 5 }] };
   const hooks = Object.fromEntries(EVENTS.map((event) => [event, [event === 'PostToolUse' ? { matcher: '*', ...hook } : hook]]));
 
   fs.mkdirSync(dir(), { recursive: true });
-  fs.writeFileSync(fileFor(id), JSON.stringify({ hooks, permissions: { allow: ORCHESTRA_TOOLS } }, null, 2));
+  const allow = conductor ? [...ORCHESTRA_TOOLS, ...CONDUCTOR_TOOLS.map((tool) => `mcp__orchestra__${tool}`)] : ORCHESTRA_TOOLS;
+  fs.writeFileSync(fileFor(id), JSON.stringify({ hooks, permissions: { allow } }, null, 2));
   return fileFor(id);
 }
 
@@ -31,12 +34,12 @@ function writeSettings(id) {
 // Dans l'app empaquetée, il est hors de l'archive (app.asar.unpacked) : c'est Claude qui le lance.
 const mcpServerPath = () => path.join(__dirname.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked'), 'mcpServer.cjs');
 
-function writeMcpConfig(id) {
+function writeMcpConfig(id, { conductor = false } = {}) {
   const server = {
     type: 'stdio',
     command: process.execPath,
     args: [mcpServerPath()],
-    env: { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_URL: toolUrl(id) },
+    env: { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_URL: toolUrl(id), ...(conductor && { ORCHESTRA_TOOLSET: 'all' }) },
   };
   fs.mkdirSync(dir(), { recursive: true });
   fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { orchestra: server } }, null, 2));

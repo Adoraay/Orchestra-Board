@@ -60,6 +60,12 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode === 'conductor') {
+        await require('./ui-conductor.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI conductor: tools create, link, update and remove tiles on the live map, log them and open the right board');
+        app.quit();
+        return;
+      }
       if (mode === 'board-ops') {
         await require('./ui-board-ops.cjs')({ win, evaluate, until, sleep, data, errors });
         console.log('PASS UI board-ops: link tool, link panel, notes, texts and deletion through shared board operations');

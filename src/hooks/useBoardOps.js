@@ -19,9 +19,9 @@ export default function useBoardOps({ setNodes, setEdges }) {
   const models = settings.models;
 
   // Nouvelle case terminal centrée sur « center » (coordonnées de la map) ; data complète celle par défaut.
+  // id : donné par Node pour une case du chef d'orchestre (il doit la connaître avant son lancement).
   const addTerminal = useCallback(
-    ({ agentId, cwd, center, data = {} }) => {
-      const id = crypto.randomUUID();
+    ({ id = crypto.randomUUID(), agentId, cwd, center, data = {} }) => {
       setNodes((nds) =>
         nds.concat({
           id,
@@ -37,21 +37,21 @@ export default function useBoardOps({ setNodes, setEdges }) {
     [setNodes, agentById, models],
   );
 
-  // Post-it ou texte posé en « point » (coordonnées de la map), seul choisi ; autoEdit = saisie ouverte.
+  // Post-it ou texte posé en « point » (coordonnées de la map) ; autoEdit = saisie ouverte, select = seul choisi.
   const addAnnotation = useCallback(
-    ({ type, point, text = '', autoEdit = true }) => {
+    ({ type, point, text = '', label, autoEdit = true, select = true }) => {
       const id = crypto.randomUUID();
       const note = type === 'note';
       setNodes((nds) =>
         nds
-          .map((n) => (n.selected ? { ...n, selected: false } : n))
+          .map((n) => (select && n.selected ? { ...n, selected: false } : n))
           .concat({
             id,
             type,
             position: note ? { x: point.x - NOTE_SIZE.width / 2, y: point.y - NOTE_SIZE.height / 2 } : { x: point.x, y: point.y - 14 },
             style: note ? { ...NOTE_SIZE } : undefined,
-            selected: true,
-            data: { text, ...(autoEdit && { autoEdit: true }), ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
+            selected: select,
+            data: { text, ...(autoEdit && { autoEdit: true }), ...(note && { label: label || numberedName(t('note.defaultName'), nds) }) },
           }),
       );
       return id;
@@ -60,16 +60,17 @@ export default function useBoardOps({ setNodes, setEdges }) {
   );
 
   // Lien entre deux cases selon linkRule (Note, Terminal ou type par défaut). Un post-it relié reçoit un nom.
+  // data : réglages du lien (chef d'orchestre) ; data.mode remplace le type par défaut entre deux agents.
   const addLink = useCallback(
-    (fromId, toId) => {
+    (fromId, toId, data = {}) => {
       const nodes = getNodes();
-      const rule = linkRule(nodes.find((n) => n.id === fromId), nodes.find((n) => n.id === toId), linkMode);
+      const rule = linkRule(nodes.find((n) => n.id === fromId), nodes.find((n) => n.id === toId), data.mode ?? linkMode);
       if (!rule) return null;
       if (rule.mode === 'note' && !nodes.find((n) => n.id === rule.target).data.label) {
         setNodes((nds) => nds.map((n) => (n.id === rule.target ? { ...n, data: { ...n.data, label: numberedName(t('note.defaultName'), nds) } } : n)));
       }
       const id = edgeId(rule.source, rule.target);
-      setEdges((eds) => addEdge({ id, source: rule.source, target: rule.target, type: 'floating', data: { ...DEFAULT_LINK, mode: rule.mode } }, eds));
+      setEdges((eds) => addEdge({ id, source: rule.source, target: rule.target, type: 'floating', data: { ...DEFAULT_LINK, ...data, mode: rule.mode } }, eds));
       return id;
     },
     [getNodes, setNodes, setEdges, linkMode, t],

@@ -561,6 +561,7 @@ export default {
   'diag.quietHint': 'Un hook absent ou ancien n’est pas forcément une panne : l’agent est peut-être simplement inactif, ou sa session n’a pas encore démarré.',
   'diag.secondsAgo': ({ n }) => `il y a ${n} s`,
   'log.kind.note': "Note",
+  'log.kind.conductor': "Chef d'orchestre",
   'usage.toggle': ({ open }) => (open ? "Masquer l'utilisation (Ctrl+Maj+U)" : "Afficher l'utilisation des agents (Ctrl+Maj+U)"),
   'usage.refresh': 'Mettre à jour (lance /usage en fond)',
   'usage.reading': 'Lecture…',
@@ -708,6 +709,10 @@ export default {
   'general.notifyDesktop': "Notification Windows quand l'app n'est pas au premier plan",
   'general.trustFolders': 'Faire confiance aux dossiers ouverts par Orchestra',
   'general.trustHint': 'Claude Code ne demande plus « Do you trust the files in this folder? » (réglage enregistré dans ~/.claude.json).',
+  'general.conductor': "Chef d'orchestre",
+  'general.conductorMaxAgents': "Agents que le chef d'orchestre peut créer par tableau",
+  'general.conductorTileTools': "Donner les outils du chef d'orchestre aux cases Claude Code (test)",
+  'general.conductorHint': "Pour essayer le chef d'orchestre depuis une case normale : coche la case, puis relance une case Claude Code. Elle peut alors créer des agents, des liens et des post-it sur son tableau, dans son dossier. Les cases créées par le chef d'orchestre n'ont jamais ces outils.",
 
   // Raccourcis
   'shortcuts.everywhere': 'Partout',

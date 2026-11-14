@@ -192,4 +192,4 @@ async function callTool(caller, name, args, signal) {
   }
 }
 
-module.exports = { init, setWorkspace, isTool, callTool, onOutput };
+module.exports = { init, setWorkspace, isTool, callTool, onOutput, clean };

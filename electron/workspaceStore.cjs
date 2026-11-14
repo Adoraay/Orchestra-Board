@@ -46,6 +46,7 @@ function sanitizeData(type, data = {}) {
         ...(role && { role }), // rôle donné à l'agent (PLAN.md §3.19)
         ...(MODEL.test(data.model ?? '') && { model: data.model }), // modèle choisi dans le dock au dépôt
         ...(sanitizeSession(data.session) && { session: sanitizeSession(data.session) }),
+        ...(data.createdBy === 'conductor' && { createdBy: 'conductor' }), // case créée par le chef d'orchestre (PLAN.md §3.25)
       };
     }
     case 'note': {

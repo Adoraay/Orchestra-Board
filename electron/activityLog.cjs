@@ -8,8 +8,9 @@ const { createReport } = require('./logReport.cjs');
 // lien Terminal, refus. Gardé en mémoire seulement : aucune conversation n'est écrite sur le disque.
 const MAX_ENTRIES = 500;
 const MAX_TEXT = 4000;
-// draft : message préparé à valider, delivered : collé et envoyé chez la cible, cancelled : annulé avant l'envoi.
-const KINDS = ['relay', 'delegate', 'draft', 'delivered', 'reply', 'cancelled', 'command', 'output', 'interrupt', 'refused', 'note'];
+// draft : message préparé à valider, delivered : collé et envoyé chez la cible, cancelled : annulé avant l'envoi,
+// conductor : action du chef d'orchestre sur le tableau (case, lien, post-it, rôle, message).
+const KINDS = ['relay', 'delegate', 'draft', 'delivered', 'reply', 'cancelled', 'command', 'output', 'interrupt', 'refused', 'note', 'conductor'];
 
 let entries = [];
 let nextId = 1;
@@ -59,4 +60,4 @@ function register(getWindow = () => null) {
   });
 }
 
-module.exports = { init, add, register };
+module.exports = { init, add, register, list: () => entries };

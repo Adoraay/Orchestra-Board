@@ -9,6 +9,8 @@ import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
 import useT from '../hooks/useT.js';
 
+const MAX_CONDUCTOR_AGENTS = 20; // = settingsStore.cjs
+
 // Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
 const SHELLS = [
   { id: 'default' },
@@ -86,6 +88,28 @@ export default function GeneralTab({ onStartTutorial, onStartSetup }) {
           {t('general.trustFolders')}
         </label>
         <span className="hint">{t('general.trustHint')}</span>
+      </div>
+
+      <div className="field">
+        <span className="field-label">{t('general.conductor')}</span>
+        <label className="field-row">
+          {t('general.conductorMaxAgents')}
+          <input
+            type="number"
+            min={1}
+            max={MAX_CONDUCTOR_AGENTS}
+            value={settings.conductor.maxAgents}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (Number.isInteger(value) && value >= 1 && value <= MAX_CONDUCTOR_AGENTS) updateSettings('conductor', { maxAgents: value });
+            }}
+          />
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={settings.conductor.tileTools} onChange={(e) => updateSettings('conductor', { tileTools: e.target.checked })} />
+          {t('general.conductorTileTools')}
+        </label>
+        <span className="hint">{t('general.conductorHint')}</span>
       </div>
 
       <div className="field">
