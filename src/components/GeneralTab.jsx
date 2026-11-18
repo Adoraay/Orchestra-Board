@@ -10,6 +10,8 @@ import { displayPath } from '../lib/paths.js';
 import useT from '../hooks/useT.js';
 
 const MAX_CONDUCTOR_AGENTS = 20; // = settingsStore.cjs
+const MODEL = /^[a-z0-9][\w.\-[\]]{0,63}$/i; // = settingsStore.cjs
+const ENGINES = ['claude', 'codex'];
 
 // Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
 const SHELLS = [
@@ -92,6 +94,28 @@ export default function GeneralTab({ onStartTutorial, onStartSetup }) {
 
       <div className="field">
         <span className="field-label">{t('general.conductor')}</span>
+        {ENGINES.map((engine) => (
+          <label key={engine} className="mode-option">
+            <input type="radio" name="conductor-engine" checked={settings.conductor.engine === engine} onChange={() => updateSettings('conductor', { engine })} />
+            <span>
+              <span className="mode-option-label">{t(`conductor.engine.${engine}`)}</span>
+              <span className="hint">{t(`general.conductorEngine.${engine}`)}</span>
+            </span>
+          </label>
+        ))}
+        <label className="field-row">
+          {t('general.conductorModel')}
+          <input
+            key={settings.conductor.model ?? ''}
+            defaultValue={settings.conductor.model ?? ''}
+            placeholder={t('general.conductorModelDefault')}
+            onBlur={(e) => {
+              const value = e.target.value.trim();
+              if (!value || MODEL.test(value)) updateSettings('conductor', { model: value || null });
+              else e.target.value = settings.conductor.model ?? '';
+            }}
+          />
+        </label>
         <label className="field-row">
           {t('general.conductorMaxAgents')}
           <input

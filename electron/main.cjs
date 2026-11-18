@@ -277,7 +277,10 @@ conductor.init({
 conductorSession.init({
   dir: () => app.getPath('userData'),
   settings: () => settingsStore.load().conductor,
-  findClaude: () => agentsHandlers.testCommand(settingsStore.load().agents.find((a) => a.id === 'claude-code')?.command ?? 'claude'),
+  findCommand: (engine) => {
+    const agentId = engine === 'codex' ? 'codex' : 'claude-code';
+    return agentsHandlers.testCommand(settingsStore.load().agents.find((a) => a.id === agentId)?.command ?? (engine === 'codex' ? 'codex' : 'claude'));
+  },
   toolUrl: hookServer.toolUrl,
   mcpServerPath: claudeHooks.mcpServerPath,
   tools: conductor.TOOLS,

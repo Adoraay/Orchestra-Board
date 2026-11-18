@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, CircleAlert, Eye, LoaderCircle, RotateCcw, Square, WandSparkles, X } from 'lucide-react';
+import { useSettings } from '../context/SettingsContext.jsx';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import useT from '../hooks/useT.js';
 import { displayPath } from '../lib/paths.js';
@@ -13,6 +14,7 @@ import MarkdownText from './MarkdownText.jsx';
 export default function ConductorBar({ boardId, session, open, onToggle, nameOf }) {
   const t = useT();
   const { activeFolder, rootPath, homeDir } = useWorkspace();
+  const { settings, updateSettings } = useSettings();
   // Sans dossier choisi dans l'explorateur : sa racine, sinon le dossier personnel.
   const folder = activeFolder ?? rootPath ?? homeDir;
   const { history, running, live, pending } = session;
@@ -76,6 +78,17 @@ export default function ConductorBar({ boardId, session, open, onToggle, nameOf 
         <WandSparkles size={15} className="conductor-icon" />
         <span className="conductor-title">{t('conductor.title')}</span>
         <span className="conductor-folder" title={t('conductor.folderHint', { path: folder ?? '' })}>{displayPath(folder, homeDir)}</span>
+        <select
+          className="conductor-engine"
+          value={settings.conductor.engine}
+          disabled={running}
+          title={t(`general.conductorEngine.${settings.conductor.engine}`)}
+          aria-label={t('conductor.engineLabel')}
+          onChange={(e) => updateSettings('conductor', { engine: e.target.value })}
+        >
+          <option value="claude">{t('conductor.engine.claude')}</option>
+          <option value="codex">{t('conductor.engine.codex')}</option>
+        </select>
         <button className="icon-button" onClick={reset} disabled={running || !history.length} title={t('conductor.reset')}><RotateCcw size={14} /></button>
         <button className="icon-button" onClick={onToggle} title={t('common.close')}><X size={15} /></button>
       </header>

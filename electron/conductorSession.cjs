@@ -4,10 +4,14 @@ const { spawn, execFile } = require('child_process');
 const { randomUUID } = require('crypto');
 const { t } = require('./i18n.cjs');
 
-// Session cachée du chef d'orchestre (PLAN.md §3.25) : une conversation Claude Code par tableau, lancée en
-// arrière-plan à chaque message de l'utilisateur (`claude -p`, jamais de boucle autonome), reprise avec
-// --resume. Ses seuls outils sont ceux du chef d'orchestre (serveur MCP d'Orchestra) : aucun outil intégré,
-// il ne lit ni n'écrit de fichier, il délègue. Aucune clé d'API : le CLI déjà connecté de l'utilisateur.
+// Session cachée du chef d'orchestre (PLAN.md §3.25) : une conversation par tableau, lancée en arrière-plan à
+// chaque message de l'utilisateur (jamais de boucle autonome) avec le CLI déjà connecté de l'utilisateur (aucune
+// clé d'API). Deux moteurs (Paramètres › Général) :
+// - Claude Code (`claude -p`, reprise par --resume) : ses seuls outils sont ceux du chef d'orchestre, aucun
+//   outil intégré ; il ne lit ni n'écrit de fichier, il délègue ;
+// - Codex (`codex exec`, reprise par `exec resume`) : ne peut pas être limité à ces outils. Il tourne en lecture
+//   seule sans approbation possible (aucune modification), avec la plupart de ses fonctions désactivées, mais
+//   garde la lecture de fichiers et les commandes de lecture : limite signalée dans les paramètres.
 // Conversation gardée dans userData/conductor.json (messages et actions affichés dans la bulle).
 // Aperçu (par défaut, sauf Paramètres › mode auto) : ses changements restent en attente, montrés en fantômes sur
 // la map ; Valider les applique, Annuler les efface, un nouveau message les remplace par un nouveau plan. Le
@@ -18,6 +22,7 @@ const MAX_ENTRY = 8000;
 const MAX_STDERR = 4000;
 const SAVE_DELAY = 500;
 const ID = /^[\w-]{1,100}$/;
+const ENGINES = ['claude', 'codex'];
 
 const SYSTEM_PROMPT = `# You are the conductor of Orchestra
 
@@ -48,7 +53,7 @@ The user may ask you to add an agent, change a role, or help a stuck agent: read
 let deps = {
   dir: () => '',
   settings: () => ({}),
-  findClaude: async () => ({ ok: false }),
+  findCommand: async () => ({ ok: false }), // (moteur) -> { ok, message: chemin du programme }
   toolUrl: () => '',
   mcpServerPath: () => '',
   tools: [],
@@ -60,7 +65,7 @@ let deps = {
   commit: async () => [],
   discard: () => {},
 };
-let conversations = null; // boardId -> { sessionId, started, history }
+let conversations = null; // boardId -> { engine, sessionId, started, history, notes }
 const runs = new Map(); // boardId -> { child, live, stopped, result, stderr, tools }
 let saveTimer = null;
 
@@ -81,9 +86,11 @@ function load() {
   try {
     const data = JSON.parse(fs.readFileSync(file(), 'utf8'));
     for (const [boardId, entry] of Object.entries(data?.boards ?? {})) {
-      if (!ID.test(boardId) || typeof entry?.sessionId !== 'string' || !Array.isArray(entry.history)) continue;
+      if (!ID.test(boardId) || !Array.isArray(entry?.history)) continue;
+      const sessionId = typeof entry.sessionId === 'string' ? entry.sessionId : null;
+      const engine = ENGINES.includes(entry.engine) ? entry.engine : 'claude';
       const notes = Array.isArray(entry.notes) ? entry.notes.filter((n) => typeof n === 'string').slice(-10) : [];
-      conversations.set(boardId, { sessionId: entry.sessionId, started: entry.started === true, history: entry.history.slice(-MAX_HISTORY), notes });
+      conversations.set(boardId, { engine, sessionId, started: entry.started === true && Boolean(sessionId), history: entry.history.slice(-MAX_HISTORY), notes });
     }
   } catch {}
   return conversations;
@@ -103,9 +110,13 @@ function save() {
   }, SAVE_DELAY);
 }
 
+// Nouvelle session pour un moteur : Claude reçoit son identifiant d'avance, Codex donne le sien à son démarrage.
+const freshSession = (engine) => ({ engine, sessionId: engine === 'claude' ? randomUUID() : null, started: false });
+const engineOf = (settings) => (settings.engine === 'codex' ? 'codex' : 'claude');
+
 function conversation(boardId) {
   const all = load();
-  if (!all.has(boardId)) all.set(boardId, { sessionId: randomUUID(), started: false, history: [], notes: [] });
+  if (!all.has(boardId)) all.set(boardId, { ...freshSession(engineOf(deps.settings())), history: [], notes: [] });
   return all.get(boardId);
 }
 
@@ -132,7 +143,7 @@ function toolInput(input = {}) {
 }
 
 // Une ligne du flux stream-json de Claude Code.
-function onLine(boardId, run, line) {
+function claudeLine(boardId, run, line) {
   let message;
   try { message = JSON.parse(line); } catch { return; }
   const conv = conversation(boardId);
@@ -191,9 +202,67 @@ function onLine(boardId, run, line) {
   }
 }
 
-// Le programme claude trouvé dans le PATH ; un script .cmd (installation npm) passe par cmd.
+function addTool(boardId, run, id, tool, input) {
+  if (!run.tools.has(id)) run.tools.set(id, addEntry(boardId, { kind: 'tool', tool, input: toolInput(input) }));
+}
+
+// Une ligne du flux JSON de `codex exec --json` (thread, tours, éléments : message, appel d'outil…).
+function codexLine(boardId, run, line) {
+  let message;
+  try { message = JSON.parse(line); } catch { return; }
+  const conv = conversation(boardId);
+  const item = message.item;
+  const toolOf = (it) => (it.type === 'mcp_tool_call' ? (it.server === 'orchestra' ? it.tool : `${it.server}.${it.tool}`) : it.type);
+  const isTool = (it) => it && ['mcp_tool_call', 'command_execution', 'file_change', 'web_search'].includes(it.type);
+  switch (message.type) {
+    case 'thread.started':
+      if (!conv.started && typeof message.thread_id === 'string') {
+        conv.sessionId = message.thread_id;
+        conv.started = true;
+        save();
+      }
+      return;
+    case 'item.started':
+      if (isTool(item)) { addTool(boardId, run, item.id, toolOf(item), item.arguments ?? {}); publish(boardId); }
+      return;
+    case 'item.completed': {
+      if (item?.type === 'agent_message' && item.text?.trim()) addEntry(boardId, { kind: 'assistant', text: clip(item.text.trim()) });
+      else if (item?.type === 'error' && item.message) addEntry(boardId, { kind: 'info', text: clip(item.message, 500) });
+      else if (isTool(item)) {
+        addTool(boardId, run, item.id, toolOf(item), item.arguments ?? {});
+        const index = run.tools.get(item.id);
+        const failed = item.status === 'failed' || Boolean(item.error);
+        const text = item.error?.message ?? (item.result?.content ?? []).map((c) => c.text ?? '').join('\n');
+        const entry = conv.history[index];
+        if (entry) conv.history[index] = { ...entry, done: true, ...(failed && { error: clip(text, 500) }) };
+        save();
+      } else return;
+      publish(boardId);
+      return;
+    }
+    case 'turn.completed':
+      run.result = message;
+      return;
+    case 'turn.failed':
+    case 'error':
+      run.result = message;
+      addEntry(boardId, { kind: 'error', text: clip(message.error?.message ?? message.message ?? message.type) });
+      publish(boardId);
+      return;
+  }
+}
+
+// Programme trouvé dans le PATH. Un script npm (.cmd) est lancé directement avec Node quand on y trouve son
+// .js : aucun passage par cmd, donc aucun souci de guillemets dans les longues options (consignes de Codex).
 function launch(program, args, options) {
   if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(program)) {
+    let script = null;
+    try { script = fs.readFileSync(program, 'utf8').match(/"%~?dp0%?\\([^"]+\.c?js)"/i)?.[1] ?? null; } catch {}
+    if (script) {
+      const dir = path.dirname(program);
+      const node = fs.existsSync(path.join(dir, 'node.exe')) ? path.join(dir, 'node.exe') : 'node';
+      return spawn(node, [path.join(dir, script), ...args], options);
+    }
     const line = [program, ...args].map((arg) => `"${arg}"`).join(' ');
     return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], { ...options, windowsVerbatimArguments: true });
   }
@@ -216,7 +285,43 @@ function writeFiles(boardId) {
   return { mcp, prompt };
 }
 
-// Message de l'utilisateur : une exécution de `claude -p`, dans le dossier de travail, sur le tableau donné.
+// Fonctions de Codex retirées au chef d'orchestre. Pas code_mode_host : ses outils MCP passent par lui.
+const CODEX_FEATURES_OFF = ['shell_tool', 'unified_exec', 'multi_agent', 'image_generation', 'goals', 'apps', 'plugins', 'browser_use', 'computer_use', 'in_app_browser', 'view_image', 'sleep_tool', 'tool_suggest', 'skill_search'];
+const toml = (value) => JSON.stringify(String(value)); // chaîne TOML de base : mêmes échappements que JSON
+const CODEX_RULE = '\n## Codex\nOther tools (code execution, file patches, sub-agents) may look available: never use them. You run read-only and Orchestra only lets you direct agents with the orchestra tools.\n';
+
+function claudeArgs(conv, files, settings) {
+  return [
+    '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
+    '--mcp-config', files.mcp, '--strict-mcp-config',
+    '--tools', '',
+    '--allowedTools', deps.tools.map((tool) => `mcp__orchestra__${tool}`).join(','),
+    '--append-system-prompt-file', files.prompt,
+    ...(conv.started ? ['--resume', conv.sessionId] : ['--session-id', conv.sessionId]),
+    ...(settings.model ? ['--model', settings.model] : []),
+  ];
+}
+
+function codexArgs(conv, boardId, settings) {
+  const env = `{ ELECTRON_RUN_AS_NODE = "1", ORCHESTRA_TOOLSET = "conductor", ORCHESTRA_URL = ${toml(deps.toolUrl(callerOf(boardId)))} }`;
+  return [
+    'exec', ...(conv.started ? ['resume'] : []), '--json', '--skip-git-repo-check',
+    ...CODEX_FEATURES_OFF.flatMap((feature) => ['--disable', feature]),
+    '-c', 'sandbox_mode="read-only"',
+    '-c', 'approval_policy="never"',
+    '-c', 'web_search="disabled"',
+    '-c', `mcp_servers.orchestra.command=${toml(process.execPath)}`,
+    '-c', `mcp_servers.orchestra.args=[${toml(deps.mcpServerPath())}]`,
+    '-c', `mcp_servers.orchestra.env=${env}`,
+    '-c', 'mcp_servers.orchestra.default_tools_approval_mode="approve"',
+    '-c', `developer_instructions=${toml(SYSTEM_PROMPT + CODEX_RULE)}`,
+    ...(settings.model ? ['-m', settings.model] : []),
+    ...(conv.started ? [conv.sessionId] : []),
+    '-',
+  ];
+}
+
+// Message de l'utilisateur : une exécution du moteur choisi, dans le dossier de travail, sur le tableau donné.
 async function send(boardId, message, folder) {
   if (typeof boardId !== 'string' || !ID.test(boardId) || !deps.boardExists(boardId)) return { error: t('conductorSession.noBoard') };
   if (typeof message !== 'string' || !message.trim() || message.length > MAX_MESSAGE) return { error: t('conductorSession.badMessage', { max: MAX_MESSAGE }) };
@@ -225,12 +330,18 @@ async function send(boardId, message, folder) {
   } catch { return { error: t('conductorSession.badFolder') }; }
   if (runs.has(boardId)) return { error: t('conductorSession.busy') };
 
-  const claude = await deps.findClaude();
-  if (!claude.ok) return { error: t('conductorSession.notFound') };
+  const settings = deps.settings();
+  const engine = engineOf(settings);
+  const program = await deps.findCommand(engine);
+  if (!program?.ok) return { error: t('conductorSession.notFound', { engine: t(`conductorSession.engine.${engine}`) }) };
   if (runs.has(boardId)) return { error: t('conductorSession.busy') };
 
   const conv = conversation(boardId);
-  const settings = deps.settings();
+  // Autre moteur que la dernière fois : nouvelle session (une session Claude ne se reprend pas dans Codex).
+  if (conv.engine !== engine) {
+    Object.assign(conv, freshSession(engine));
+    if (conv.history.length) addEntry(boardId, { kind: 'info', text: t('conductorSession.engineChanged', { engine: t(`conductorSession.engine.${engine}`) }) });
+  }
   // Un message pendant un aperçu = une correction : l'ancien plan est effacé, un nouveau est proposé.
   if (deps.pendingOf(callerOf(boardId)).length) {
     deps.discard(callerOf(boardId));
@@ -239,16 +350,8 @@ async function send(boardId, message, folder) {
   deps.openSession(callerOf(boardId), { boardId, folder, preview: !settings.autoApply });
   const input = [...(conv.notes ?? []).map((text) => `[Orchestra] ${text}`), message.trim()].join('\n\n');
   conv.notes = [];
-  const { mcp, prompt } = writeFiles(boardId);
-  const args = [
-    '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
-    '--mcp-config', mcp, '--strict-mcp-config',
-    '--tools', '',
-    '--allowedTools', deps.tools.map((tool) => `mcp__orchestra__${tool}`).join(','),
-    '--append-system-prompt-file', prompt,
-    ...(conv.started ? ['--resume', conv.sessionId] : ['--session-id', conv.sessionId]),
-    ...(settings.model ? ['--model', settings.model] : []),
-  ];
+  const args = engine === 'codex' ? codexArgs(conv, boardId, settings) : claudeArgs(conv, writeFiles(boardId), settings);
+  const onLine = engine === 'codex' ? codexLine : claudeLine;
 
   addEntry(boardId, { kind: 'user', text: clip(message.trim(), MAX_MESSAGE) });
   const run = { child: null, live: '', stopped: false, result: null, stderr: '', tools: new Map() };
@@ -257,7 +360,7 @@ async function send(boardId, message, folder) {
 
   let child;
   try {
-    child = launch(claude.message, args, { cwd: folder, windowsHide: true, env: { ...process.env } });
+    child = launch(program.message, args, { cwd: folder, windowsHide: true, env: { ...process.env } });
   } catch (error) {
     runs.delete(boardId);
     addEntry(boardId, { kind: 'error', text: t('conductorSession.exited', { code: '?', detail: error.message }) });
@@ -345,7 +448,7 @@ function reset(boardId) {
   if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
   if (runs.has(boardId)) return { error: t('conductorSession.busy') };
   deps.discard(callerOf(boardId));
-  load().set(boardId, { sessionId: randomUUID(), started: false, history: [], notes: [] });
+  load().set(boardId, { ...freshSession(engineOf(deps.settings())), history: [], notes: [] });
   deps.closeSession(callerOf(boardId));
   save();
   publish(boardId);
@@ -373,4 +476,4 @@ function get(boardId) {
   return typeof boardId === 'string' && ID.test(boardId) ? snapshot(boardId) : { history: [], running: false, live: '', pending: [] };
 }
 
-module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, callerOf, onLine, SYSTEM_PROMPT };
+module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, callerOf, onLine: claudeLine, codexLine, SYSTEM_PROMPT };

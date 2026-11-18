@@ -2641,9 +2641,13 @@ h2.task-heading { margin: 0; font-size: 16px; font-weight: 600; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  max-width: min(420px, calc(100% - 40px));
-  padding: 18px 26px;
+  width: min(380px, calc(100% - 40px));
+  height: 280px;
+  box-sizing: border-box;
+  padding: 0 26px 22px;
+  overflow: hidden;
   transform: translate(-50%, -50%);
   border: 1px solid var(--accent);
   border-radius: var(--radius-md);
@@ -2653,6 +2657,40 @@ h2.task-heading { margin: 0; font-size: 16px; font-weight: 600; }
   text-align: center;
   pointer-events: none;
   animation: fade-in 200ms ease-out;
+}
+.conductor-composing > :not(svg) { position: relative; }
+/* Scène en boucle derrière le texte : une petite map qui se compose, en gris foncé. */
+.composing-scene { position: absolute; top: 18px; left: 50%; width: 256px; height: 160px; transform: translateX(-50%); }
+.composing-tile, .composing-note, .composing-bar, .composing-link {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-duration: 4s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-out;
+}
+.composing-tile { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.5; animation-name: composing-piece; }
+.composing-note { fill: var(--surface-2); stroke: var(--border); stroke-width: 1.5; stroke-dasharray: 3 3; animation-name: composing-piece; }
+.composing-bar { fill: var(--border); animation-name: composing-piece; }
+.composing-link {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 2;
+  stroke-dasharray: 140;
+  stroke-dashoffset: 140;
+  animation-name: composing-link;
+}
+@keyframes composing-piece {
+  0% { opacity: 0; transform: scale(0.8); }
+  10% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; transform: scale(1); }
+  82%, 100% { opacity: 0; transform: scale(1); }
+}
+@keyframes composing-link {
+  0% { opacity: 1; stroke-dashoffset: 140; }
+  15% { opacity: 1; stroke-dashoffset: 0; }
+  62% { opacity: 1; stroke-dashoffset: 0; }
+  74%, 100% { opacity: 0; stroke-dashoffset: 0; }
 }
 .conductor-composing-icon { color: var(--accent); animation: conductor-wave 1.6s ease-in-out infinite; }
 @keyframes conductor-wave { 50% { transform: rotate(-14deg) scale(1.08); } }
@@ -2672,4 +2710,15 @@ h2.task-heading { margin: 0; font-size: 16px; font-weight: 600; }
 .conductor-msg.live .markdown > :last-child::after { content: '▍'; color: var(--accent); animation: conductor-blink 1s steps(2) infinite; }
 @media (prefers-reduced-motion: reduce) {
   .react-flow__node.conductor-appear, .conductor-composing, .conductor-composing-icon { animation: none; }
+  .composing-tile, .composing-note, .composing-bar, .composing-link { animation: none; opacity: 1; stroke-dashoffset: 0; }
+}
+
+.conductor-engine {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
 }

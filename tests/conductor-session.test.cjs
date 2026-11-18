@@ -19,6 +19,16 @@ function fakeClaude(dir) {
   return file;
 }
 
+// Script au format npm (comme codex.cmd) : Orchestra lance directement le .js avec Node, sans passer par cmd.
+function codexShim(dir) {
+  const file = path.join(dir, 'codex.cmd');
+  if (!fs.existsSync(file)) {
+    fs.copyFileSync(path.join(__dirname, 'fake-codex.cjs'), path.join(dir, 'fake-codex.cjs'));
+    fs.writeFileSync(file, '@ECHO off\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\fake-codex.cjs" %*\r\n');
+  }
+  return file;
+}
+
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-session-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -33,7 +43,7 @@ function setup(t) {
   const deps = {
     dir: () => dir,
     settings: () => ({}),
-    findClaude: async () => ({ ok: true, message: program }),
+    findCommand: async (engine) => ({ ok: true, message: engine === 'codex' ? codexShim(dir) : program }),
     toolUrl: (id) => `http://127.0.0.1:9/tool/${id}?t=x`,
     mcpServerPath: () => path.join(dir, 'mcpServer.cjs'),
     tools: ['read_board', 'create_agent'],
@@ -208,4 +218,70 @@ test('preview: approve, cancel and correction are applied and told to the conduc
   assert.match((await s.session.approve('main')).error, /busy/);
   s.session.stop('main');
   await s.idle();
+});
+
+test('Codex engine: read-only exec with the conductor tools, instructions, JSON events and resume', { skip: process.platform !== 'win32' }, async (t) => {
+  const s = setup(t);
+  await s.session.send('main', 'Bonjour', s.folder); // une conversation Claude d'abord
+  await s.idle();
+  s.settings.engine = 'codex';
+  s.settings.model = 'gpt-test';
+  await s.session.send('main', 'Salut', s.folder);
+  await s.idle();
+  const args = s.calls().at(-1);
+  assert.equal(args[0], 'exec');
+  assert.equal(args[1], '--json', 'a new Codex session, not a resume of the Claude one');
+  const config = (key) => args.filter((a, i) => args[i - 1] === '-c').find((a) => a.startsWith(`${key}=`))?.slice(key.length + 1);
+  assert.equal(config('sandbox_mode'), '"read-only"');
+  assert.equal(config('approval_policy'), '"never"');
+  assert.match(config('mcp_servers.orchestra.env'), /ORCHESTRA_TOOLSET = "conductor", ORCHESTRA_URL = "http:\/\/127\.0\.0\.1:9\/tool\/conductor-main\?t=x"/);
+  assert.equal(config('mcp_servers.orchestra.default_tools_approval_mode'), '"approve"');
+  // Consignes passées entières, retours à la ligne et guillemets compris (aucun passage par cmd).
+  const instructions = JSON.parse(config('developer_instructions'));
+  assert.ok(instructions.startsWith('# You are the conductor of Orchestra'));
+  assert.match(instructions, /never use them/);
+  for (const feature of ['shell_tool', 'unified_exec', 'multi_agent', 'plugins']) assert.ok(args.some((a, i) => a === feature && args[i - 1] === '--disable'), feature);
+  assert.equal(args.includes('code_mode_host'), false, 'its MCP tools go through code mode');
+  assert.equal(args[args.indexOf('-m') + 1], 'gpt-test');
+  assert.equal(args.at(-1), '-');
+  const history = s.session.get('main').history;
+  assert.match(history.find((e) => e.kind === 'info').text, /conductorSession.engineChanged conductorSession.engine.codex/);
+  assert.equal(history.at(-1).text, 'Codex : Salut');
+
+  // Message suivant : exec resume <thread>.
+  await s.session.send('main', 'Encore', s.folder);
+  await s.idle();
+  const second = s.calls().at(-1);
+  assert.deepEqual(second.slice(0, 3), ['exec', 'resume', '--json']);
+  const thread = second.at(-2);
+  assert.match(thread, /^[0-9a-f-]{36}$/);
+  await s.session.send('main', 'Toujours', s.folder);
+  await s.idle();
+  assert.equal(s.calls().at(-1).at(-2), thread, 'same Codex thread');
+
+  // Tour échoué : erreur affichée.
+  await s.session.send('main', 'FAIL', s.folder);
+  await s.idle();
+  assert.match(s.session.get('main').history.at(-1).text, /not logged in to Codex/);
+});
+
+test('Codex events become tool lines and replies', async () => {
+  const session = load('conductorSession.cjs', { './i18n.cjs': i18n });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-session-'));
+  session.init({ dir: () => dir, emit: () => {}, settings: () => ({ engine: 'codex' }) });
+  const run = { live: '', tools: new Map() };
+  const item = { id: 'i1', type: 'mcp_tool_call', server: 'orchestra', tool: 'create_agent', arguments: { type: 'codex', name: 'API', prompt: 'secret' }, status: 'in_progress' };
+  session.codexLine('b', run, JSON.stringify({ type: 'thread.started', thread_id: 'th-1' }));
+  session.codexLine('b', run, JSON.stringify({ type: 'item.started', item }));
+  session.codexLine('b', run, JSON.stringify({ type: 'item.completed', item: { ...item, status: 'failed', result: { content: [{ type: 'text', text: 'limit reached' }] } } }));
+  session.codexLine('b', run, JSON.stringify({ type: 'item.completed', item: { id: 'i2', type: 'command_execution', command: 'ls', status: 'completed' } }));
+  session.codexLine('b', run, JSON.stringify({ type: 'item.completed', item: { id: 'i3', type: 'reasoning', text: 'hidden' } }));
+  session.codexLine('b', run, JSON.stringify({ type: 'item.completed', item: { id: 'i4', type: 'agent_message', text: 'Done **now**' } }));
+  const history = session.get('b').history;
+  assert.deepEqual(history.map((e) => e.kind), ['tool', 'tool', 'assistant']);
+  assert.deepEqual(history[0].input, { type: 'codex', name: 'API' });
+  assert.equal(history[0].error, 'limit reached');
+  assert.equal(history[1].tool, 'command_execution', 'other Codex tools stay visible');
+  assert.equal(history[2].text, 'Done **now**');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
