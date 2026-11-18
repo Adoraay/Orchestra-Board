@@ -3,6 +3,8 @@ const { t } = require('./i18n.cjs');
 const { MODEL } = require('./settingsStore.cjs');
 const { createWorkspaceFiles } = require('./workspaceFiles.cjs');
 const { sanitizeSession } = require('./sessionState.cjs');
+const { configuration: visualTestConfiguration, sanitizeResult: sanitizeVisualTestResult } = require('./visualTestRunner.cjs');
+const { sanitizeBrowserData } = require('./browserModel.mjs');
 const { randomUUID } = require('crypto');
 
 // Tableaux et disposition de chaque map (PLAN.md §3.4), dans userData/workspace.json.
@@ -52,6 +54,12 @@ function sanitizeData(type, data = {}) {
       const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
       return { text: text(data.text), ...(label && { label }) }; // label : nom donné aux agents par le lien Note
     }
+    case 'visualTest': {
+      const lastResult = sanitizeVisualTestResult(data?.lastResult);
+      return { ...visualTestConfiguration(data), ...(lastResult && { lastResult }) };
+    }
+    case 'interactiveBrowser':
+      return sanitizeBrowserData(data);
     case 'panel': // Utilisation ou Journal posé sur la map (PLAN.md §3.24)
       if (data.panel === 'usage') return { panel: 'usage', ...(USAGE_AGENTS.includes(data.agentId) && { agentId: data.agentId }) };
       return { panel: 'log' };
@@ -61,7 +69,7 @@ function sanitizeData(type, data = {}) {
 }
 
 function sanitizeNode(n) {
-  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text', 'panel'].includes(n.type)) return null;
+  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text', 'panel', 'visualTest', 'interactiveBrowser'].includes(n.type)) return null;
   if (!isNum(n.position?.x) || !isNum(n.position?.y)) return null;
   const style = {};
   if (size(n.style?.width)) style.width = n.style.width;
@@ -81,12 +89,13 @@ function sanitizeNode(n) {
 // dans les deux sens ou non.
 function sanitizeLink(data = {}) {
   return {
-    mode: ['delegate', 'terminal', 'note'].includes(data.mode) ? data.mode : 'relay',
+    mode: ['delegate', 'terminal', 'note', 'visual', 'browser'].includes(data.mode) ? data.mode : 'relay',
     bidirectional: data.bidirectional === true,
     prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '', // vide = pas encore configuré
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),
     enabled: data.enabled !== false,
     review: data.review === true, // Transmission : message à valider avant l'envoi
+    ...(data.terminalFallback === true && { terminalFallback: true }),
   };
 }
 
@@ -200,7 +209,7 @@ function setRole(id, value) {
 function startup() { restoring = false; return { workspace: load(), recovery, generation }; }
 
 // listener(workspace) : appelé au démarrage puis après chaque sauvegarde (liens pour linkRelay).
-function register(listener, beforeRestore = () => {}) {
+function register(listener, beforeRestore = () => {}, applyPreset = (_id, _cards, _preset, _backlog, persist) => persist()) {
   onSaved = listener;
   onSaved(load());
   ipcMain.handle('workspace:get', () => load());
@@ -228,6 +237,33 @@ function register(listener, beforeRestore = () => {}) {
     } catch (error) { restoring = false; generation = previousGeneration; return { error: error.message }; }
   });
   ipcMain.handle('workspace:set', (_e, workspace, token) => { if (token === generation) save(workspace); });
+  ipcMain.handle('workspace:setPreset', (event, workspace, token, preset, backlog) => {
+    try {
+      load();
+      const board = sanitize(workspace).boards.find(({ id }) => id === workspace?.activeBoardId);
+      if (token !== generation || restoring || recovery || !board || current.boards.some(({ id }) => id === board.id)) {
+        return { error: t('team.applyFailed') };
+      }
+      const cards = board.nodes.filter(({ type }) => type === 'terminal').map(({ id }) => id);
+      const existingNodes = new Set(current.boards.flatMap(({ nodes }) => nodes.map(({ id }) => id)));
+      if (cards.some((id) => existingNodes.has(id))) return { error: t('team.applyFailed') };
+      let projectBacklog = null;
+      if (backlog != null) {
+        const matchingNodes = board.nodes.filter(({ id }) => id === backlog.noteId);
+        const note = matchingNodes.length === 1 ? matchingNodes[0] : null;
+        if (!note || note.type !== 'note' || existingNodes.has(note.id) || typeof backlog.cwd !== 'string' ||
+            !board.nodes.some(({ type, data }) => type === 'terminal' && data.cwd === backlog.cwd)) {
+          return { error: t('team.backlogFailed') };
+        }
+        projectBacklog = { noteId: note.id, cwd: backlog.cwd, text: note.data.text };
+      }
+      applyPreset(board.id, cards, preset, projectBacklog, () => save(workspace), event);
+      return { ok: true };
+    } catch (error) {
+      if (error.missingServers) return { error: t('team.missingMcp', { names: error.missingServers.join(', ') }) };
+      return { error: t(error.noteKey ? 'team.backlogFailed' : 'team.applyFailed') };
+    }
+  });
   // Version synchrone pour la fermeture de la fenêtre : une sauvegarde asynchrone n'aurait pas le temps de finir.
   ipcMain.on('workspace:saveSync', (event, workspace, token) => {
     try {

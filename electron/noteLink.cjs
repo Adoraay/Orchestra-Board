@@ -31,7 +31,7 @@ function setWorkspace(workspace) {
       notes.set(node.id, { name: node.data.label || t('note.defaultName'), text: fresh ? written.text : node.data.text });
     }
     for (const edge of board.edges) {
-      if (edge.data.mode !== 'note' || !notes.has(edge.target)) continue;
+      if (edge.data.mode !== 'note' || edge.data.enabled === false || !notes.has(edge.target)) continue;
       reachable.set(edge.source, [...(reachable.get(edge.source) ?? []), { id: edge.id, target: edge.target }]);
     }
   }
@@ -58,6 +58,8 @@ function listNotes(caller) {
   if (!links.length) return result(t('note.none'));
   const lines = links.map((l) => {
     const { name, text } = notes.get(l.target);
+    const file = deps.file?.(l.target);
+    if (file) return `- ${name} (${t('note.fileLinked')})`;
     return `- ${name} (${text.trim() ? t('note.lines', { n: text.trim().split('\n').length }) : t('note.empty')})`;
   });
   return result(`${t('note.list')}\n${lines.join('\n')}\n\n${t('note.format')}`);
@@ -66,12 +68,16 @@ function listNotes(caller) {
 function readNote(caller, { name } = {}) {
   const found = findNote(caller, name);
   if (found.error) return found.error;
-  return result(found.note.text.trim() ? found.note.text : `(${t('note.empty')})`);
+  const file = deps.file?.(found.link.target);
+  if (file?.error) return result(t(file.error), true);
+  const text = file?.text ?? found.note.text;
+  return result(text.trim() ? text : `(${t('note.empty')})`);
 }
 
 function writeNote(caller, { name, text } = {}) {
   const found = findNote(caller, name);
   if (found.error) return found.error;
+  if (deps.file?.(found.link.target)) return result(t('note.fileWrite'), true);
   if (typeof text !== 'string') return result(t('note.noText'), true);
   if (text.length > MAX_TEXT) return result(t('note.tooLong', { max: MAX_TEXT }), true);
   const { link, note } = found;

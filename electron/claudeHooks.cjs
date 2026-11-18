@@ -9,7 +9,7 @@ const { hookUrl, toolUrl } = require('./hookServer.cjs');
 //   run_in_terminal : Claude demande la permission avant de lancer une commande (PLAN.md §3.17) ;
 // - <id>.mcp.json, passé avec `claude --mcp-config` : le serveur MCP « orchestra » (PLAN.md §3.11).
 const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop'];
-const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies', 'list_terminals', 'read_terminal', 'interrupt_terminal', 'list_notes', 'read_note', 'write_note'].map(
+const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies', 'list_terminals', 'read_terminal', 'interrupt_terminal', 'list_notes', 'read_note', 'write_note', 'list_visual_tests', 'read_visual_test'].map(
   (tool) => `mcp__orchestra__${tool}`,
 );
 
@@ -31,7 +31,7 @@ function writeSettings(id) {
 // Dans l'app empaquetée, il est hors de l'archive (app.asar.unpacked) : c'est Claude qui le lance.
 const mcpServerPath = () => path.join(__dirname.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked'), 'mcpServer.cjs');
 
-function writeMcpConfig(id) {
+function writeMcpConfig(id, extraServers = {}) {
   const server = {
     type: 'stdio',
     command: process.execPath,
@@ -39,7 +39,7 @@ function writeMcpConfig(id) {
     env: { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_URL: toolUrl(id) },
   };
   fs.mkdirSync(dir(), { recursive: true });
-  fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { orchestra: server } }, null, 2));
+  fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { ...extraServers, orchestra: server } }, null, 2));
   return mcpFileFor(id);
 }
 

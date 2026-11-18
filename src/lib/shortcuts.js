@@ -26,6 +26,7 @@ export const SHORTCUT_GROUPS = [
       { keys: ['N'], label: 'tool.note' },
       { keys: ['T'], label: 'tool.text' },
       { keys: ['L'], label: 'tool.link' },
+      { keys: ['R'], label: 'tool.visualTest' },
       { keys: ['F'], label: 'shortcut.fitView' },
       { keys: ['Esc'], label: 'shortcut.escape' },
       { keys: ['Del'], label: 'shortcut.delete' },

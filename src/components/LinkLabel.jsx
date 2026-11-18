@@ -1,5 +1,5 @@
 import { EdgeLabelRenderer } from '@xyflow/react';
-import { Network, Pause, SquareTerminal, StickyNote } from 'lucide-react';
+import { Globe, MonitorCheck, Network, Pause, SquareTerminal, StickyNote } from 'lucide-react';
 import useT from '../hooks/useT.js';
 import LinkReview from './LinkReview.jsx';
 
@@ -14,6 +14,8 @@ export default function LinkLabel({ x, y, state, prompt, targetName, turns, maxT
     case 'delegate':
     case 'terminal':
     case 'note':
+    case 'visual':
+    case 'browser':
     case 'limit':
       text = t(`link.label.${state}`);
       break;
@@ -39,7 +41,9 @@ export default function LinkLabel({ x, y, state, prompt, targetName, turns, maxT
           {state === 'delegate' && <Network size={13} />}
           {state === 'terminal' && <SquareTerminal size={13} />}
           {state === 'note' && <StickyNote size={13} />}
-          {!['disabled', 'delegate', 'terminal', 'note'].includes(state) && <span className="link-label-dot" />}
+          {state === 'visual' && <MonitorCheck size={13} aria-hidden="true" />}
+          {state === 'browser' && <Globe size={13} aria-hidden="true" />}
+          {!['disabled', 'delegate', 'terminal', 'note', 'visual', 'browser'].includes(state) && <span className="link-label-dot" />}
           <span className="link-label-text">{text}</span>
           {showTurns && <span className="link-label-turns">{turns}/{maxTurns}</span>}
         </button>

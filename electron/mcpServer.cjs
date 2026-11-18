@@ -128,6 +128,46 @@ const TOOLS = [
     },
   },
   {
+    name: 'list_visual_tests',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists the visual tests linked to your tile, including runner IDs and latest completion times.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'read_visual_test',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Returns the last completed result of a linked visual test, including HTTP status, failed step, and network and console error counts. Does not start a test. Screenshots stay on the board.',
+    inputSchema: {
+      type: 'object',
+      properties: { runner_id: { type: 'string', description: 'ID from list_visual_tests. Optional when exactly one test is linked.' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'orchestra_browser_get_state',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists live tabs on Interactive Browser cards you can reach through a Browser link. Returns tab IDs, routes, titles, loading and history state, and console error types and locations. The user opens the site in the browser first.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'orchestra_browser_navigate',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Starts navigation within the current origin of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object',
+      properties: { tabId: { type: 'string' }, url: { type: 'string', maxLength: 4096 } },
+      required: ['tabId', 'url'], additionalProperties: false,
+    },
+  },
+  {
+    name: 'orchestra_browser_reload',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Starts reloading the current page of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object', properties: { tabId: { type: 'string' } }, required: ['tabId'], additionalProperties: false,
+    },
+  },
+  {
     name: 'write_note',
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     description:
