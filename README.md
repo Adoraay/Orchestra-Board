@@ -459,18 +459,18 @@ The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds
 
 ### Updating the local branch
 
-The local `main` follows the original repository. Keep feature work on `codex/orchestra-enhancements` and merge upstream changes into it:
+In a fork checkout, `origin` points to the fork and `upstream` points to the original repository. The local `main` tracks `upstream/main`. Run these commands to bring upstream changes into the feature branch.
 
 ```bash
-git fetch origin main
+git fetch upstream main
 git switch codex/orchestra-enhancements
-git merge origin/main
+git merge upstream/main
 npm ci
 npm test
 npm run build
 ```
 
-If you publish a GitHub fork, name the original remote `upstream` and point `origin` at the fork. Merge `upstream/main` and target the original repository’s `main` when opening a pull request. The in-app updater still points to the original repository’s installers. Use Git to update a customized source build.
+Target the original repository’s `main` when opening a pull request. The in-app updater points to the original repository’s installers. Use Git to update a customized source build.
 
 <details>
 <summary><b>Windows launcher and build notes</b></summary>
