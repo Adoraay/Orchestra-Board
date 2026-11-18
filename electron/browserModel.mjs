@@ -5,7 +5,21 @@ export const BROWSER_DRAG_HANDLE = '.interactive-browser-header';
 export const BLANK_URL = 'about:blank';
 export const MAX_BROWSER_TABS = 20;
 export const MAX_BROWSER_URL = 4096;
+export const PREFERENCE_COOKIE_NAMES = ['theme', 'locale'];
+export const PREFERENCE_COOKIE_MAX_VALUE = 32;
 const ID = /^[\w-]{1,128}$/;
+const LOCALE_TAG = /^[a-z]{2,3}(?:-[a-z]{4})?(?:-(?:[a-z]{2}|[0-9]{3}))?(?:-(?:[a-z0-9]{5,8}|[0-9][a-z0-9]{3}))*$/i;
+
+export function isPreferenceCookieValue(name, value) {
+  if (typeof value !== 'string' || value.length > PREFERENCE_COOKIE_MAX_VALUE) return false;
+  if (name === 'theme') return ['light', 'dark', 'system', 'auto'].includes(value);
+  if (name !== 'locale' || !LOCALE_TAG.test(value)) return false;
+  try {
+    return Intl.getCanonicalLocales(value).length === 1;
+  } catch {
+    return false;
+  }
+}
 
 export function isBrowserId(value) {
   return typeof value === 'string' && ID.test(value);

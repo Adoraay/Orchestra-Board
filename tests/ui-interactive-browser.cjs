@@ -9,10 +9,11 @@ const status = require('../electron/agentStatus.cjs');
 
 module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   const requests = [];
+  const fixtureCookieValue = 'fixture-value-private';
   const server = http.createServer((request, response) => {
     requests.push({ url: request.url, cookies: request.headers.cookie });
     response.setHeader('Content-Type', 'text/html');
-    if (request.url === '/first') response.setHeader('Set-Cookie', 'fixture_pref=dark; Path=/; HttpOnly; Max-Age=3600');
+    if (request.url === '/first') response.setHeader('Set-Cookie', `fixture_pref=${fixtureCookieValue}; Path=/; HttpOnly; Max-Age=3600`);
     const title = request.url === '/first' ? 'First fixture' : 'Second fixture';
     response.end(`<title>${title}</title><input id="retained"><a href="/second">Continue</a><script>console.error(new TypeError('fixture diagnostic'))</script>`);
   });
@@ -60,7 +61,7 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
     await waitForUrl(second);
     await until("document.querySelector('.browser-tabs [role=tab][aria-selected=true]')?.textContent === 'Second fixture'");
     assert.equal(await evaluate("document.querySelectorAll('webview').length"), 2);
-    assert.equal(requests.find((request) => request.url === '/second').cookies, 'fixture_pref=dark');
+    assert.equal(requests.find((request) => request.url === '/second').cookies, `fixture_pref=${fixtureCookieValue}`);
     await click('.browser-tabs [role=tab]');
     await waitForUrl(first);
     assert.equal(await evaluate(`document.querySelector('${active}').getWebContentsId()`), firstGuestId);
@@ -81,7 +82,60 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
 
     await click('[aria-label=Cookies]');
     await until("document.querySelector('.browser-cookie-list')?.textContent.includes('fixture_pref')");
-    assert.equal(await evaluate("document.querySelector('.browser-popover').textContent.includes('dark')"), false);
+    assert.equal(await evaluate(`document.querySelector('.browser-popover').textContent.includes(${JSON.stringify(fixtureCookieValue)})`), false);
+    assert.equal(await evaluate("document.querySelector('.browser-cookie-form input[readonly]').value"), '127.0.0.1');
+    const cookieValue = '.browser-cookie-form input:not([readonly])';
+    const saveCookie = '.browser-cookie-form button[type=submit]';
+    const cookieSaved = "document.querySelector('.browser-cookie-feedback')?.textContent === 'Preference saved.'";
+    await fill(cookieValue, 'dark');
+    await click(saveCookie);
+    await until(cookieSaved);
+    const [theme] = await firstGuest.session.cookies.get({ url: second, name: 'theme' });
+    assert.equal(theme.value, 'dark');
+    assert.equal(theme.hostOnly, true);
+    assert.equal(theme.session, false);
+
+    await click('[aria-label="Edit theme at /"]');
+    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(cookieValue)}).value`), 'dark');
+    await fill(cookieValue, 'light');
+    await click(saveCookie);
+    await until(cookieSaved);
+    const [editedTheme] = await firstGuest.session.cookies.get({ url: second, name: 'theme' });
+    assert.equal(editedTheme.value, 'light');
+    assert.equal(editedTheme.expirationDate, theme.expirationDate);
+
+    await click('.browser-cookie-form button[type=button]');
+    await evaluate(`(() => {
+      const select = document.querySelector('.browser-cookie-form select');
+      select.value = 'locale';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    })()`);
+    await fill(cookieValue, 'pt-BR');
+    await click(saveCookie);
+    await until(cookieSaved);
+    const [locale] = await firstGuest.session.cookies.get({ url: second, name: 'locale' });
+    assert.equal(locale.value, 'pt-BR');
+    assert.equal(locale.domain, '127.0.0.1');
+    assert.equal(locale.hostOnly, true);
+
+    await firstGuest.session.cookies.set({ url: second, name: 'locale', value: 'en-US', path: '/second', sameSite: 'strict' });
+    await click('[aria-label=Cookies]');
+    await click('[aria-label=Cookies]');
+    await until("!!document.querySelector('[aria-label=\"Edit locale at /second\"]')");
+    await click('[aria-label="Edit locale at /second"]');
+    await fill(cookieValue, 'fr-CA');
+    await click(saveCookie);
+    await until(cookieSaved);
+    const editedLocales = await firstGuest.session.cookies.get({ url: second, name: 'locale' });
+    const pageLocale = editedLocales.find((cookie) => cookie.path === '/second');
+    assert.equal(pageLocale.value, 'fr-CA');
+    assert.equal(pageLocale.session, true);
+    assert.equal(pageLocale.sameSite, 'strict');
+    assert.equal(editedLocales.find((cookie) => cookie.path === '/').value, 'pt-BR');
+
+    const rejected = await evaluate(`window.interactiveBrowser.savePreferenceCookie(${firstGuestId}, ${JSON.stringify(second)}, { name: 'theme', value: 'dark', domain: 'example.test' })`);
+    assert.equal(rejected, null);
+    assert.equal((await firstGuest.session.cookies.get({ url: second, name: 'fixture_pref' }))[0].value, fixtureCookieValue);
     await click('.browser-popover button.danger');
     await click('.browser-popover-actions button.danger');
     await until("document.querySelector('.browser-popover')?.textContent.includes('No cookies match')");

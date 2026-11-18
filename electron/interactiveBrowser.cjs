@@ -1,5 +1,5 @@
 const { t } = require('./i18n.cjs');
-const { BLANK_URL, BROWSER_PARTITION, browserTitle, browserUrl, isBrowserId } = require('./browserModel.mjs');
+const { BLANK_URL, BROWSER_PARTITION, PREFERENCE_COOKIE_NAMES, browserTitle, browserUrl, isBrowserId, isPreferenceCookieValue } = require('./browserModel.mjs');
 
 const GET_STATE = 'orchestra_browser_get_state';
 const NAVIGATE = 'orchestra_browser_navigate';
@@ -7,6 +7,12 @@ const RELOAD = 'orchestra_browser_reload';
 const isTool = (name) => [GET_STATE, NAVIGATE, RELOAD].includes(name);
 const ok = (value) => ({ text: JSON.stringify(value), isError: false });
 const error = (key) => ({ text: t(`browser.mcp.${key}`), isError: true });
+const PREFERENCE_COOKIE_LIFETIME = 365 * 24 * 60 * 60; // seconds
+
+function canEditPreference(cookie, page) {
+  return PREFERENCE_COOKIE_NAMES.includes(cookie.name) && cookie.hostOnly === true && cookie.domain === page.hostname
+    && !cookie.httpOnly && (!cookie.secure || page.protocol === 'https:');
+}
 
 function originOf(value) {
   const url = browserUrl(value);
@@ -99,19 +105,53 @@ function createInteractiveBrowser() {
     return true;
   }
 
-  async function cookies(host, guestId, expectedUrl, remove = false) {
+  function cookiePage(host, guestId, expectedUrl) {
     const entry = guests.get(guestId);
-    const url = entry?.host === host && browserUrl(entry.guest.getURL());
-    const origin = originOf(url);
-    if (!origin || url !== expectedUrl) return null;
-    const store = entry.guest.session.cookies;
+    if (!entry || entry.host !== host || entry.guest.isDestroyed()) return null;
+    const url = browserUrl(entry.guest.getURL());
+    return url && url !== BLANK_URL && url === expectedUrl ? new URL(url) : null;
+  }
+
+  async function cookies(host, guestId, expectedUrl, remove = false) {
+    const page = cookiePage(host, guestId, expectedUrl);
+    if (!page) return null;
+    const { origin, href: url } = page;
+    const store = guests.get(guestId).guest.session.cookies;
     const list = await store.get({ url });
-    if (entry.guest.isDestroyed() || entry.guest.getURL() !== url) return null;
+    if (!cookiePage(host, guestId, url)) return null;
     if (remove) {
       await Promise.all([...new Set(list.map(({ name }) => name))].map((name) => store.remove(url, name)));
       return { origin, cookies: [] };
     }
-    return { origin, cookies: list.map(({ name, domain, path, secure, httpOnly }) => ({ name, domain, path, secure, httpOnly })) };
+    return { origin, cookies: list.map((cookie) => {
+      const { name, domain, path, secure, httpOnly, value } = cookie;
+      return { name, domain, path, secure, httpOnly,
+        ...(canEditPreference(cookie, page) && { editableValue: isPreferenceCookieValue(name, value) ? value : '' }),
+      };
+    }) };
+  }
+
+  async function savePreferenceCookie(host, guestId, expectedUrl, preference) {
+    const page = cookiePage(host, guestId, expectedUrl);
+    const { name, value, domain, path = '/' } = preference ?? {};
+    if (!page || domain !== page.hostname || !isPreferenceCookieValue(name, value)) return null;
+    const store = guests.get(guestId).guest.session.cookies;
+    // Include Secure cookies when checking for an existing preference, even from an HTTP tab.
+    const scope = new URL(page);
+    scope.protocol = 'https:';
+    const list = await store.get({ url: scope.href, name });
+    const [existing, duplicate] = list.filter((cookie) => cookie.path === path);
+    if (duplicate || (existing ? !canEditPreference(existing, page) : path !== '/')) return null;
+    if (!cookiePage(host, guestId, expectedUrl)) return null;
+    // Omit domain so Chromium sets a host-only cookie. Preserve attributes on edits.
+    const expirationDate = existing ? existing.expirationDate : Math.floor(Date.now() / 1000) + PREFERENCE_COOKIE_LIFETIME;
+    await store.set({
+      url: page.origin, name, value, path,
+      secure: existing?.secure ?? (page.protocol === 'https:'),
+      sameSite: existing?.sameSite ?? 'lax',
+      ...(expirationDate !== undefined && { expirationDate }),
+    });
+    return cookies(host, guestId, expectedUrl);
   }
 
   function callTool(workspace, caller, name, args) {
@@ -138,7 +178,7 @@ function createInteractiveBrowser() {
     return ok({ tabId: entry.tabId, started: true });
   }
 
-  return { attach, register, cookies, callTool };
+  return { attach, register, cookies, savePreferenceCookie, callTool };
 }
 
 module.exports = { createInteractiveBrowser, isTool };

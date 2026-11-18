@@ -178,6 +178,7 @@ contextBridge.exposeInMainWorld('interactiveBrowser', {
   register: (guestId, boardId, browserId, tabId) => ipcRenderer.invoke('browser:register', guestId, boardId, browserId, tabId),
   cookies: (guestId, url) => ipcRenderer.invoke('browser:cookies', guestId, url),
   removeCookies: (guestId, url) => ipcRenderer.invoke('browser:removeCookies', guestId, url),
+  savePreferenceCookie: (guestId, url, preference) => ipcRenderer.invoke('browser:savePreferenceCookie', guestId, url, preference),
 });
 
 contextBridge.exposeInMainWorld('visualTests', {

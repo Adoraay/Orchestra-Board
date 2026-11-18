@@ -4,7 +4,7 @@ const { EventEmitter } = require('node:events');
 const { load, i18n } = require('./helpers.cjs');
 const {
   BROWSER_DRAG_TYPE, BROWSER_PARTITION, BROWSER_SIZE, BROWSER_DRAG_HANDLE, BLANK_URL,
-  addressUrl, browserDropPosition, createBrowserNode, newBrowserTab, sanitizeBrowserData,
+  addressUrl, browserDropPosition, createBrowserNode, isPreferenceCookieValue, newBrowserTab, sanitizeBrowserData,
 } = require('../electron/browserModel.mjs');
 const { createInteractiveBrowser } = load('interactiveBrowser.cjs', { './i18n.cjs': i18n });
 const { sanitizeContent } = load('workspaceStore.cjs', {
@@ -80,6 +80,62 @@ test('webview attachment requires the dedicated partition and enforces sandboxed
     host.emit('will-attach-webview', { preventDefault: () => rejected++ }, {}, params);
   }
   assert.equal(rejected, 2);
+});
+
+test('preference cookie writes are bound to the current host and preserve attributes on eligible edits', async () => {
+  const { controller, host } = fixture();
+  const domain = 'prefs.fixture.test';
+  const url = `https://${domain}/settings/profile`;
+  let currentUrl = url;
+  let navigateDuringRead = false;
+  const cookieList = [
+    { name: 'theme', value: 'dark', domain, hostOnly: true, path: '/settings', secure: true, sameSite: 'strict', expirationDate: 1900000000 },
+    { name: 'locale', value: 'en-US', domain, hostOnly: true, path: '/settings', httpOnly: true },
+    { name: 'theme', value: 'dark', domain: '.fixture.test', path: '/' },
+  ];
+  const writes = [];
+  const guest = Object.assign(new EventEmitter(), {
+    id: 1, isDestroyed: () => false, getURL: () => currentUrl, setWindowOpenHandler() {},
+    session: { cookies: {
+      async get({ name }) {
+        if (navigateDuringRead) currentUrl = 'https://changed.fixture.test/';
+        return name ? cookieList.filter((cookie) => cookie.name === name) : cookieList;
+      },
+      async set(details) { writes.push(details); },
+    } },
+  });
+  host.emit('did-attach-webview', {}, guest);
+  const save = (preference, page = url, sender = host) => controller.savePreferenceCookie(sender, 1, page, { domain, ...preference });
+  const snapshot = await controller.cookies(host, 1, url);
+  assert.equal(snapshot.cookies[0].editableValue, 'dark');
+  assert.equal(snapshot.cookies[1].editableValue, undefined);
+  assert.equal(snapshot.cookies[2].editableValue, undefined);
+
+  const theme = { name: 'theme', value: 'light', path: '/settings' };
+  for (const preference of [
+    { ...theme, name: 'session' }, { ...theme, value: 'dark; secure' }, { ...theme, domain: 'fixture.test' },
+    { ...theme, domain: `.${domain}` }, { ...theme, path: '/other' }, { ...theme, path: '/' },
+    { ...theme, name: 'locale', value: 'pt-BR' },
+  ]) assert.equal(await save(preference), null);
+  assert.equal(await save(theme, 'https://changed.fixture.test/'), null);
+  assert.equal(await save(theme, url, new EventEmitter()), null);
+  assert.deepEqual(writes, []);
+
+  assert.ok(await save(theme));
+  assert.deepEqual(writes[0], { url: `https://${domain}`, ...theme, secure: true, sameSite: 'strict', expirationDate: 1900000000 });
+  assert.ok(await save({ name: 'locale', value: 'pt-BR' }));
+  assert.equal(writes[1].path, '/');
+  assert.equal(writes[1].secure, true);
+  assert.equal(writes[1].sameSite, 'lax');
+  assert.ok(writes[1].expirationDate > Date.now() / 1000);
+  assert.equal(Object.hasOwn(writes[1], 'domain'), false);
+  assert.equal(isPreferenceCookieValue('locale', 'zh-Hant-TW'), true);
+  assert.equal(isPreferenceCookieValue('locale', 'ca-ES-valencia'), true);
+  assert.equal(isPreferenceCookieValue('locale', 'en-US-x-opaque'), false);
+
+  navigateDuringRead = true;
+  assert.equal(await save(theme), null);
+  assert.equal(writes.length, 2);
 });
 
 test('MCP controls linked live tabs on their current origin and returns bounded console diagnostics', async () => {

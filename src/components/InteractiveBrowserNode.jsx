@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { NodeResizer, useReactFlow } from '@xyflow/react';
 import { ArrowLeft, ArrowRight, Braces, Cookie, Globe, Plus, RotateCw, Settings2, X } from 'lucide-react';
-import { BLANK_URL, BROWSER_PARTITION, MAX_BROWSER_TABS, addressUrl, browserTitle, browserUrl, newBrowserTab } from '../../electron/browserModel.mjs';
+import { BLANK_URL, BROWSER_PARTITION, MAX_BROWSER_TABS, PREFERENCE_COOKIE_MAX_VALUE, PREFERENCE_COOKIE_NAMES, addressUrl, browserTitle, browserUrl, isPreferenceCookieValue, newBrowserTab } from '../../electron/browserModel.mjs';
 import { useBoard } from '../context/BoardContext.jsx';
 import useT from '../hooks/useT.js';
 
@@ -68,12 +68,26 @@ function BrowserPage({ boardId, browserId, tab, active, label, views, onRuntime,
     className="browser-webview" style={active ? undefined : { display: 'none' }} />;
 }
 
+const NEW_PREFERENCE = { name: PREFERENCE_COOKIE_NAMES[0], value: '', path: '/' };
+
 function CookiesPanel({ guestId, url }) {
   const t = useT();
+  const valueHintId = useId();
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [preference, setPreference] = useState(NEW_PREFERENCE);
+  const [editing, setEditing] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null);
+  const valueInput = useRef(null);
+  const domain = snapshot ? new URL(snapshot.origin).hostname : '';
+
+  const resetPreference = () => {
+    setPreference(NEW_PREFERENCE);
+    setEditing(false);
+    setSaveStatus(null);
+  };
   useEffect(() => {
     if (guestId == null || url === BLANK_URL) return;
     let disposed = false;
@@ -88,13 +102,40 @@ function CookiesPanel({ guestId, url }) {
     setError(false);
     try {
       const result = await window.interactiveBrowser.removeCookies(guestId, url);
-      if (result) setSnapshot(result);
-      else setError(true);
+      if (result) {
+        setSnapshot(result);
+        resetPreference();
+      } else setError(true);
     } catch {
       setError(true);
     } finally {
       setBusy(false);
       setConfirm(false);
+    }
+  }
+
+  async function savePreference(event) {
+    event.preventDefault();
+    if (busy || confirm) return;
+    const value = preference.value.trim();
+    if (!isPreferenceCookieValue(preference.name, value)) {
+      setSaveStatus('invalid');
+      valueInput.current?.focus();
+      return;
+    }
+    setBusy(true);
+    setSaveStatus(null);
+    try {
+      const result = await window.interactiveBrowser.savePreferenceCookie(guestId, url, { ...preference, value, domain });
+      if (result) {
+        setSnapshot(result);
+        setPreference({ ...preference, value });
+      }
+      setSaveStatus(result ? 'saved' : 'failed');
+    } catch {
+      setSaveStatus('failed');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -104,10 +145,48 @@ function CookiesPanel({ guestId, url }) {
     {error && <p role="alert">{t('browser.cookiesFailed')}</p>}
     {url === BLANK_URL ? <p>{t('browser.cookiesNoPage')}</p> : !snapshot && !error && <p role="status">{t('browser.loading')}</p>}
     {snapshot?.cookies.length === 0 && <p>{t('browser.cookiesEmpty')}</p>}
+    {snapshot && <form className="browser-cookie-form" onSubmit={savePreference}>
+      <fieldset disabled={busy || confirm}>
+        <legend>{t('browser.cookiePreferences')}</legend>
+        <div className="browser-cookie-fields">
+          <label>{t('browser.cookieName')}
+            <select value={preference.name} disabled={editing} onChange={(event) => {
+              setPreference({ ...NEW_PREFERENCE, name: event.target.value });
+              setSaveStatus(null);
+            }}>
+              {PREFERENCE_COOKIE_NAMES.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+          <label>{t('browser.cookieValue')}
+            <input ref={valueInput} value={preference.value} maxLength={PREFERENCE_COOKIE_MAX_VALUE} spellCheck={false}
+              aria-describedby={valueHintId} aria-invalid={saveStatus === 'invalid'}
+              onChange={(event) => { setPreference({ ...preference, value: event.target.value }); setSaveStatus(null); }} />
+          </label>
+          <label>{t('browser.cookieDomain')}<input readOnly value={domain} /></label>
+        </div>
+        <p className="hint" id={valueHintId} role={saveStatus === 'invalid' ? 'alert' : undefined}>
+          {t(`browser.cookieValueHint.${preference.name}`)}
+        </p>
+        {editing && preference.path !== '/' && <p className="hint">{t('browser.cookiePath', { path: preference.path })}</p>}
+        <div className="browser-popover-actions">
+          <button type="submit" className="text-button primary">{t('browser.cookieSave')}</button>
+          {editing && <button type="button" className="text-button" onClick={resetPreference}>{t('common.cancel')}</button>}
+        </div>
+      </fieldset>
+      {saveStatus === 'saved' && <p className="browser-cookie-feedback" role="status">{t('browser.cookieSaved')}</p>}
+      {saveStatus === 'failed' && <p className="browser-cookie-feedback" role="alert">{t('browser.cookieSaveFailed')}</p>}
+    </form>}
     {!!snapshot?.cookies.length && <>
       <ul className="browser-cookie-list">
-        {snapshot.cookies.map(({ name, domain, path, secure, httpOnly }) => <li key={JSON.stringify([name, domain, path])}>
-          <strong>{name}</strong><small>{domain}{path}{secure ? ' · Secure' : ''}{httpOnly ? ' · HttpOnly' : ''}</small>
+        {snapshot.cookies.map(({ name, domain, path, secure, httpOnly, editableValue }) => <li key={JSON.stringify([name, domain, path])}>
+          <span><strong>{name}</strong><small>{domain}{path}{secure ? ' · Secure' : ''}{httpOnly ? ' · HttpOnly' : ''}</small></span>
+          {editableValue !== undefined && <button type="button" className="text-button" disabled={busy || confirm}
+            aria-label={t('browser.cookieEditName', { name, path })} onClick={() => {
+              setPreference({ name, value: editableValue, path });
+              setEditing(true);
+              setSaveStatus(null);
+              valueInput.current?.focus();
+            }}>{t('browser.cookieEdit')}</button>}
         </li>)}
       </ul>
       {confirm ? <>
@@ -116,7 +195,7 @@ function CookiesPanel({ guestId, url }) {
           <button type="button" className="text-button" disabled={busy} onClick={() => setConfirm(false)}>{t('common.cancel')}</button>
           <button type="button" className="text-button danger" disabled={busy} onClick={remove}>{t('browser.cookiesRemove')}</button>
         </div>
-      </> : <button type="button" className="text-button danger" onClick={() => setConfirm(true)}>{t('browser.cookiesRemove')}</button>}
+      </> : <button type="button" className="text-button danger" disabled={busy} onClick={() => setConfirm(true)}>{t('browser.cookiesRemove')}</button>}
     </>}
   </section>;
 }

@@ -48,6 +48,7 @@ const interactiveBrowser = createInteractiveBrowser();
 ipcMain.handle('browser:register', (event, ...args) => isBoardFrame(event) && interactiveBrowser.register(event.sender, ...args));
 ipcMain.handle('browser:cookies', (event, guestId, url) => isBoardFrame(event) ? interactiveBrowser.cookies(event.sender, guestId, url) : null);
 ipcMain.handle('browser:removeCookies', (event, guestId, url) => isBoardFrame(event) ? interactiveBrowser.cookies(event.sender, guestId, url, true) : null);
+ipcMain.handle('browser:savePreferenceCookie', (event, guestId, url, preference) => isBoardFrame(event) ? interactiveBrowser.savePreferenceCookie(event.sender, guestId, url, preference) : null);
 
 ipcMain.handle('mcp:get', (event, boardId, cardId) => isBoardFrame(event) ? mcpCatalog().get(boardId, cardId) : null);
 ipcMain.handle('mcp:save', (event, boardId, cardId, change) => {
