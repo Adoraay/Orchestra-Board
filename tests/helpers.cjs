@@ -6,8 +6,8 @@ function load(name, mocks = {}, clock = globalThis) {
   const file = path.resolve(__dirname, '..', 'electron', name);
   const localRequire = createRequire(file);
   const module = { exports: {} };
-  new Function('require', 'module', 'exports', 'setTimeout', 'clearTimeout', fs.readFileSync(file, 'utf8'))(
-    (id) => Object.hasOwn(mocks, id) ? mocks[id] : localRequire(id), module, module.exports, clock.setTimeout, clock.clearTimeout,
+  new Function('require', 'module', 'exports', '__dirname', '__filename', 'setTimeout', 'clearTimeout', fs.readFileSync(file, 'utf8'))(
+    (id) => Object.hasOwn(mocks, id) ? mocks[id] : localRequire(id), module, module.exports, path.dirname(file), file, clock.setTimeout, clock.clearTimeout,
   );
   return module.exports;
 }

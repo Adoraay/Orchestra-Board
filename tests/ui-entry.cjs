@@ -66,6 +66,18 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode === 'visual-test') {
+        await require('./ui-visual-test.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI visual-test: Chrome flow, assertions, network and console diagnostics, saved screenshot');
+        app.quit();
+        return;
+      }
+      if (mode === 'mcp-relay') {
+        await require('./ui-mcp-relay.cjs')({ evaluate, until, sleep, data, errors });
+        console.log('PASS UI mcp-relay: board and card scope, CMD output relayed for review');
+        app.quit();
+        return;
+      }
       if (mode === 'changes') {
         await require('./ui-changes.cjs')({ win, evaluate, until, sleep, data, errors });
         app.quit();

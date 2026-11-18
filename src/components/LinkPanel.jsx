@@ -34,8 +34,7 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const nameOf = (id) => (id === edge.source ? source.name : target.name);
   const relay = link.mode === 'relay';
 
-  // Qui doit être Claude Code ou Codex (agents à hooks) : en Transmission, chaque source (son hook Stop donne
-  // la réponse) ; en Délégation, les deux bouts (l'un appelle les outils, l'autre répond).
+  // En Transmission, chaque source doit fournir une réponse. En Délégation les deux bouts ont besoin de hooks.
   const needsHooks = relay ? [source, ...(link.bidirectional ? [target] : [])] : [source, target];
   const notClaude = needsHooks.filter((c) => !c.agent.hooks).map((c) => c.name);
 
@@ -59,6 +58,14 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
         </p>
         <p className="hint">{t(`link.mode.${link.mode}.description`)}</p>
         {!source.agent.hooks && <p className="link-warning">{t(warning, { name: source.name })}</p>}
+        {link.mode === 'terminal' && (
+          <button className="text-button" onClick={() => {
+            onSwap();
+            onChange({ mode: 'relay', terminalFallback: true, review: true });
+          }}>
+            <Repeat size={14} />{t('link.relayTerminal')}
+          </button>
+        )}
         <button className="text-button danger link-delete" onClick={onDelete}>
           <Trash2 size={14} />
           {t('link.delete')}
@@ -79,13 +86,16 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
       </header>
 
       <div className="link-modes" role="radiogroup" aria-label={t('link.type')}>
-        {LINK_MODES.map((mode) => (
+        {(source.agent.id === 'shell' && target.agent.id !== 'shell' ? ['relay', 'terminal'] : LINK_MODES).map((mode) => (
           <button
             key={mode}
             role="radio"
             aria-checked={link.mode === mode}
             className={`link-mode ${link.mode === mode ? 'active' : ''}`}
-            onClick={() => onChange({ mode })}
+            onClick={() => {
+              if (mode === 'terminal') onSwap();
+              onChange({ mode });
+            }}
           >
             {t(`link.mode.${mode}`)}
           </button>
@@ -128,6 +138,14 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
             <input type="checkbox" checked={link.review} onChange={(e) => onChange({ review: e.target.checked })} />
             {t('link.review')}
           </label>
+          {notClaude.length > 0 && (
+            <label className="checkbox">
+              <input type="checkbox" checked={link.terminalFallback === true} onChange={(e) => onChange({
+                terminalFallback: e.target.checked, ...(e.target.checked && { review: true }),
+              })} />
+              {t('link.terminalFallback')}
+            </label>
+          )}
         </>
       )}
 
@@ -145,7 +163,7 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
         />
       </label>
 
-      {notClaude.length > 0 && (
+      {notClaude.length > 0 && (!relay || link.terminalFallback) && (
         <p className="link-warning">
           {relay
             ? t('link.warnRelay', { names: notClaude.join(t('common.and')) })

@@ -31,7 +31,7 @@ function writeSettings(id) {
 // Dans l'app empaquetée, il est hors de l'archive (app.asar.unpacked) : c'est Claude qui le lance.
 const mcpServerPath = () => path.join(__dirname.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked'), 'mcpServer.cjs');
 
-function writeMcpConfig(id) {
+function writeMcpConfig(id, extraServers = {}) {
   const server = {
     type: 'stdio',
     command: process.execPath,
@@ -39,7 +39,7 @@ function writeMcpConfig(id) {
     env: { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_URL: toolUrl(id) },
   };
   fs.mkdirSync(dir(), { recursive: true });
-  fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { orchestra: server } }, null, 2));
+  fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { ...extraServers, orchestra: server } }, null, 2));
   return mcpFileFor(id);
 }
 

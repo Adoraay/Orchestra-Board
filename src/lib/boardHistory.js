@@ -1,5 +1,5 @@
 // Éléments recréés par Ctrl+Z, contrairement aux terminaux fermés (panneaux posés sur la map compris).
-export const ANNOTATIONS = new Set(['note', 'text', 'panel']);
+export const ANNOTATIONS = new Set(['note', 'text', 'panel', 'visualTest']);
 
 // Les notes restaurées sont aussi des extrémités de liens, contrairement aux terminaux fermés.
 export function restoreBoardHistory(nodes, snapshot) {

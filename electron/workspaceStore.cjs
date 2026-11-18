@@ -3,6 +3,7 @@ const { t } = require('./i18n.cjs');
 const { MODEL } = require('./settingsStore.cjs');
 const { createWorkspaceFiles } = require('./workspaceFiles.cjs');
 const { sanitizeSession } = require('./sessionState.cjs');
+const { configuration: visualTestConfiguration, sanitizeResult: sanitizeVisualTestResult } = require('./visualTestRunner.cjs');
 const { randomUUID } = require('crypto');
 
 // Tableaux et disposition de chaque map (PLAN.md §3.4), dans userData/workspace.json.
@@ -52,6 +53,10 @@ function sanitizeData(type, data = {}) {
       const label = typeof data.label === 'string' ? data.label.trim().slice(0, 40) : '';
       return { text: text(data.text), ...(label && { label }) }; // label : nom donné aux agents par le lien Note
     }
+    case 'visualTest': {
+      const lastResult = sanitizeVisualTestResult(data?.lastResult);
+      return { ...visualTestConfiguration(data), ...(lastResult && { lastResult }) };
+    }
     case 'panel': // Utilisation ou Journal posé sur la map (PLAN.md §3.24)
       if (data.panel === 'usage') return { panel: 'usage', ...(USAGE_AGENTS.includes(data.agentId) && { agentId: data.agentId }) };
       return { panel: 'log' };
@@ -61,7 +66,7 @@ function sanitizeData(type, data = {}) {
 }
 
 function sanitizeNode(n) {
-  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text', 'panel'].includes(n.type)) return null;
+  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text', 'panel', 'visualTest'].includes(n.type)) return null;
   if (!isNum(n.position?.x) || !isNum(n.position?.y)) return null;
   const style = {};
   if (size(n.style?.width)) style.width = n.style.width;
@@ -87,6 +92,7 @@ function sanitizeLink(data = {}) {
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),
     enabled: data.enabled !== false,
     review: data.review === true, // Transmission : message à valider avant l'envoi
+    ...(data.terminalFallback === true && { terminalFallback: true }),
   };
 }
 

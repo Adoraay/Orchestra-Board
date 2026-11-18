@@ -15,7 +15,8 @@ export function serializeBoard({ nodes, edges, strokes, groups = [], viewport })
 export function deserializeBoard(saved) {
   return {
     nodes: saved.nodes.map((n) =>
-      n.type === 'terminal' ? { ...n, dragHandle: '.drag-handle', data: { ...n.data, restored: true } } : n,
+      n.type === 'terminal' ? { ...n, dragHandle: '.drag-handle', data: { ...n.data, restored: true } }
+        : n.type === 'visualTest' ? { ...n, dragHandle: '.visual-test-header' } : n,
     ),
     edges: saved.edges,
     strokes: saved.strokes,

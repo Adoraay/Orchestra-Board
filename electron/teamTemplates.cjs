@@ -14,13 +14,20 @@ function templateBoard(input) {
   const board = sanitizeContent(input);
   return {
     ...board,
-    nodes: board.nodes.map((node) => node.type !== 'terminal' ? node : {
-      ...node, data: {
-        agentId: node.data.agentId,
-        ...(node.data.label && { label: node.data.label }),
-        ...(node.data.role && { role: node.data.role }),
-        ...(node.data.model && { model: node.data.model }),
-      },
+    nodes: board.nodes.map((node) => {
+      if (node.type === 'visualTest') {
+        const { lastResult, ...data } = node.data;
+        return { ...node, data };
+      }
+      if (node.type !== 'terminal') return node;
+      return {
+        ...node, data: {
+          agentId: node.data.agentId,
+          ...(node.data.label && { label: node.data.label }),
+          ...(node.data.role && { role: node.data.role }),
+          ...(node.data.model && { model: node.data.model }),
+        },
+      };
     }),
   };
 }
@@ -95,11 +102,12 @@ function instantiate(id, cwd, replacements = {}, agents = settings.load().agents
     const target = byId.get(edge.target);
     const sourceAgent = agents.find((agent) => agent.id === source?.data.agentId);
     const targetAgent = agents.find((agent) => agent.id === target?.data.agentId);
-    if (['delegate', 'relay', 'note', 'terminal'].includes(edge.data.mode) && !sourceAgent?.hooks) throw new Error(t('team.incompatible'));
+    const terminalRelay = edge.data.mode === 'relay' && edge.data.terminalFallback;
+    if (!terminalRelay && !sourceAgent?.hooks) throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'delegate' && !targetAgent?.hooks) throw new Error(t('team.incompatible'));
-    if (edge.data.bidirectional && !targetAgent?.hooks) throw new Error(t('team.incompatible'));
+    if (edge.data.bidirectional && !terminalRelay && !targetAgent?.hooks) throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'note' && target?.type !== 'note') throw new Error(t('team.incompatible'));
-    if (edge.data.mode === 'relay' && target?.type !== 'terminal') throw new Error(t('team.incompatible'));
+    if (edge.data.mode === 'relay' && (source?.type !== 'terminal' || target?.type !== 'terminal')) throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'terminal' && target?.data.agentId !== 'shell') throw new Error(t('team.incompatible'));
   }
   const groups = template.board.groups.map((group) => ({ ...group, id: 'group-' + randomUUID(), members: group.members.map((id) => ids.get(id)) }));

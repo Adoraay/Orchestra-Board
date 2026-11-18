@@ -1,4 +1,4 @@
-import { MousePointer2, PenLine, Spline, StickyNote, Type } from 'lucide-react';
+import { MonitorCheck, MousePointer2, PenLine, Spline, StickyNote, Type } from 'lucide-react';
 import useT from '../hooks/useT.js';
 
 // Nom de chaque outil dans src/locales (tool.<id>).
@@ -8,6 +8,7 @@ export const TOOLS = [
   { id: 'note', key: 'N', icon: StickyNote },
   { id: 'text', key: 'T', icon: Type },
   { id: 'link', key: 'L', icon: Spline },
+  { id: 'visualTest', key: 'R', icon: MonitorCheck },
 ];
 
 // Barre d'outils arrondie sur le bord gauche de la map (PLAN.md §3.8).

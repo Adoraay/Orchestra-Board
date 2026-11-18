@@ -66,7 +66,14 @@ export default function useBoards(saved) {
     if (latest.current.boards.length >= 50) return false;
     const id = 'board-' + crypto.randomUUID();
     const next = [...latest.current.boards, { id, name: name.slice(0, 40) }];
-    content.current[id] = { ...state, nodes: state.nodes.map((node) => node.type === 'terminal' ? { ...node, dragHandle: '.drag-handle' } : node) };
+    content.current[id] = {
+      ...state,
+      nodes: state.nodes.map((node) => {
+        if (node.type === 'terminal') return { ...node, dragHandle: '.drag-handle' };
+        if (node.type === 'visualTest') return { ...node, dragHandle: '.visual-test-header' };
+        return node;
+      }),
+    };
     // Enregistrer les rôles et liens côté Node avant le SessionStart des nouveaux agents.
     clearTimeout(saveTimer.current);
     try {
@@ -91,6 +98,7 @@ export default function useBoards(saved) {
     if (index === -1 || boards.length === 1) return;
     for (const node of content.current[id].nodes) {
       if (node.type === 'terminal') window.pty.kill(node.id);
+      if (node.type === 'visualTest') window.visualTests.cancel(node.id);
     }
     delete content.current[id];
     const rest = boards.filter((b) => b.id !== id);

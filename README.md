@@ -413,7 +413,7 @@ That's Orchestra's status hooks (working / done). Choose **Trust all and continu
 <details>
 <summary><b>Which agents can use links?</b></summary>
 
-Claude Code and Codex can relay, delegate, drive a terminal, use linked notes and run task sequences. Other CLIs (Aider, Gemini CLI, your own…) work in a tile and can *receive* relayed messages; their integration does not include Orchestra hooks or orchestration tools.
+Claude Code, Codex, and Antigravity can relay, delegate, drive a terminal, and use linked notes. Task sequences are available for Claude Code and Codex. Other CLIs such as Aider and Gemini CLI can use terminal output as the source of a Relay and receive relayed messages.
 </details>
 
 <details>
@@ -448,6 +448,29 @@ npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 ```
 
 The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds the `.dmg` files (on a Mac), and every push to that branch builds them on GitHub Actions.
+
+### Board extensions
+
+- **Antigravity** — Add Antigravity from **Settings → Agents** and place it on the board. Orchestra loads its hooks and MCP through a temporary workspace using `agy --add-dir`. The integration was verified with AGY 1.5.11.
+- **Linked notes** — Click the paperclip on a note and choose a local UTF-8 Markdown file up to 1 MB. The note follows changes on disk. Clicking a task cycles through `[ ]`, `[~]`, and `[x]` and writes the marker to the file.
+- **Visual Test Runner** — Choose the monitor tool or press `R`, then click the board. Enter a URL, configure the browser steps, and run the test. The card uses an isolated session of installed Google Chrome and keeps the last screenshot, HTTP results, and console errors.
+- **MCP by board and card** — Select servers in **Settings → MCP** or use **MCP servers…** in a card’s context menu. Cards inherit board defaults until you choose a custom selection. Changes apply on the next agent launch. Linear uses the client’s sign-in flow. The Chrome DevTools, agent-browser, and agent-desktop presets use Node.js and `npx`. Custom server definitions and assignments live in the local app profile.
+- **Relay from a terminal** — Link from the terminal to the receiving card, then set the instruction. For an existing Relay, enable **Use terminal output for sources without hooks**. If Orchestra recognizes the shell prompt, it waits for it to return. Other CLI output uses a two-second pause. Review is enabled by default when you turn on terminal capture.
+
+### Updating the local branch
+
+The local `main` follows the original repository. Keep feature work on `codex/orchestra-enhancements` and merge upstream changes into it:
+
+```bash
+git fetch origin main
+git switch codex/orchestra-enhancements
+git merge origin/main
+npm ci
+npm test
+npm run build
+```
+
+If you publish a GitHub fork, name the original remote `upstream` and point `origin` at the fork. Merge `upstream/main` and target the original repository’s `main` when opening a pull request. The in-app updater still points to the original repository’s installers. Use Git to update a customized source build.
 
 <details>
 <summary><b>Windows launcher and build notes</b></summary>

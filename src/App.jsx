@@ -27,6 +27,7 @@ import MiniMapNode from './components/MiniMapNode.jsx';
 import NodeMenu from './components/NodeMenu.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import PanelNode from './components/PanelNode.jsx';
+import VisualTestNode from './components/VisualTestNode.jsx';
 import QuitDialog from './components/QuitDialog.jsx';
 import ResumeDialog from './components/ResumeDialog.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
@@ -64,11 +65,12 @@ import useT from './hooks/useT.js';
 import { DEFAULT_LINK } from './lib/links.js';
 import { PANELS, draggedPanel } from './lib/panels.js';
 
-const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode };
+const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode, visualTest: VisualTestNode };
 const DUPLICATE_OFFSET = 40; // px : une copie apparaît en décalé de l'original
 const NOTE_SIZE = { width: 270, height: 180 }; // plus large que haut : les lignes écrites par un agent restent lisibles
+const VISUAL_TEST_SIZE = { width: 500, height: 480 };
 const edgeTypes = { floating: FloatingEdge };
-const BOARD_HINTS = ['pen', 'note', 'text', 'link']; // outils avec un bandeau d'aide (board.hint.<outil>)
+const BOARD_HINTS = ['pen', 'note', 'text', 'link', 'visualTest']; // outils avec un bandeau d'aide (board.hint.<outil>)
 const NODE_SIZE = { width: 640, height: 400 };
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
 
@@ -104,7 +106,7 @@ export default function App() {
 function Workspace({ saved }) {
   const boards = useBoards(saved);
   const { activeId, content, updateContent } = boards;
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(null);
   const [teamsOpen, setTeamsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -117,7 +119,7 @@ function Workspace({ saved }) {
     window.blockers.get().then((entries) => { if (!disposed && !changed) setBlockers(entries); });
     return () => { disposed = true; off(); };
   }, []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const closeSettings = useCallback(() => setSettingsOpen(null), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
   // Post-it d'un autre tableau réécrit par un agent (lien Note) ; le tableau ouvert s'en charge lui-même.
   useEffect(
@@ -130,6 +132,14 @@ function Workspace({ saved }) {
       }),
     [content, activeId, updateContent],
   );
+  useEffect(() => window.visualTests.onFinished((id, lastResult) => {
+    if (!lastResult) return;
+    for (const [boardId, state] of Object.entries(content)) {
+      if (boardId === activeId || !state.nodes.some((node) => node.id === id && node.type === 'visualTest')) continue;
+      const nodes = state.nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, lastResult } } : node);
+      updateContent(boardId, { ...state, nodes });
+    }
+  }), [content, activeId, updateContent]);
   const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
   const { settings, agentById, updateSettings } = useSettings();
   // Panneaux épinglés (PLAN.md §7, 3.4) : rouverts au lancement ; Journal prioritaire sur Utilisation (même bord).
@@ -162,16 +172,16 @@ function Workspace({ saved }) {
     updateSettings('general', { tutorialDone: true });
   }, [updateSettings]);
   const startTutorial = useCallback(() => {
-    setSettingsOpen(false);
+    setSettingsOpen(null);
     setTutorial('tour');
   }, []);
   const startSetup = useCallback(() => {
-    setSettingsOpen(false);
+    setSettingsOpen(null);
     setTutorial('setup');
   }, []);
 
   useAppShortcuts({
-    toggleSettings: () => setSettingsOpen((o) => !o),
+    toggleSettings: () => setSettingsOpen((open) => open ? null : {}),
     cycleBoard: (step) => {
       const list = boards.boards;
       const index = list.findIndex((b) => b.id === activeId);
@@ -248,7 +258,7 @@ function Workspace({ saved }) {
         boards={boards}
         boardsWithNews={boardsWithNews}
         renameRequest={renameRequest}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => setSettingsOpen({})}
         onOpenTeams={() => setTeamsOpen(true)}
         onOpenInbox={() => setInboxOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
@@ -260,6 +270,7 @@ function Workspace({ saved }) {
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
           <Board
+            boardId={activeId}
             initial={content[activeId]}
             onChange={onBoardChange}
             focusRequest={focusRequest}
@@ -272,6 +283,7 @@ function Workspace({ saved }) {
             boardList={boards.boards}
             focusAgent={focusAgent}
             onPanelPlaced={closePanelDrawer}
+            onOpenMcp={(cardId) => setSettingsOpen({ cardId })}
           />
         </ReactFlowProvider>
         <ExplorerPanel
@@ -280,7 +292,17 @@ function Workspace({ saved }) {
           onLaunchAgent={(agentId, cwd) => setLaunchRequest({ agentId, cwd, at: Date.now() })}
         />
       </div>
-      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} onStartSetup={startSetup} />}
+      {settingsOpen && (
+        <SettingsModal
+          onClose={closeSettings}
+          onStartTutorial={startTutorial}
+          onStartSetup={startSetup}
+          boardId={activeId}
+          boardName={boards.boards.find((board) => board.id === activeId)?.name}
+          nodes={content[activeId].nodes}
+          mcpCardId={settingsOpen.cardId}
+        />
+      )}
       {tasksOpen && <TaskSequencesDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
       {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
       {searchOpen && (
@@ -308,7 +330,7 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced }) {
+function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced, onOpenMcp }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
@@ -355,8 +377,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [maxSlot, setMaxSlot] = useState(null);
   const pendingMessages = usePendingMessages();
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot, boardList, focusAgent }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot, boardList, focusAgent],
+    () => ({ boardId, tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot, boardList, focusAgent }),
+    [boardId, tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot, boardList, focusAgent],
   );
 
   // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
@@ -465,15 +487,16 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         setEdges((eds) => addEdge({ source: agentNode.id, target: noteNode.id, type: 'floating', data: { ...DEFAULT_LINK, mode: 'note' } }, eds));
         return;
       }
-      // Un agent relié à une case Terminal : lien Terminal, toujours de l'agent vers le terminal (PLAN.md §3.17).
+      // Agent → shell : commande via MCP. Shell → agent : transmission de la sortie.
       const isShell = (n) => n?.data.agentId === 'shell';
-      const terminal = isShell(sourceNode) !== isShell(node);
-      const [source, target] = terminal && isShell(sourceNode) ? [node.id, linkSource] : [linkSource, node.id];
-      const mode = terminal ? 'terminal' : settings.general.linkMode;
-      setEdges((eds) => addEdge({ source, target, type: 'floating', data: { ...DEFAULT_LINK, mode } }, eds));
+      const mode = !isShell(sourceNode) && isShell(node) ? 'terminal'
+        : isShell(sourceNode) ? 'relay' : settings.general.linkMode;
+      const fallback = mode === 'relay' && !agentById(sourceNode?.data.agentId).hooks;
+      const data = { ...DEFAULT_LINK, mode, ...(fallback && { terminalFallback: true, review: true }) };
+      setEdges((eds) => addEdge({ source: linkSource, target: node.id, type: 'floating', data }, eds));
       setLinkSource(null);
     },
-    [tool, linkSource, nodes, setNodes, setEdges, settings.general.linkMode, t],
+    [tool, linkSource, nodes, setNodes, setEdges, settings.general.linkMode, agentById, t],
   );
 
   // Post-it de ce tableau réécrit par un agent (lien Note).
@@ -484,6 +507,13 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       ),
     [setNodes],
   );
+
+  useEffect(() => window.visualTests.onFinished((id, lastResult) => {
+    if (!lastResult) return;
+    setNodes((nodes) => nodes.some((node) => node.id === id && node.type === 'visualTest')
+      ? nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, lastResult } } : node)
+      : nodes);
+  }), [setNodes]);
 
   // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).
   const selectedEdges = edges.filter((e) => e.selected);
@@ -524,15 +554,17 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       notes: chosen.filter((n) => n.type === 'note').length,
       texts: chosen.filter((n) => n.type === 'text').length,
       panels: chosen.filter((n) => n.type === 'panel').length,
+      visualTests: chosen.filter((n) => n.type === 'visualTest').length,
       strokes: stroke ? 1 : 0,
       nodeIds: chosen.map((n) => n.id),
       edgeIds: chosenEdges.map((e) => e.id),
       stroke,
     };
-    if (terminals.length || selection.links || selection.notes || selection.texts || selection.panels || selection.strokes) setDeleteRequest(selection);
+    if (selection.nodeIds.length || selection.links || selection.strokes) setDeleteRequest(selection);
   };
   const confirmDelete = () => {
     for (const t of deleteRequest.terminals) window.pty.kill(t.id);
+    if (deleteRequest.visualTests) for (const id of deleteRequest.nodeIds) window.visualTests.cancel(id);
     // deleteElements retire aussi les liens attachés aux cases supprimées.
     deleteElements({ nodes: deleteRequest.nodeIds.map((id) => ({ id })), edges: deleteRequest.edgeIds.map((id) => ({ id })) });
     if (deleteRequest.stroke) {
@@ -564,15 +596,15 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       if (tool !== 'select') return;
       if (node.type === 'terminal' && !event.target.closest('.terminal-header')) return;
       event.preventDefault();
-      setNodeMenu({ x: event.clientX, y: event.clientY, id: node.id, type: node.type });
+      setNodeMenu({ x: event.clientX, y: event.clientY, id: node.id, type: node.type, mcp: node.type === 'terminal' && Boolean(agentById(node.data.agentId).hooks) });
     },
-    [tool],
+    [tool, agentById],
   );
 
   // Copie décalée : une case copiée lance un nouvel agent (même agent, dossier, branche, rôle et modèle).
   const duplicate = (node) =>
     setNodes((nds) => {
-      const { label, restored, autoEdit, ...data } = node.data;
+      const { label, restored, autoEdit, lastResult, ...data } = node.data;
       if (node.type === 'terminal') data.label = numberedName(agentById(node.data.agentId).name, nds);
       if (node.type === 'note') data.label = numberedName(t('note.defaultName'), nds);
       return nds
@@ -608,30 +640,35 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       case 'link':
         pendingLinkSource.current = node.id;
         return setTool('link');
+      case 'mcp':
+        return onOpenMcp(node.id);
       case 'delete':
         return requestDelete(node);
     }
   };
 
-  // Outils Post-it et Texte : un clic sur la map pose l'élément, puis on repasse en Sélection.
+  // Outils de placement : un clic sur la map pose l'élément, puis on repasse en Sélection.
   const onPaneClick = useCallback(
     (event) => {
       setSelectedStroke(null);
       setLinkSource(null);
-      if (tool !== 'note' && tool !== 'text') return;
+      if (!['note', 'text', 'visualTest'].includes(tool)) return;
 
       const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const note = tool === 'note';
+      const visualTest = tool === 'visualTest';
+      const size = visualTest ? VISUAL_TEST_SIZE : note ? NOTE_SIZE : null;
       setNodes((nds) =>
         nds
           .map((n) => (n.selected ? { ...n, selected: false } : n))
           .concat({
             id: crypto.randomUUID(),
             type: tool,
-            position: note ? { x: p.x - NOTE_SIZE.width / 2, y: p.y - NOTE_SIZE.height / 2 } : { x: p.x, y: p.y - 14 },
-            style: note ? { ...NOTE_SIZE } : undefined,
+            position: size ? { x: p.x - size.width / 2, y: p.y - size.height / 2 } : { x: p.x, y: p.y - 14 },
+            style: size ? { ...size } : undefined,
+            ...(visualTest && { dragHandle: '.visual-test-header' }),
             selected: true,
-            data: { text: '', autoEdit: true, ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
+            data: visualTest ? {} : { text: '', autoEdit: true, ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
           }),
       );
       setTool('select');
@@ -898,7 +935,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           return <DropPreview name={t(title)} position={previewPos} size={size}><Icon size={32} /></DropPreview>;
         })()}
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
-        {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} onAction={onNodeAction} onClose={closeNodeMenu} />}
+        {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} mcp={nodeMenu.mcp} onAction={onNodeAction} onClose={closeNodeMenu} />}
         {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
         {maximizedNode && (
           <section className="terminal-max" aria-label={maximizedName}>

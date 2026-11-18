@@ -26,7 +26,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
   const fitRef = useRef(null);
   const { settings, agentById } = useSettings();
   const t = useT();
-  const { tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest, maximized, setMaximized, maxSlot } = useBoard();
+  const { boardId, tool, linkSource, branchTarget, branchPicker, setBranchPicker, resumeChoice, renameRequest, maximized, setMaximized, maxSlot } = useBoard();
   const bodyRef = useRef(null);
   const { theme, accent, terminalFontSize } = settings.appearance;
   const [exited, setExited] = useState(false);
@@ -114,12 +114,13 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     termRef.current = term;
     fitRef.current = fit;
     if (!askResumeAtMount.current) {
-      window.pty.create({ id, agentId: data.agentId, cwd: runDirRef.current, label: nameRef.current, cols: term.cols, rows: term.rows, model: data.model }).then((result) => {
+      window.pty.create({ id, boardId, agentId: data.agentId, cwd: runDirRef.current, label: nameRef.current, cols: term.cols, rows: term.rows, model: data.model }).then((result) => {
         if (disposed) return;
         if (result?.buffer) term.write(result.buffer);
         applyStatus(result?.status);
         ready = true;
-      });
+        if (result?.error || !result) setResumeError(result?.error || t('terminal.launchFailed'));
+      }).catch(() => { if (!disposed) setResumeError(t('terminal.launchFailed')); });
     }
 
     // Quand la case change de taille, le terminal suit.
@@ -142,7 +143,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
       termRef.current = null;
     };
     // Police et thème sont appliqués en direct par l'effet suivant, sans recréer le terminal.
-  }, [id, data.agentId, data.cwd]);
+  }, [id, boardId, data.agentId, data.cwd]);
 
   // Terminal agrandi (PLAN.md §7, 3.3) : le même terminal xterm est déplacé dans le calque au-dessus de la map,
   // puis remis dans la case. Rien n'est relancé ; position et taille de la case ne changent pas.
@@ -184,7 +185,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     if (!term || launching.current) return;
     launching.current = true;
     try {
-      const result = await window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
+      const result = await window.pty.create({ id, boardId, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model });
       if (result?.error || !result) { setResumeError(result?.error || t('terminal.launchFailed')); return; }
       setResumeError('');
       updateNodeData(id, { restored: false });
@@ -204,7 +205,9 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     if (!term) return;
     setExited(false);
     term.write('\r\n');
-    window.pty.create({ id, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, model: data.model });
+    window.pty.create({ id, boardId, agentId: data.agentId, cwd: runDir, label: name, cols: term.cols, rows: term.rows, model: data.model })
+      .then((result) => setResumeError(result?.error || ''))
+      .catch(() => setResumeError(t('terminal.launchFailed')));
     term.focus();
   };
 
@@ -218,7 +221,7 @@ export default function TerminalNode({ id, data, selected, dragging, positionAbs
     setFinished(false);
     setConfirmingClose(false);
     term.reset();
-    window.pty.create({ id, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model })
+    window.pty.create({ id, boardId, agentId: data.agentId, cwd: dir, label: name, cols: term.cols, rows: term.rows, resume, model: data.model })
       .then((result) => { if (result?.error) setResumeError(result.error); })
       .catch(() => setResumeError(t('terminal.launchFailed')));
     term.focus();
