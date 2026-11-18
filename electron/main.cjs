@@ -1,7 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, session, shell } = require('electron');
 const ptyManager = require('./ptyManager.cjs');
 const fsHandlers = require('./fsHandlers.cjs');
 const settingsStore = require('./settingsStore.cjs');
@@ -21,6 +21,8 @@ const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
 const visualTests = require('./visualTestRunner.cjs');
 const visualTestLink = require('./visualTestLink.cjs');
+const { createInteractiveBrowser, isTool: isBrowserTool } = require('./interactiveBrowser.cjs');
+const { BROWSER_PARTITION } = require('./browserModel.mjs');
 const { createNoteFiles, registerNoteFiles } = require('./noteFiles.cjs');
 const activityLog = require('./activityLog.cjs');
 const diagnostics = require('./diagnostics.cjs');
@@ -41,6 +43,11 @@ let taskSequences;
 let sequenceNodes = [];
 const mcpCatalog = () => createMcpCatalog(app.getPath('userData'));
 const isBoardFrame = (event) => win && event.sender === win.webContents && event.senderFrame === event.sender.mainFrame;
+const interactiveBrowser = createInteractiveBrowser();
+
+ipcMain.handle('browser:register', (event, ...args) => isBoardFrame(event) && interactiveBrowser.register(event.sender, ...args));
+ipcMain.handle('browser:cookies', (event, guestId, url) => isBoardFrame(event) ? interactiveBrowser.cookies(event.sender, guestId, url) : null);
+ipcMain.handle('browser:removeCookies', (event, guestId, url) => isBoardFrame(event) ? interactiveBrowser.cookies(event.sender, guestId, url, true) : null);
 
 ipcMain.handle('mcp:get', (event, boardId, cardId) => isBoardFrame(event) ? mcpCatalog().get(boardId, cardId) : null);
 ipcMain.handle('mcp:save', (event, boardId, cardId, change) => {
@@ -102,8 +109,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webviewTag: true,
     },
   });
+  interactiveBrowser.attach(win.webContents, session.fromPartition(BROWSER_PARTITION));
 
   if (process.platform === 'win32') {
     const launcher = path.join(__dirname, '..', 'launcher.exe');
@@ -255,6 +264,10 @@ noteLink.init({
 // Outils du serveur MCP d'une case : liens Note, Test visuel, Terminal et Délégation.
 function callTool(caller, name, args, signal) {
   if (noteLink.isTool(name)) return noteLink.callTool(caller, name, args);
+  if (isBrowserTool(name)) {
+    if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
+    return interactiveBrowser.callTool(workspaceStore.get(), caller, name, args);
+  }
   if (visualTestLink.isTool(name)) {
     if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
     return visualTestLink.callTool(workspaceStore.get(), caller, name, args, visualTests.isRunning);

@@ -174,6 +174,12 @@ contextBridge.exposeInMainWorld('notes', {
   },
 });
 
+contextBridge.exposeInMainWorld('interactiveBrowser', {
+  register: (guestId, boardId, browserId, tabId) => ipcRenderer.invoke('browser:register', guestId, boardId, browserId, tabId),
+  cookies: (guestId, url) => ipcRenderer.invoke('browser:cookies', guestId, url),
+  removeCookies: (guestId, url) => ipcRenderer.invoke('browser:removeCookies', guestId, url),
+});
+
 contextBridge.exposeInMainWorld('visualTests', {
   start: (id, data) => ipcRenderer.invoke('visualTest:start', id, data),
   isRunning: (id) => ipcRenderer.invoke('visualTest:isRunning', id),

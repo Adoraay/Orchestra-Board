@@ -205,6 +205,7 @@ function instantiate(id, cwd, replacements = {}, agents = settings.load().agents
     if (edge.data.bidirectional && !terminalRelay && !targetAgent?.hooks) throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'note' && target?.type !== 'note') throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'visual' && target?.type !== 'visualTest') throw new Error(t('team.incompatible'));
+    if (edge.data.mode === 'browser' && target?.type !== 'interactiveBrowser') throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'relay' && (source?.type !== 'terminal' || target?.type !== 'terminal')) throw new Error(t('team.incompatible'));
     if (edge.data.mode === 'terminal' && target?.data.agentId !== 'shell') throw new Error(t('team.incompatible'));
   }

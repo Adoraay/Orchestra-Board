@@ -144,6 +144,30 @@ const TOOLS = [
     },
   },
   {
+    name: 'orchestra_browser_get_state',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists live tabs on Interactive Browser cards you can reach through a Browser link. Returns tab IDs, routes, titles, loading and history state, and console error types and locations. The user opens the site in the browser first.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'orchestra_browser_navigate',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Starts navigation within the current origin of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object',
+      properties: { tabId: { type: 'string' }, url: { type: 'string', maxLength: 4096 } },
+      required: ['tabId', 'url'], additionalProperties: false,
+    },
+  },
+  {
+    name: 'orchestra_browser_reload',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Starts reloading the current page of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object', properties: { tabId: { type: 'string' } }, required: ['tabId'], additionalProperties: false,
+    },
+  },
+  {
     name: 'write_note',
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     description:

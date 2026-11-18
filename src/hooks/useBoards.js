@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EMPTY_BOARD, deserializeBoard, serializeBoard } from '../lib/workspace.js';
+import { EMPTY_BOARD, deserializeBoard, restoreToolDragHandle, serializeBoard } from '../lib/workspace.js';
 import useT from './useT.js';
 
 const SAVE_DELAY = 500; // ms après le dernier changement (PLAN.md §3.4)
@@ -71,8 +71,7 @@ export default function useBoards(saved) {
       fitAtStart: !state.viewport,
       nodes: state.nodes.map((node) => {
         if (node.type === 'terminal') return { ...node, dragHandle: '.drag-handle' };
-        if (node.type === 'visualTest') return { ...node, dragHandle: '.visual-test-header' };
-        return node;
+        return restoreToolDragHandle(node);
       }),
     };
     // Enregistrer les rôles et liens côté Node avant le SessionStart des nouveaux agents.

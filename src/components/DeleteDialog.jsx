@@ -9,7 +9,7 @@ import useT from '../hooks/useT.js';
 export default function DeleteDialog({ selection, onCancel, onConfirm }) {
   const t = useT();
   const { terminals } = selection;
-  const others = ['links', 'notes', 'texts', 'panels', 'visualTests', 'strokes']
+  const others = ['links', 'notes', 'texts', 'panels', 'visualTests', 'browsers', 'strokes']
     .filter((kind) => selection[kind])
     .map((kind) => t(`delete.${kind}`, { count: selection[kind] }));
   const busy = terminals.some((term) => term.status === 'working' || term.status === 'waiting');

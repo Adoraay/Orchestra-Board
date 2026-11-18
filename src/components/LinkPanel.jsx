@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ArrowRight, MonitorCheck, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Globe, MonitorCheck, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK, LINK_MODES, MAX_TURNS } from '../lib/links.js';
 import usePendingMessages from '../hooks/usePendingMessages.js';
@@ -9,6 +9,7 @@ const CONTEXT_LINKS = {
   note: { Icon: StickyNote, warning: 'link.warnNote' },
   terminal: { Icon: SquareTerminal, warning: 'link.warnTerminal' },
   visual: { Icon: MonitorCheck, warning: 'link.warnVisual' },
+  browser: { Icon: Globe, warning: 'link.warnBrowser' },
 };
 
 function statusText(event, nameOf, t) {
@@ -33,7 +34,8 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const caseOf = (id) => {
     const node = nodes.find((n) => n.id === id);
     const agent = agentById(node?.data.agentId);
-    const name = node?.type === 'note' ? t('note.defaultName') : node?.type === 'visualTest' ? t('tool.visualTest') : agent.name;
+    const toolNames = { note: 'note.defaultName', visualTest: 'tool.visualTest', interactiveBrowser: 'dock.browser' };
+    const name = toolNames[node?.type] ? t(toolNames[node.type]) : agent.name;
     return { name: node?.data.label || name, agent };
   };
   const source = caseOf(edge.source);
@@ -64,7 +66,7 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
         </p>
         <p className="hint">{t(`link.mode.${link.mode}.description`)}</p>
         {!source.agent.hooks && <p className="link-warning">{t(warning, { name: source.name })}</p>}
-        {link.mode === 'visual' && (
+        {['visual', 'browser'].includes(link.mode) && (
           <label className="checkbox link-toggle">
             <input type="checkbox" checked={link.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
             {t('link.enabled')}

@@ -4,6 +4,7 @@ const { MODEL } = require('./settingsStore.cjs');
 const { createWorkspaceFiles } = require('./workspaceFiles.cjs');
 const { sanitizeSession } = require('./sessionState.cjs');
 const { configuration: visualTestConfiguration, sanitizeResult: sanitizeVisualTestResult } = require('./visualTestRunner.cjs');
+const { sanitizeBrowserData } = require('./browserModel.mjs');
 const { randomUUID } = require('crypto');
 
 // Tableaux et disposition de chaque map (PLAN.md §3.4), dans userData/workspace.json.
@@ -57,6 +58,8 @@ function sanitizeData(type, data = {}) {
       const lastResult = sanitizeVisualTestResult(data?.lastResult);
       return { ...visualTestConfiguration(data), ...(lastResult && { lastResult }) };
     }
+    case 'interactiveBrowser':
+      return sanitizeBrowserData(data);
     case 'panel': // Utilisation ou Journal posé sur la map (PLAN.md §3.24)
       if (data.panel === 'usage') return { panel: 'usage', ...(USAGE_AGENTS.includes(data.agentId) && { agentId: data.agentId }) };
       return { panel: 'log' };
@@ -66,7 +69,7 @@ function sanitizeData(type, data = {}) {
 }
 
 function sanitizeNode(n) {
-  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text', 'panel', 'visualTest'].includes(n.type)) return null;
+  if (!n || !ID.test(n.id) || !['terminal', 'note', 'text', 'panel', 'visualTest', 'interactiveBrowser'].includes(n.type)) return null;
   if (!isNum(n.position?.x) || !isNum(n.position?.y)) return null;
   const style = {};
   if (size(n.style?.width)) style.width = n.style.width;
@@ -86,7 +89,7 @@ function sanitizeNode(n) {
 // dans les deux sens ou non.
 function sanitizeLink(data = {}) {
   return {
-    mode: ['delegate', 'terminal', 'note', 'visual'].includes(data.mode) ? data.mode : 'relay',
+    mode: ['delegate', 'terminal', 'note', 'visual', 'browser'].includes(data.mode) ? data.mode : 'relay',
     bidirectional: data.bidirectional === true,
     prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '', // vide = pas encore configuré
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),

@@ -12,6 +12,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { Minimize2 } from 'lucide-react';
+import { BROWSER_DRAG_TYPE, browserDropPosition, createBrowserNode } from '../electron/browserModel.mjs';
 import AgentDock from './components/AgentDock.jsx';
 import AgentLogo from './components/AgentLogo.jsx';
 import AgentsBar from './components/AgentsBar.jsx';
@@ -27,6 +28,7 @@ import MiniMapNode from './components/MiniMapNode.jsx';
 import NodeMenu from './components/NodeMenu.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import PanelNode from './components/PanelNode.jsx';
+import InteractiveBrowserNode from './components/InteractiveBrowserNode.jsx';
 import VisualTestNode from './components/VisualTestNode.jsx';
 import QuitDialog from './components/QuitDialog.jsx';
 import ResumeDialog from './components/ResumeDialog.jsx';
@@ -65,7 +67,7 @@ import useT from './hooks/useT.js';
 import { DEFAULT_LINK } from './lib/links.js';
 import { PANELS, draggedPanel } from './lib/panels.js';
 
-const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode, visualTest: VisualTestNode };
+const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode, visualTest: VisualTestNode, interactiveBrowser: InteractiveBrowserNode };
 const DUPLICATE_OFFSET = 40; // px : une copie apparaît en décalé de l'original
 const NOTE_SIZE = { width: 270, height: 180 }; // plus large que haut : les lignes écrites par un agent restent lisibles
 const VISUAL_TEST_SIZE = { width: 500, height: 480 };
@@ -468,18 +470,19 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
   const onNodeClick = useCallback(
     (_event, node) => {
       setSelectedStroke(null);
-      if (tool !== 'link' || !['terminal', 'note', 'visualTest'].includes(node.type)) return;
+      if (tool !== 'link' || !['terminal', 'note', 'visualTest', 'interactiveBrowser'].includes(node.type)) return;
       if (!linkSource || linkSource === node.id) {
         setLinkSource(linkSource ? null : node.id);
         return;
       }
       const sourceNode = nodes.find((n) => n.id === linkSource);
-      const isRunner = (n) => n?.type === 'visualTest';
-      if (isRunner(sourceNode) || isRunner(node)) {
-        const [agent, runner] = isRunner(node) ? [sourceNode, node] : [node, sourceNode];
+      const isBrowserTool = (n) => ['visualTest', 'interactiveBrowser'].includes(n?.type);
+      if (isBrowserTool(sourceNode) || isBrowserTool(node)) {
+        const [agent, target] = isBrowserTool(node) ? [sourceNode, node] : [node, sourceNode];
         setLinkSource(null);
         if (agent?.type !== 'terminal' || !agentById(agent.data.agentId).hooks) return;
-        setEdges((eds) => addEdge({ source: agent.id, target: runner.id, type: 'floating', data: { ...DEFAULT_LINK, mode: 'visual' } }, eds));
+        const mode = target.type === 'interactiveBrowser' ? 'browser' : 'visual';
+        setEdges((eds) => addEdge({ source: agent.id, target: target.id, type: 'floating', data: { ...DEFAULT_LINK, mode } }, eds));
         return;
       }
       // Un agent relié à un post-it : lien Note, toujours de l'agent vers le post-it. Pas de lien entre deux
@@ -563,6 +566,7 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
       texts: chosen.filter((n) => n.type === 'text').length,
       panels: chosen.filter((n) => n.type === 'panel').length,
       visualTests: chosen.filter((n) => n.type === 'visualTest').length,
+      browsers: chosen.filter((n) => n.type === 'interactiveBrowser').length,
       strokes: stroke ? 1 : 0,
       nodeIds: chosen.map((n) => n.id),
       edgeIds: chosenEdges.map((e) => e.id),
@@ -700,6 +704,11 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
 
   const onDragOver = useCallback(
     (event) => {
+      if (event.dataTransfer.types.includes(BROWSER_DRAG_TYPE)) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        return;
+      }
       // « Branche » se lâche seulement sur une case terminal : elle s'allume au survol.
       if (draggingBranch) {
         event.preventDefault();
@@ -783,6 +792,25 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
   // « Lancer un agent ici » (clic droit dans l'explorateur) : nouvelle case au centre de la vue.
   const boardRef = useRef(null);
   useGridGlow(boardRef, glow && Boolean(GRID_VARIANTS[grid]), settings.appearance.glowSize);
+  const addBrowser = useCallback((center) => {
+    const browser = createBrowserNode(center);
+    setNodes((all) => [...all.map((node) => node.selected ? { ...node, selected: false } : node), browser]);
+    setTool('select');
+  }, [setNodes]);
+
+  const openBrowser = useCallback(() => {
+    const browsers = nodesRef.current.filter((node) => node.type === 'interactiveBrowser');
+    const browser = browsers.find((node) => node.selected) ?? browsers[0];
+    if (browser) {
+      setTool('select');
+      setNodes((all) => all.map((node) => Boolean(node.selected) === (node.id === browser.id) ? node : { ...node, selected: node.id === browser.id }));
+      const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 400;
+      fitView({ nodes: [{ id: browser.id }], duration, padding: 0.16, maxZoom: 1 });
+    } else if (boardRef.current) {
+      const { left, top, width, height } = boardRef.current.getBoundingClientRect();
+      addBrowser(screenToFlowPosition({ x: left + width / 2, y: top + height / 2 }));
+    }
+  }, [addBrowser, fitView, screenToFlowPosition, setNodes]);
   useEffect(() => {
     if (!launchRequest || !boardRef.current) return;
     const rect = boardRef.current.getBoundingClientRect();
@@ -794,6 +822,12 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
+      const browserCenter = browserDropPosition(event, screenToFlowPosition);
+      if (browserCenter) {
+        endDrag();
+        addBrowser(browserCenter);
+        return;
+      }
       if (draggingBranch) {
         const nodeId = branchTarget;
         endDrag();
@@ -816,7 +850,7 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
 
       addTerminal(agentId, cwd, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
     },
-    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, addPanel, activeFolder, homeDir, agentById, t],
+    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, addPanel, addBrowser, activeFolder, homeDir, agentById, t],
   );
 
   const maximizedNode = maximized && nodes.find((n) => n.id === maximized && n.type === 'terminal');
@@ -830,6 +864,7 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
         onDragStart={setDraggedAgentId}
         onBranchDragStart={() => setDraggingBranch(true)}
         onDragEnd={endDrag}
+        onBrowserOpen={openBrowser}
       />
       <main
         ref={boardRef}

@@ -72,6 +72,12 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode === 'interactive-browser') {
+        await require('./ui-interactive-browser.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI interactive-browser: Dock, live webviews, history, cookie isolation and workspace restoration');
+        app.quit();
+        return;
+      }
       if (mode === 'mcp-relay') {
         await require('./ui-mcp-relay.cjs')({ evaluate, until, sleep, data, errors });
         console.log('PASS UI mcp-relay: board and card scope, CMD output relayed for review');

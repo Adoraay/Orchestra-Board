@@ -9,7 +9,7 @@ function snapshotOf(nodes, edges, strokes, groups) {
   return {
     annotations: nodes
       .filter((n) => ANNOTATIONS.has(n.type))
-      .map(({ id, type, position, width, height, style, data }) => ({ id, type, position, width, height, style, data })),
+      .map(({ id, type, position, width, height, style, data, dragHandle }) => ({ id, type, position, width, height, style, data, dragHandle })),
     edges: edges.map(({ id, source, target, type, animated, data }) => ({ id, source, target, type, animated, data })),
     strokes,
     positions: nodes.filter((node) => node.type === 'terminal').map(({ id, position }) => ({ id, position })),
@@ -29,7 +29,8 @@ export default function useBoardHistory({ nodes, edges, strokes, groups, setNode
 
   const current = useMemo(() => {
     const snapshot = snapshotOf(nodes, edges, strokes, groups);
-    return { snapshot, key: JSON.stringify(snapshot) };
+    const annotations = snapshot.annotations.map((node) => node.type === 'interactiveBrowser' ? { ...node, data: undefined } : node);
+    return { snapshot, key: JSON.stringify({ ...snapshot, annotations }) };
   }, [nodes, edges, strokes, groups]);
 
   const commit = (entry) => {
@@ -50,7 +51,10 @@ export default function useBoardHistory({ nodes, edges, strokes, groups, setNode
       return;
     }
     cancelPending();
-    if (current.key === present.current.key) return;
+    if (current.key === present.current.key) {
+      present.current = current;
+      return;
+    }
     pending.current = {
       entry: current,
       timer: setTimeout(() => {
