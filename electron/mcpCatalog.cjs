@@ -7,6 +7,15 @@ const reserved = new Set(['orchestra', '__proto__', 'constructor', 'prototype'])
 const line = (value, limit) => typeof value === 'string' && value.length <= limit && !/[\x00-\x1f\x7f]/.test(value);
 const validId = (id) => typeof id === 'string' && ID.test(id) && !reserved.has(id);
 
+function sanitizePreset(input, cardIds) {
+  if (!input || typeof input !== 'object') return null;
+  const ids = (value) => Array.isArray(value) ? [...new Set(value.filter((id) => validId(id) && SERVER_ID.test(id)))].slice(0, 54) : [];
+  const board = ids(input.board);
+  const cards = Object.fromEntries(cardIds.flatMap((id) =>
+    validId(id) && Array.isArray(input.cards?.[id]) ? [[id, ids(input.cards[id])]] : []));
+  return board.length || Object.keys(cards).length ? { board, cards } : null;
+}
+
 function npmServer(pkg, args) {
   const npmArgs = ['npx', '--yes', pkg, ...args];
   return process.platform === 'win32'
@@ -78,6 +87,12 @@ function createMcpCatalog(directory) {
     };
   }
 
+  function write(data) {
+    const temporary = file + '.tmp';
+    fs.writeFileSync(temporary, JSON.stringify(data, null, 2), { mode: 0o600 });
+    fs.renameSync(temporary, file);
+  }
+
   function save(boardId, cardId, change) {
     if (!validId(boardId) || (cardId != null && !validId(cardId))) throw new Error('invalidScope');
     const data = read();
@@ -96,10 +111,36 @@ function createMcpCatalog(directory) {
       else if (change.selection == null) delete data.cards[cardId];
       else data.cards[cardId] = { boardId, servers: selection(change.selection, data.custom) };
     }
-    const temporary = file + '.tmp';
-    fs.writeFileSync(temporary, JSON.stringify(data, null, 2), { mode: 0o600 });
-    fs.renameSync(temporary, file);
+    write(data);
     return get(boardId, cardId);
+  }
+
+  function capturePreset(boardId, cardIds) {
+    if (!validId(boardId)) return null;
+    const { custom, boards, cards } = read();
+    return sanitizePreset({
+      board: selection(boards[boardId], custom),
+      cards: Object.fromEntries(cardIds.flatMap((id) =>
+        validId(id) && cards[id]?.boardId === boardId ? [[id, selection(cards[id].servers, custom)]] : [])),
+    }, cardIds);
+  }
+
+  function applyPreset(boardId, cardIds, input, saveWorkspace) {
+    if (!validId(boardId)) throw new Error('invalidScope');
+    const preset = sanitizePreset(input, cardIds);
+    if (!preset) return saveWorkspace();
+    const previous = read();
+    const known = new Set([...presets, ...previous.custom].map(({ id }) => id));
+    const missing = [...new Set([...preset.board, ...Object.values(preset.cards).flat()])].filter((id) => !known.has(id));
+    if (missing.length) throw Object.assign(new Error('missingServers'), { missingServers: missing });
+    const cards = Object.fromEntries(Object.entries(preset.cards).map(([id, servers]) => [id, { boardId, servers }]));
+    write({ ...previous, boards: { ...previous.boards, [boardId]: preset.board }, cards: { ...previous.cards, ...cards } });
+    try {
+      return saveWorkspace();
+    } catch (error) {
+      write(previous);
+      throw error;
+    }
   }
 
   function resolve(boardId, cardId) {
@@ -115,7 +156,7 @@ function createMcpCatalog(directory) {
     }
   }
 
-  return { get, save, resolve };
+  return { get, save, resolve, capturePreset, applyPreset };
 }
 
-module.exports = { createMcpCatalog, validId };
+module.exports = { createMcpCatalog, sanitizePreset, validId };

@@ -532,7 +532,7 @@ workspaceStore.register((workspace) => {
   }
   for (const id of caseAgents.keys()) diagnostics.forget(id);
   caseAgents.clear();
-});
+}, (boardId, cards, preset, persist) => mcpCatalog().applyPreset(boardId, cards, preset, persist));
 gitHandlers.register(workspaceStore.get);
 taskService = tasksHandlers.register(workspaceStore.get, send, linkRelay);
 teamTemplates.register();

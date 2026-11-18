@@ -8,7 +8,7 @@ import useT from '../hooks/useT.js';
 
 const terminals = (board) => board?.nodes.filter((node) => node.type === 'terminal') ?? [];
 
-export default function TeamTemplates({ board, getBoard, boardName, onCreate, onClose }) {
+export default function TeamTemplates({ boardId, board, getBoard, boardName, onCreate, onClose }) {
   const t = useT();
   const { agents, settings } = useSettings();
   const { activeFolder, rootPath } = useWorkspace();
@@ -17,6 +17,7 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
   const [tab, setTab] = useState('use');
   const [name, setName] = useState(boardName);
   const [folder, setFolder] = useState(activeFolder || rootPath || '');
+  const [testUrl, setTestUrl] = useState('');
   const [installed, setInstalled] = useState({});
   const [replacements, setReplacements] = useState({});
   const [error, setError] = useState('');
@@ -43,11 +44,17 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
   }, [onClose]);
 
   const template = templates.find((item) => item.id === selected);
+  const visualTests = template?.board.nodes.filter((node) => node.type === 'visualTest') ?? [];
   const sourceIds = [...new Set(terminals(template?.board).map((node) => node.data.agentId))];
   const compatible = (sourceId, agent) => {
     if (sourceId === 'shell') return agent.id === 'shell';
     const ids = new Set(template.board.nodes.filter((node) => node.type === 'terminal' && node.data.agentId === sourceId).map((node) => node.id));
-    const needsHooks = template.board.nodes.some((node) => ids.has(node.id) && node.data.role) || template.board.edges.some((edge) => ids.has(edge.source) || (ids.has(edge.target) && (edge.data.mode === 'delegate' || edge.data.bidirectional)));
+    const needsHooks = template.board.nodes.some((node) =>
+      ids.has(node.id) && (node.data.role || template.mcp?.cards[node.id]?.length),
+    ) || template.board.edges.some((edge) => {
+      if (edge.data.mode === 'relay' && edge.data.terminalFallback) return false;
+      return ids.has(edge.source) || (ids.has(edge.target) && (edge.data.mode === 'delegate' || edge.data.bidirectional));
+    });
     return !needsHooks || Boolean(agent.hooks);
   };
   const choice = (id) => {
@@ -64,15 +71,16 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
     finally { setBusy(false); }
   };
   const create = () => perform(async () => {
-    const result = await window.teams.create(selected, folder, Object.fromEntries(sourceIds.map((id) => [id, choice(id)])));
+    const result = await window.teams.create(selected, folder, Object.fromEntries(sourceIds.map((id) => [id, choice(id)])), visualTests.length ? testUrl.trim() : '');
     if (result.error) { setError(result.error); return; }
-    if (!await onCreate(result.value.name, result.value.board)) { setError(t('team.boardLimit')); return; }
+    const created = await onCreate(result.value.name, result.value.board, result.value.mcp);
+    if (!created || created.error) { setError(created?.error || t('team.boardLimit')); return; }
     onClose();
   });
   const save = () => perform(async () => {
-    const result = await window.teams.save(name, getBoard());
+    const result = await window.teams.save(name, getBoard(), boardId);
     if (result.error) { setError(result.error); return; }
-    await refresh(); setSelected(result.value.id); setReplacements({}); setConfirmDelete(false); setTab('use');
+    await refresh(); setSelected(result.value.id); setTestUrl(''); setReplacements({}); setConfirmDelete(false); setTab('use');
   });
   const remove = () => perform(async () => {
     const result = await window.teams.remove(selected);
@@ -99,7 +107,7 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
         </div>
       </div> : <div className="team-layout">
         <aside className="team-list thin-scrollbar" aria-label={t('team.title')}>
-          {templates.map((item) => <button key={item.id} className={`team-item ${item.id === selected ? 'active' : ''}`} onClick={() => { setSelected(item.id); setReplacements({}); setConfirmDelete(false); setError(''); }}>
+          {templates.map((item) => <button key={item.id} className={`team-item ${item.id === selected ? 'active' : ''}`} onClick={() => { setSelected(item.id); setTestUrl(''); setReplacements({}); setConfirmDelete(false); setError(''); }}>
             <strong>{item.name}</strong>
             <span className="hint">{t(item.builtin ? 'team.recipe' : 'team.personal')} · {summary(item)}</span>
           </button>)}
@@ -114,12 +122,24 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
             <summary>{t('team.roles', { n: roles.length })}</summary>
             {roles.map((node) => <div key={node.id}><strong>{node.data.label || node.data.agentId}</strong><p>{node.data.role}</p></div>)}
           </details>}
+          {template.mcp && <details className="team-roles" open>
+            <summary>{t('mcp.servers')}</summary>
+            {template.mcp.board.length > 0 && <div><strong>{t('team.boardDefaults')}</strong><p>{template.mcp.board.join(', ')}</p></div>}
+            {terminals(template.board).filter((node) => Object.hasOwn(template.mcp.cards, node.id)).map((node) => (
+              <div key={node.id}><strong>{node.data.label || node.data.agentId}</strong><p>{template.mcp.cards[node.id].join(', ') || t('team.noExtraMcp')}</p></div>
+            ))}
+          </details>}
 
           <h3 className="team-section">{t('team.setup')}</h3>
           <label className="field"><span>{t('team.folder')}</span><div className="field-row">
             <input type="text" value={folder} placeholder={t('team.folderPlaceholder')} onChange={(e) => setFolder(e.target.value)} />
             <button className="text-button" title={t('team.pickFolder')} onClick={async () => { const picked = await window.fs.pickFolder(folder); if (picked) setFolder(picked); }}><FolderOpen size={15} />{t('team.browse')}</button>
           </div></label>
+          {visualTests.length > 0 && <label className="field">
+            <span>{t('team.testUrl')}</span>
+            <input type="text" inputMode="url" value={testUrl} placeholder="http://localhost:3000" onChange={(e) => setTestUrl(e.target.value)} />
+            {visualTests.some((node) => node.data.url) && <span className="hint">{t('team.testUrlHint')}</span>}
+          </label>}
           {sourceIds.length > 0 && <div className="field"><span>{t('team.agents')}</span>
             <div className="team-agents">{sourceIds.map((id) => {
               const source = agents.find((agent) => agent.id === id);

@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('workspace', {
     return () => ipcRenderer.removeListener('workspace:saveError', listener);
   },
   set: (workspace) => ipcRenderer.invoke('workspace:set', workspace, workspaceGeneration),
+  setPreset: (workspace, mcp) => ipcRenderer.invoke('workspace:setPreset', workspace, workspaceGeneration, mcp),
   saveSync: (workspace) => ipcRenderer.sendSync('workspace:saveSync', workspace, workspaceGeneration),
 });
 
@@ -91,9 +92,9 @@ contextBridge.exposeInMainWorld('git', {
 
 contextBridge.exposeInMainWorld('teams', {
   list: () => ipcRenderer.invoke('teams:list'),
-  save: (name, board) => ipcRenderer.invoke('teams:save', name, board),
+  save: (name, board, boardId) => ipcRenderer.invoke('teams:save', name, board, boardId),
   remove: (id) => ipcRenderer.invoke('teams:remove', id),
-  create: (id, cwd, replacements) => ipcRenderer.invoke('teams:create', id, cwd, replacements),
+  create: (id, cwd, replacements, testUrl) => ipcRenderer.invoke('teams:create', id, cwd, replacements, testUrl),
 });
 
 contextBridge.exposeInMainWorld('blockers', {

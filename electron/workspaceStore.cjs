@@ -206,7 +206,7 @@ function setRole(id, value) {
 function startup() { restoring = false; return { workspace: load(), recovery, generation }; }
 
 // listener(workspace) : appelé au démarrage puis après chaque sauvegarde (liens pour linkRelay).
-function register(listener, beforeRestore = () => {}) {
+function register(listener, beforeRestore = () => {}, applyPreset = (_id, _cards, _preset, persist) => persist()) {
   onSaved = listener;
   onSaved(load());
   ipcMain.handle('workspace:get', () => load());
@@ -234,6 +234,22 @@ function register(listener, beforeRestore = () => {}) {
     } catch (error) { restoring = false; generation = previousGeneration; return { error: error.message }; }
   });
   ipcMain.handle('workspace:set', (_e, workspace, token) => { if (token === generation) save(workspace); });
+  ipcMain.handle('workspace:setPreset', (_e, workspace, token, preset) => {
+    try {
+      load();
+      const board = sanitize(workspace).boards.find(({ id }) => id === workspace?.activeBoardId);
+      if (token !== generation || restoring || recovery || !board || current.boards.some(({ id }) => id === board.id)) {
+        return { error: t('team.applyFailed') };
+      }
+      const cards = board.nodes.filter(({ type }) => type === 'terminal').map(({ id }) => id);
+      const existingCards = new Set(current.boards.flatMap(({ nodes }) => nodes.map(({ id }) => id)));
+      if (cards.some((id) => existingCards.has(id))) return { error: t('team.applyFailed') };
+      applyPreset(board.id, cards, preset, () => save(workspace));
+      return { ok: true };
+    } catch (error) {
+      return { error: error.missingServers ? t('team.missingMcp', { names: error.missingServers.join(', ') }) : t('team.applyFailed') };
+    }
+  });
   // Version synchrone pour la fermeture de la fenêtre : une sauvegarde asynchrone n'aurait pas le temps de finir.
   ipcMain.on('workspace:saveSync', (event, workspace, token) => {
     try {

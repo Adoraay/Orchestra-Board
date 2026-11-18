@@ -62,7 +62,7 @@ export default function useBoards(saved) {
     return id;
   };
 
-  const addBoard = async (name, state) => {
+  const addBoard = async (name, state, mcp) => {
     if (latest.current.boards.length >= 50) return false;
     const id = 'board-' + crypto.randomUUID();
     const next = [...latest.current.boards, { id, name: name.slice(0, 40) }];
@@ -77,7 +77,17 @@ export default function useBoards(saved) {
     // Enregistrer les rôles et liens côté Node avant le SessionStart des nouveaux agents.
     clearTimeout(saveTimer.current);
     try {
-      await window.workspace.set({ activeBoardId: id, boards: next.map((board) => ({ ...board, ...serializeBoard(content.current[board.id]) })) });
+      const workspace = { activeBoardId: id, boards: next.map((board) => ({ ...board, ...serializeBoard(content.current[board.id]) })) };
+      if (mcp) {
+        const result = await window.workspace.setPreset(workspace, mcp);
+        if (result.error) {
+          delete content.current[id];
+          scheduleSave();
+          return result;
+        }
+      } else {
+        await window.workspace.set(workspace);
+      }
     } catch (error) {
       delete content.current[id];
       setSaveError(true);

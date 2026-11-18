@@ -457,6 +457,12 @@ The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds
 - **MCP by board and card** — Select servers in **Settings → MCP** or use **MCP servers…** in a card’s context menu. Cards inherit board defaults until you choose a custom selection. Changes apply on the next agent launch. Linear uses the client’s sign-in flow. The Chrome DevTools, agent-browser, and agent-desktop presets use Node.js and `npx`. Custom server definitions and assignments live in the local app profile.
 - **Relay from a terminal** — Link from the terminal to the receiving card, then set the instruction. For an existing Relay, enable **Use terminal output for sources without hooks**. If Orchestra recognizes the shell prompt, it waits for it to return. Other CLI output uses a two-second pause. Review is enabled by default when you turn on terminal capture.
 
+### Reusing a project board
+
+Open **Team templates → Project maintenance**, choose a project folder, and create a board. The preset includes a lead with Linear, a developer, a QA card with Chrome DevTools, a shared checklist, and a Visual Test Runner. Enter the application URL when creating the board or configure it on the test card later. Linear authentication happens in the agent’s CLI.
+
+Use **Save this board** to keep your own setup. A template saves the layout, links, role instructions, notes, test definitions, and the MCP server IDs selected at each level. Register any referenced custom server on this installation first. Set an application URL when creating a board to point saved tests at a new origin while keeping their paths. Each new board starts agents in the chosen folder with fresh conversations, and each test card starts with an empty run history.
+
 ### Updating the local branch
 
 In a fork checkout, `origin` points to the fork and `upstream` points to the original repository. The local `main` tracks `upstream/main`. Run these commands to bring upstream changes into the feature branch.

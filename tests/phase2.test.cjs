@@ -6,6 +6,7 @@ const path = require('path');
 const { load, i18n } = require('./helpers.cjs');
 const { createBlockers } = require('../electron/blockers.cjs');
 const { createRoleState } = require('../electron/roleState.cjs');
+const { createMcpCatalog } = require('../electron/mcpCatalog.cjs');
 const { sharedWorktrees } = require('../electron/sharedWorktrees.cjs');
 
 function fixture(t) {
@@ -61,7 +62,7 @@ test('missing agents require compatible replacements, without reusing their mode
 
 test('recipes are usable and invalid or unreadable libraries are never overwritten', (t) => {
   const { teams, directory } = templates(t);
-  assert.equal(teams.list().length, 3);
+  assert.equal(teams.list().length, 4);
   for (const recipe of teams.list()) assert.ok(teams.instantiate(recipe.id, directory).board.nodes.length >= 2);
   assert.throws(() => teams.save('', { nodes: [] }), /invalidName/);
   assert.throws(() => teams.save('Empty', { nodes: [] }), /empty/);
@@ -70,6 +71,50 @@ test('recipes are usable and invalid or unreadable libraries are never overwritt
   const file = path.join(directory, 'team-templates.json'); fs.writeFileSync(file, '{ broken');
   assert.throws(() => teams.save('More', { nodes: [node('a')] }), /unreadable/);
   assert.equal(fs.readFileSync(file, 'utf8'), '{ broken');
+});
+
+test('a saved preset reuses MCP IDs across repositories and preserves explicit card overrides', (t) => {
+  const { teams, directory } = templates(t);
+  const catalog = createMcpCatalog(directory);
+  catalog.save('source', null, {
+    add: { id: 'project-tools', type: 'http', url: 'http://localhost:8080/mcp' },
+    selection: ['linear', 'project-tools'],
+  });
+  catalog.save('source', 'a', { selection: ['chrome-devtools'] });
+  catalog.save('source', 'b', { selection: [] });
+  const template = teams.save('Project setup', { nodes: [node('a'), node('b'), node('c')] }, 'source');
+  const target = path.join(directory, 'other-repo');
+  fs.mkdirSync(target);
+  const created = teams.instantiate(template.id, target);
+  const [a, b, c] = created.board.nodes;
+  assert.equal(a.data.cwd, target);
+  assert.notEqual(a.id, 'a');
+  assert.doesNotMatch(fs.readFileSync(path.join(directory, 'team-templates.json'), 'utf8'), /localhost:8080/);
+  catalog.applyPreset('created', [a.id, b.id, c.id], created.mcp, () => {
+    assert.deepEqual(Object.keys(catalog.resolve('created', a.id)), ['chrome-devtools']);
+    assert.deepEqual(catalog.resolve('created', b.id), {});
+    assert.deepEqual(Object.keys(catalog.resolve('created', c.id)), ['linear', 'project-tools']);
+  });
+  catalog.save('source', null, { remove: 'project-tools' });
+  assert.throws(() => catalog.applyPreset('new-board', [], created.mcp, () => assert.fail()), { missingServers: ['project-tools'] });
+});
+
+test('the maintenance preset provides Linear and Chrome roles plus a project test URL', (t) => {
+  const { teams, directory } = templates(t);
+  const result = teams.instantiate('recipe-maintenance', directory, {}, agents, 'http://localhost:3001/tasks');
+  const [lead, developer, qa, , visual] = result.board.nodes;
+  assert.deepEqual(result.mcp.cards, { [lead.id]: ['linear'], [qa.id]: ['chrome-devtools'] });
+  assert.equal(result.mcp.cards[developer.id], undefined);
+  assert.match(lead.data.role, /team.guide.linear/);
+  assert.match(qa.data.role, /team.guide.chrome/);
+  assert.equal(visual.data.url, 'http://localhost:3001/tasks');
+  assert.throws(() => teams.instantiate('recipe-maintenance', directory, {}, agents, 'file:///local'), /invalidTestUrl/);
+  const catalog = createMcpCatalog(directory);
+  assert.throws(() => catalog.applyPreset('new-board', [lead.id, qa.id], result.mcp, () => {
+    assert.deepEqual(Object.keys(catalog.resolve('new-board', lead.id)), ['linear']);
+    throw new Error('workspace failed');
+  }), /workspace failed/);
+  assert.equal(catalog.get('new-board', lead.id).card, null);
 });
 
 test('permission blockers deduplicate, survive clear-resolved, and resolve on work resumption', () => {

@@ -39,7 +39,8 @@ export default function TeamPreview({ board, agents }) {
         const { width, height } = nodeSize(node);
         const note = node.type !== 'terminal';
         const agent = agents.find((entry) => entry.id === node.data.agentId);
-        const label = node.data.label || agent?.name || (node.type === 'panel' ? t(`${node.data.panel}.title`) : t('team.note'));
+        const label = node.data.label || agent?.name ||
+          (node.type === 'panel' ? t(`${node.data.panel}.title`) : t(node.type === 'visualTest' ? 'tool.visualTest' : 'team.note'));
         // Largeur estimée du texte (tailles du CSS) : un nom trop long est resserré dans sa case.
         const fit = label.length * (note ? 56 : 84) * 0.55 > width * 0.86 ? { textLength: width * 0.86, lengthAdjust: 'spacingAndGlyphs' } : {};
         return <g key={node.id} className={`team-node ${note ? 'note' : ''}`}>
