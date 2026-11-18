@@ -79,3 +79,60 @@ test('binding requires local UTF-8 Markdown and rejects directories', (t) => {
   assert.throws(() => service.link('note', directory), { noteKey: 'note.fileUnavailable' });
   assert.equal(service.get('note'), null);
 });
+
+test('preset backlogs prefer BACKLOG.md, then TODO.md, and never replace existing content', (t) => {
+  const { service, file } = setup(t, '- [x] Existing backlog\n');
+  const cwd = path.dirname(file);
+  const todo = path.join(cwd, 'TODO.md');
+  fs.writeFileSync(todo, '- [ ] Existing TODO\n');
+  const apply = () => service.applyProjectBacklog('note', cwd, '- [ ] Preset checklist\n', () => service.setWorkspace(workspace));
+
+  apply();
+  assert.equal(service.get('note').file, fs.realpathSync.native(file));
+  assert.equal(service.get('note').text, '- [x] Existing backlog\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), '- [x] Existing backlog\n');
+
+  service.unlink('note');
+  fs.unlinkSync(file);
+  apply();
+  assert.equal(service.get('note').file, fs.realpathSync.native(todo));
+  assert.equal(service.get('note').text, '- [ ] Existing TODO\n');
+  assert.equal(fs.existsSync(file), false);
+});
+
+test('preset backlogs seed a new UTF-8 checklist and roll back the binding if board save fails', (t) => {
+  const { service, file, profile } = setup(t, '');
+  fs.unlinkSync(file);
+  const text = '- [ ] Fazer revisão\n';
+
+  assert.throws(() => service.applyProjectBacklog('note', path.dirname(file), text, () => {
+    service.setWorkspace(workspace);
+    assert.equal(service.get('note').text, text);
+    fs.writeFileSync(file, '- [~] Editado durante a criação\n');
+    throw new Error('board save failed');
+  }), /board save failed/);
+  assert.equal(service.get('note'), null);
+  assert.equal(fs.readFileSync(file, 'utf8'), '- [~] Editado durante a criação\n');
+
+  const restored = createNoteFiles(profile, () => {});
+  t.after(restored.dispose);
+  restored.setWorkspace(workspace);
+  assert.equal(restored.get('note'), null);
+  restored.applyProjectBacklog('note', path.dirname(file), text, () => restored.setWorkspace(workspace));
+  assert.equal(restored.get('note').text, '- [~] Editado durante a criação\n');
+});
+
+test('preset backlogs reject reparse targets and refuse to replace an unusable BACKLOG.md', (t) => {
+  const { service, file } = setup(t, '');
+  fs.unlinkSync(file);
+  const cwd = path.dirname(file);
+  const other = path.join(cwd, 'outside');
+  fs.mkdirSync(other);
+  fs.writeFileSync(path.join(cwd, 'TODO.md'), '- [ ] Alternate\n');
+  fs.symlinkSync(other, file, process.platform === 'win32' ? 'junction' : 'dir');
+
+  assert.throws(() => service.applyProjectBacklog('note', cwd, 'checklist', () => assert.fail()), { noteKey: 'note.fileUnavailable' });
+  assert.equal(service.get('note'), null);
+  assert.equal(fs.lstatSync(file).isSymbolicLink(), true);
+  assert.equal(fs.readFileSync(path.join(cwd, 'TODO.md'), 'utf8'), '- [ ] Alternate\n');
+});

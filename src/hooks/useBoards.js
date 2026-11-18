@@ -62,12 +62,13 @@ export default function useBoards(saved) {
     return id;
   };
 
-  const addBoard = async (name, state, mcp) => {
+  const addBoard = async (name, state, mcp, backlog) => {
     if (latest.current.boards.length >= 50) return false;
     const id = 'board-' + crypto.randomUUID();
     const next = [...latest.current.boards, { id, name: name.slice(0, 40) }];
     content.current[id] = {
       ...state,
+      fitAtStart: !state.viewport,
       nodes: state.nodes.map((node) => {
         if (node.type === 'terminal') return { ...node, dragHandle: '.drag-handle' };
         if (node.type === 'visualTest') return { ...node, dragHandle: '.visual-test-header' };
@@ -78,8 +79,8 @@ export default function useBoards(saved) {
     clearTimeout(saveTimer.current);
     try {
       const workspace = { activeBoardId: id, boards: next.map((board) => ({ ...board, ...serializeBoard(content.current[board.id]) })) };
-      if (mcp) {
-        const result = await window.workspace.setPreset(workspace, mcp);
+      if (mcp || backlog) {
+        const result = await window.workspace.setPreset(workspace, mcp, backlog);
         if (result.error) {
           delete content.current[id];
           scheduleSave();

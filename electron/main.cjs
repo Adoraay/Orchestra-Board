@@ -20,6 +20,7 @@ const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
 const visualTests = require('./visualTestRunner.cjs');
+const visualTestLink = require('./visualTestLink.cjs');
 const { createNoteFiles, registerNoteFiles } = require('./noteFiles.cjs');
 const activityLog = require('./activityLog.cjs');
 const diagnostics = require('./diagnostics.cjs');
@@ -251,9 +252,13 @@ noteLink.init({
   emit: emitLink,
 });
 
-// Outils du serveur MCP d'une case : lien Note, lien Terminal ou Délégation.
+// Outils du serveur MCP d'une case : liens Note, Test visuel, Terminal et Délégation.
 function callTool(caller, name, args, signal) {
   if (noteLink.isTool(name)) return noteLink.callTool(caller, name, args);
+  if (visualTestLink.isTool(name)) {
+    if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
+    return visualTestLink.callTool(workspaceStore.get(), caller, name, args, visualTests.isRunning);
+  }
   if (!terminalLink.isTool(name)) return delegation.callTool(caller, name, args, signal);
   if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
   return terminalLink.callTool(caller, name, args, signal);
@@ -532,10 +537,16 @@ workspaceStore.register((workspace) => {
   }
   for (const id of caseAgents.keys()) diagnostics.forget(id);
   caseAgents.clear();
-}, (boardId, cards, preset, persist) => mcpCatalog().applyPreset(boardId, cards, preset, persist));
+}, (boardId, cards, preset, backlog, persist, event) => {
+  if (!isBoardFrame(event)) throw new Error('Invalid board frame');
+  return mcpCatalog().applyPreset(boardId, cards, preset, () => {
+    if (!backlog) return persist();
+    return noteFiles.applyProjectBacklog(backlog.noteId, backlog.cwd, backlog.text, persist);
+  });
+});
 gitHandlers.register(workspaceStore.get);
 taskService = tasksHandlers.register(workspaceStore.get, send, linkRelay);
-teamTemplates.register();
+teamTemplates.register(noteFiles.get);
 usage.register();
 updates.register(() => win);
 activityLog.register(() => win);

@@ -14,7 +14,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
-const agents = [{ id: 'claude-code', hooks: 'claude' }, { id: 'codex', hooks: 'codex' }, { id: 'shell' }];
+const agents = [{ id: 'claude-code', hooks: 'claude' }, { id: 'codex', hooks: 'codex' }, { id: 'antigravity', hooks: 'antigravity' }, { id: 'shell' }];
 const node = (id, role = '') => ({ id, type: 'terminal', position: { x: 10, y: 20 }, style: { width: 640, height: 400 }, data: { agentId: 'claude-code', label: id, role } });
 const workspace = (role = 'Old role') => ({ boards: [{ id: 'one', name: 'One', nodes: [node('a', role), node('b')], edges: [{ id: 'ab', source: 'a', target: 'b', data: { mode: 'delegate', enabled: true } }] }, { id: 'two', name: 'Two', nodes: [node('c')], edges: [] }] });
 
@@ -62,7 +62,7 @@ test('missing agents require compatible replacements, without reusing their mode
 
 test('recipes are usable and invalid or unreadable libraries are never overwritten', (t) => {
   const { teams, directory } = templates(t);
-  assert.equal(teams.list().length, 4);
+  assert.equal(teams.list().length, 5);
   for (const recipe of teams.list()) assert.ok(teams.instantiate(recipe.id, directory).board.nodes.length >= 2);
   assert.throws(() => teams.save('', { nodes: [] }), /invalidName/);
   assert.throws(() => teams.save('Empty', { nodes: [] }), /empty/);
@@ -102,12 +102,15 @@ test('a saved preset reuses MCP IDs across repositories and preserves explicit c
 test('the maintenance preset provides Linear and Chrome roles plus a project test URL', (t) => {
   const { teams, directory } = templates(t);
   const result = teams.instantiate('recipe-maintenance', directory, {}, agents, 'http://localhost:3001/tasks');
-  const [lead, developer, qa, , visual] = result.board.nodes;
+  const [lead, developer, qa, plan, visual] = result.board.nodes;
   assert.deepEqual(result.mcp.cards, { [lead.id]: ['linear'], [qa.id]: ['chrome-devtools'] });
   assert.equal(result.mcp.cards[developer.id], undefined);
   assert.match(lead.data.role, /team.guide.linear/);
   assert.match(qa.data.role, /team.guide.chrome/);
   assert.equal(visual.data.url, 'http://localhost:3001/tasks');
+  assert.deepEqual(result.backlog, { noteId: plan.id, cwd: directory });
+  assert.ok(result.board.edges.some(({ source, target, data }) => source === developer.id && target === qa.id && data.mode === 'delegate' && data.bidirectional));
+  assert.ok(result.board.edges.some(({ source, target, data }) => source === qa.id && target === visual.id && data.mode === 'visual'));
   assert.throws(() => teams.instantiate('recipe-maintenance', directory, {}, agents, 'file:///local'), /invalidTestUrl/);
   const catalog = createMcpCatalog(directory);
   assert.throws(() => catalog.applyPreset('new-board', [lead.id, qa.id], result.mcp, () => {
@@ -115,6 +118,43 @@ test('the maintenance preset provides Linear and Chrome roles plus a project tes
     throw new Error('workspace failed');
   }), /workspace failed/);
   assert.equal(catalog.get('new-board', lead.id).card, null);
+});
+
+test('enterprise roles have independent agent choices and the expected collaboration paths', (t) => {
+  const { teams, directory } = templates(t);
+  const setup = teams.instantiate('recipe-enterprise-squad', directory, {}, agents, '', { backend: 'claude-code' });
+  const [architect, lead, backend, frontend, qa, msbuild, npm, plan, visual] = setup.board.nodes;
+  const linked = (from, to, mode, twoWay = false) =>
+    setup.board.edges.some(({ source, target, data }) => source === from.id && target === to.id && data.mode === mode && data.bidirectional === twoWay);
+  assert.equal(architect.data.agentId, 'antigravity');
+  assert.equal(backend.data.agentId, 'claude-code');
+  assert.equal(qa.data.agentId, 'codex');
+  assert.equal(msbuild.data.agentId, 'shell');
+  assert.equal(npm.data.agentId, 'shell');
+  assert.ok(linked(architect, lead, 'delegate'));
+  assert.ok(linked(architect, plan, 'note'));
+  assert.ok(linked(backend, msbuild, 'terminal'));
+  assert.ok(linked(frontend, npm, 'terminal'));
+  assert.ok(linked(backend, qa, 'delegate', true));
+  assert.ok(linked(frontend, qa, 'delegate', true));
+  assert.ok(linked(qa, visual, 'visual'));
+  assert.deepEqual(setup.backlog, { noteId: plan.id, cwd: directory });
+  assert.deepEqual(setup.mcp.cards, { [lead.id]: ['linear'], [qa.id]: ['chrome-devtools'] });
+});
+
+test('saving a project backlog as a preset retains only its portable binding intent', (t) => {
+  const { teams, directory } = templates(t);
+  const project = path.join(directory, 'original');
+  fs.mkdirSync(project);
+  const dev = node('dev');
+  dev.data.cwd = project;
+  const plan = { id: 'plan', type: 'note', position: { x: 80, y: 50 }, data: { text: '- [ ] Check' } };
+  const saved = teams.save('With backlog', { nodes: [dev, plan] }, 'original-board',
+    (id) => id === plan.id ? { file: path.join(project, 'TODO.md') } : null);
+  assert.equal(saved.backlog, plan.id);
+  assert.doesNotMatch(fs.readFileSync(path.join(directory, 'team-templates.json'), 'utf8'), /TODO\.md|cwd/);
+  const setup = teams.instantiate(saved.id, directory);
+  assert.deepEqual(setup.backlog, { cwd: directory, noteId: setup.board.nodes[1].id });
 });
 
 test('permission blockers deduplicate, survive clear-resolved, and resolve on work resumption', () => {

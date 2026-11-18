@@ -468,12 +468,20 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
   const onNodeClick = useCallback(
     (_event, node) => {
       setSelectedStroke(null);
-      if (tool !== 'link' || (node.type !== 'terminal' && node.type !== 'note')) return;
+      if (tool !== 'link' || !['terminal', 'note', 'visualTest'].includes(node.type)) return;
       if (!linkSource || linkSource === node.id) {
         setLinkSource(linkSource ? null : node.id);
         return;
       }
       const sourceNode = nodes.find((n) => n.id === linkSource);
+      const isRunner = (n) => n?.type === 'visualTest';
+      if (isRunner(sourceNode) || isRunner(node)) {
+        const [agent, runner] = isRunner(node) ? [sourceNode, node] : [node, sourceNode];
+        setLinkSource(null);
+        if (agent?.type !== 'terminal' || !agentById(agent.data.agentId).hooks) return;
+        setEdges((eds) => addEdge({ source: agent.id, target: runner.id, type: 'floating', data: { ...DEFAULT_LINK, mode: 'visual' } }, eds));
+        return;
+      }
       // Un agent relié à un post-it : lien Note, toujours de l'agent vers le post-it. Pas de lien entre deux
       // post-it, ni avec une case Terminal (elle n'a pas d'outils).
       const isNote = (n) => n?.type === 'note';
@@ -851,6 +859,7 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
             }}
             onMoveEnd={(_event, v) => setViewport(v)}
             defaultViewport={initial.viewport ?? undefined}
+            fitView={initial.fitAtStart === true}
             nodesDraggable={tool === 'select'}
             nodesConnectable={false}
             elementsSelectable={tool === 'select'}

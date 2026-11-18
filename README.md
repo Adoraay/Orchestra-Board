@@ -459,9 +459,14 @@ The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds
 
 ### Reusing a project board
 
-Open **Team templates → Project maintenance**, choose a project folder, and create a board. The preset includes a lead with Linear, a developer, a QA card with Chrome DevTools, a shared checklist, and a Visual Test Runner. Enter the application URL when creating the board or configure it on the test card later. Linear authentication happens in the agent’s CLI.
+Open **Team templates**, choose a project folder, and pick a preset.
 
-Use **Save this board** to keep your own setup. A template saves the layout, links, role instructions, notes, test definitions, and the MCP server IDs selected at each level. Register any referenced custom server on this installation first. Set an application URL when creating a board to point saved tests at a new origin while keeping their paths. Each new board starts agents in the chosen folder with fresh conversations, and each test card starts with an empty run history.
+- **Project maintenance** includes a Linear lead, a developer, and QA with Chrome DevTools. The developer requests reviews directly from QA, and QA's reply carries the findings back.
+- **Enterprise squad** adds Antigravity as architect and splits development into backend and frontend cards with dedicated MSBuild and npm terminals. The architect reads the backlog and hands the design to the tech lead. Both developer cards can contact QA. Enable Antigravity in **Settings → Agents** to use `agy`, or pick a compatible agent for that card.
+
+Both presets link the project note to `BACKLOG.md` or fall back to `TODO.md`. If neither file exists, Orchestra creates a `BACKLOG.md` with the preset checklist. Use **Sync the project backlog** to control this when creating a board. The visual link lets QA read the linked runner’s latest status and diagnostics through the Orchestra MCP. Set an application URL when creating the board or configure it on the runner later. Linear authentication happens in the lead’s CLI.
+
+Use **Save this board** to keep your own setup. A preset saves layout, links, roles, notes, test definitions, and the MCP IDs selected at each level. A link to a project-root `BACKLOG.md` or `TODO.md` retains the instruction to bind a backlog in the next project. Register any referenced custom MCP server on this installation first. Set an application URL at creation to point saved tests to a new origin while keeping their paths. Agents start in the project folder with fresh conversations, and test cards start with an empty run history.
 
 ### Updating the local branch
 

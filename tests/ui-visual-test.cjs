@@ -69,6 +69,38 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
     await click('.visual-test-node button[type=submit]');
     await until("document.querySelector('.visual-test-result')?.textContent.includes('received 500')");
     assert.match(await evaluate("document.querySelector('.visual-test-result').textContent"), /fixture browser error/);
+    for (let attempt = 0; attempt < 30 && saved()?.data.lastResult?.status !== 500; attempt++) await sleep(100);
+    const runner = saved();
+    assert.equal(runner?.data.lastResult?.status, 500);
+
+    // Exercise the same token-checked endpoint the QA card's stdio MCP process calls.
+    const workspace = await evaluate('window.workspace.get()');
+    const active = workspace.boards.find((board) => board.id === workspace.activeBoardId);
+    const qaId = 'fixture-qa';
+    active.nodes.push({ id: qaId, type: 'terminal', position: { x: 0, y: 0 }, data: { agentId: 'codex' } });
+    active.edges.push({ id: 'fixture-visual-link', source: qaId, target: runner.id, data: { mode: 'visual' } });
+    await evaluate(`window.workspace.set(${JSON.stringify(workspace)})`);
+    const agentStatus = require('../electron/agentStatus.cjs');
+    const { hookUrl, toolUrl } = require('../electron/hookServer.cjs');
+    const endpointToken = (url) => new URL(url).searchParams.get('t');
+    assert.notEqual(endpointToken(toolUrl(qaId)), endpointToken(toolUrl('fixture-other')));
+    assert.notEqual(endpointToken(toolUrl(qaId)), endpointToken(hookUrl(qaId)));
+    const readRun = async () => (await fetch(toolUrl(qaId), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'read_visual_test' }),
+    })).json();
+    assert.equal((await readRun()).isError, true);
+    agentStatus.register(qaId, 'hooks');
+    try {
+      const response = await readRun();
+      assert.equal(response.isError, false);
+      const { last_run: run } = JSON.parse(response.text);
+      assert.equal(run.status, 500);
+      assert.equal(run.passed, false);
+      assert.equal(run.screenshot_on_board, true);
+      assert.doesNotMatch(response.text, /base64|fixture browser error/);
+    } finally {
+      agentStatus.unregister(qaId);
+    }
     assert.deepEqual(errors, []);
   } finally {
     server.closeAllConnections();

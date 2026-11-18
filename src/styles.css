@@ -590,14 +590,17 @@ button { font: inherit; color: inherit; }
 .team-edge { stroke: var(--text-muted); stroke-width: 7; }
 .team-edge.delegate, .team-edge.terminal { stroke: var(--accent); }
 .team-edge.note { stroke: var(--warning); stroke-dasharray: 18 12; }
+.team-edge.visual { stroke: var(--accent); stroke-dasharray: 8 12; }
 .team-arrow { fill: var(--text-muted); }
 .team-arrow.delegate, .team-arrow.terminal { fill: var(--accent); }
 .team-arrow.note { fill: var(--warning); }
+.team-arrow.visual { fill: var(--accent); }
 .team-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; color: var(--text-muted); font-size: 11px; }
 .team-legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .team-legend-item i { width: 16px; height: 2px; background: var(--text-muted); }
 .team-legend-item.delegate i, .team-legend-item.terminal i { background: var(--accent); }
 .team-legend-item.note i { background: var(--warning); }
+.team-legend-item.visual i { background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 7px); }
 .team-roles summary { cursor: pointer; color: var(--text-muted); font-size: 12px; }
 .team-roles > div { margin-top: 10px; padding-left: 10px; border-left: 2px solid var(--border); }
 .team-roles p { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
@@ -1499,6 +1502,9 @@ kbd {
 .tool-note .react-flow__pane { cursor: copy; }
 .tool-visualTest .react-flow__pane { cursor: copy; }
 .visual-test-node { flex-direction: column; }
+.tool-link .visual-test-node { cursor: pointer; }
+.tool-link .visual-test-node * { pointer-events: none; }
+.tool-link .visual-test-node:hover { border-color: var(--accent); }
 
 .visual-test-header {
   display: flex;
@@ -2115,6 +2121,7 @@ kbd {
    avancent, en attente = jaune, limite ou erreur = rouge, en pause = gris fin */
 .react-flow__edge-path.link-unconfigured { stroke: var(--text-muted); stroke-dasharray: 6 6; }
 .react-flow__edge-path.link-ready, .react-flow__edge-path.link-delegate, .react-flow__edge-path.link-terminal { stroke: var(--accent); stroke-width: 1.5; }
+.react-flow__edge-path.link-visual { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 5; }
 .react-flow__edge-path.link-sending { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 10 7; animation: link-flow 0.6s linear infinite; }
 .react-flow__edge-path.link-queued { stroke: var(--warning); stroke-width: 1.5; stroke-dasharray: 6 5; }
 .react-flow__edge-path.link-limit, .react-flow__edge-path.link-error { stroke: var(--danger); stroke-width: 1.5; }
@@ -2169,7 +2176,7 @@ kbd {
 .link-label.limit, .link-label.error { border-color: var(--danger); }
 .link-label.limit .link-label-dot, .link-label.error .link-label-dot { background: var(--danger); }
 .link-label.disabled { border-color: var(--border); color: var(--text-muted); }
-.link-label.delegate svg, .link-label.terminal svg { color: var(--accent); }
+.link-label.delegate svg, .link-label.terminal svg, .link-label.visual svg { color: var(--accent); }
 .link-label:hover { background: var(--surface); }
 .link-pulse { fill: var(--accent-hover); filter: drop-shadow(0 0 4px var(--accent)); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {

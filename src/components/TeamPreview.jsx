@@ -1,7 +1,7 @@
 import { boundsOf, nodeSize } from '../lib/layout.js';
 import useT from '../hooks/useT.js';
 
-const MODES = ['delegate', 'relay', 'terminal', 'note'];
+const MODES = ['delegate', 'relay', 'terminal', 'note', 'visual'];
 
 // Point où le segment centre → centre sort du rectangle de la case.
 function border(center, size, dx, dy) {

@@ -57,6 +57,7 @@ function arrowPath(tip, side) {
 // État affiché : réglages du lien d'abord (pause, Transmission sans consigne), puis dernier événement.
 // Au repos, une Délégation est « delegate », un lien Terminal « terminal », un lien Note « note », une Transmission configurée « ready ».
 function linkState(link, event) {
+  if (link.mode === 'visual') return link.enabled ? 'visual' : 'disabled';
   if (link.mode === 'terminal' || link.mode === 'note') return event?.state === 'sent' && Date.now() - event.at < SENDING_FOR ? 'sending' : link.mode;
   if (!link.enabled) return 'disabled';
   if (link.mode === 'relay' && !link.prompt.trim()) return 'unconfigured';
@@ -105,7 +106,8 @@ export default function FloatingEdge({ id, source, target, data, style }) {
   const state = draft ? 'review' : linkState(link, event?.state === 'review' ? null : event);
   const pulsing = event?.state === 'sent' && Date.now() - event.at < PULSE_DURATION;
   const horizontal = sourceSide === Position.Left || sourceSide === Position.Right;
-  const roomy = horizontal ? Math.abs(to.x - from.x) >= LABEL_ROOM.horizontal : Math.abs(to.y - from.y) >= LABEL_ROOM.vertical;
+  const labelWidth = link.mode === 'visual' ? 120 : LABEL_ROOM.horizontal;
+  const roomy = horizontal ? Math.abs(to.x - from.x) >= labelWidth : Math.abs(to.y - from.y) >= LABEL_ROOM.vertical;
   const turns = event && typeof event.turns === 'number' ? event.turns : 0;
   // Dans un lien à double sens, le message peut aller vers la source : event.to dit vers qui.
   const toNode = (draft?.to ?? event?.to) === source ? sourceNode : targetNode;
@@ -142,7 +144,7 @@ export default function FloatingEdge({ id, source, target, data, style }) {
           prompt={link.prompt}
           targetName={targetName}
           turns={turns}
-          maxTurns={link.mode === 'terminal' || link.mode === 'note' ? null : link.maxTurns}
+          maxTurns={['terminal', 'note', 'visual'].includes(link.mode) ? null : link.maxTurns}
           message={event?.message}
           onOpen={open}
           draft={draft}

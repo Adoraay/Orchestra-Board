@@ -1,9 +1,15 @@
-import { ArrowLeftRight, ArrowRight, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, MonitorCheck, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK, LINK_MODES, MAX_TURNS } from '../lib/links.js';
 import usePendingMessages from '../hooks/usePendingMessages.js';
 import useT from '../hooks/useT.js';
 import PendingMessage from './PendingMessage.jsx';
+
+const CONTEXT_LINKS = {
+  note: { Icon: StickyNote, warning: 'link.warnNote' },
+  terminal: { Icon: SquareTerminal, warning: 'link.warnTerminal' },
+  visual: { Icon: MonitorCheck, warning: 'link.warnVisual' },
+};
 
 function statusText(event, nameOf, t) {
   const turns = event.maxTurns ? t('link.status.turns', { turns: event.turns, max: event.maxTurns }) : '';
@@ -27,7 +33,8 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const caseOf = (id) => {
     const node = nodes.find((n) => n.id === id);
     const agent = agentById(node?.data.agentId);
-    return { name: node?.data.label || (node?.type === 'note' ? t('note.defaultName') : agent.name), agent };
+    const name = node?.type === 'note' ? t('note.defaultName') : node?.type === 'visualTest' ? t('tool.visualTest') : agent.name;
+    return { name: node?.data.label || name, agent };
   };
   const source = caseOf(edge.source);
   const target = caseOf(edge.target);
@@ -38,10 +45,9 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const needsHooks = relay ? [source, ...(link.bidirectional ? [target] : [])] : [source, target];
   const notClaude = needsHooks.filter((c) => !c.agent.hooks).map((c) => c.name);
 
-  // Lien Terminal (PLAN.md §3.17) ou Note : rien à régler, une explication et la suppression.
-  if (link.mode === 'terminal' || link.mode === 'note') {
-    const Icon = link.mode === 'note' ? StickyNote : SquareTerminal;
-    const warning = link.mode === 'note' ? 'link.warnNote' : 'link.warnTerminal';
+  const contextual = CONTEXT_LINKS[link.mode];
+  if (contextual) {
+    const { Icon, warning } = contextual;
     return (
       <aside className="link-panel nowheel" aria-label={t('link.panelLabel')}>
         <header className="link-panel-header">
@@ -58,6 +64,12 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
         </p>
         <p className="hint">{t(`link.mode.${link.mode}.description`)}</p>
         {!source.agent.hooks && <p className="link-warning">{t(warning, { name: source.name })}</p>}
+        {link.mode === 'visual' && (
+          <label className="checkbox link-toggle">
+            <input type="checkbox" checked={link.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
+            {t('link.enabled')}
+          </label>
+        )}
         {link.mode === 'terminal' && (
           <button className="text-button" onClick={() => {
             onSwap();

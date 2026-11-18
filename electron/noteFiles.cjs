@@ -77,6 +77,33 @@ function withMarkdown(file, writable, useFile) {
   }
 }
 
+function projectBacklog(cwd, text) {
+  if (typeof cwd !== 'string' || !path.isAbsolute(cwd) || typeof text !== 'string') throw fileError('note.fileInvalid');
+  const root = fs.realpathSync.native(cwd);
+  const backlog = path.join(root, 'BACKLOG.md');
+  if (!isMarkdownPath(backlog) || !fs.lstatSync(root).isDirectory()) throw fileError('note.fileInvalid');
+
+  for (const file of [backlog, path.join(root, 'TODO.md')]) {
+    try {
+      fs.lstatSync(file); // A symlink or a directory also occupies the intended path.
+      return file;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+
+  const bytes = Buffer.from(text, 'utf8');
+  if (bytes.length > MAX_FILE_BYTES) throw fileError('note.fileTooLarge');
+  parseMarkdown(bytes);
+  if (!samePath(root, fs.realpathSync.native(root))) throw fileError('note.fileUnavailable');
+  try {
+    fs.writeFileSync(backlog, bytes, { flag: 'wx', mode: 0o600 });
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+  }
+  return backlog;
+}
+
 function createNoteFiles(directory, emit) {
   const registry = path.join(directory, 'note-files.json');
   const watching = new Map();
@@ -198,6 +225,27 @@ function createNoteFiles(directory, emit) {
     return null;
   }
 
+  function applyProjectBacklog(id, cwd, text, persist) {
+    if (!validId(id) || loadBindings().has(id)) throw fileError('note.fileInvalid');
+    let file;
+    try {
+      file = projectBacklog(cwd, text);
+      const initial = read(file);
+      if (initial.error) throw fileError(initial.error);
+      saveBinding(id, file);
+    } catch (error) {
+      throw fileError(error.noteKey ?? 'note.fileUnavailable');
+    }
+    try {
+      return persist();
+    } catch (error) {
+      unwatch(id);
+      saveBinding(id, null);
+      // Leave a newly created project file in place. An editor may already be using it.
+      throw error;
+    }
+  }
+
   function toggle(id, line, revision) {
     const entry = watching.get(id);
     if (!entry || !Number.isSafeInteger(line) || typeof revision !== 'string') throw fileError('note.fileUnavailable');
@@ -220,7 +268,7 @@ function createNoteFiles(directory, emit) {
     for (const id of watching.keys()) unwatch(id);
   }
 
-  return { setWorkspace, get, link, unlink, toggle, dispose };
+  return { setWorkspace, get, link, unlink, applyProjectBacklog, toggle, dispose };
 }
 
 function registerNoteFiles(ipcMain, dialog, window, service) {

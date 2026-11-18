@@ -86,7 +86,7 @@ function sanitizeNode(n) {
 // dans les deux sens ou non.
 function sanitizeLink(data = {}) {
   return {
-    mode: ['delegate', 'terminal', 'note'].includes(data.mode) ? data.mode : 'relay',
+    mode: ['delegate', 'terminal', 'note', 'visual'].includes(data.mode) ? data.mode : 'relay',
     bidirectional: data.bidirectional === true,
     prompt: typeof data.prompt === 'string' ? data.prompt.slice(0, MAX_TEXT) : '', // vide = pas encore configuré
     maxTurns: Math.round(clamp(data.maxTurns, 1, MAX_TURNS, 3)),
@@ -206,7 +206,7 @@ function setRole(id, value) {
 function startup() { restoring = false; return { workspace: load(), recovery, generation }; }
 
 // listener(workspace) : appelé au démarrage puis après chaque sauvegarde (liens pour linkRelay).
-function register(listener, beforeRestore = () => {}, applyPreset = (_id, _cards, _preset, persist) => persist()) {
+function register(listener, beforeRestore = () => {}, applyPreset = (_id, _cards, _preset, _backlog, persist) => persist()) {
   onSaved = listener;
   onSaved(load());
   ipcMain.handle('workspace:get', () => load());
@@ -234,7 +234,7 @@ function register(listener, beforeRestore = () => {}, applyPreset = (_id, _cards
     } catch (error) { restoring = false; generation = previousGeneration; return { error: error.message }; }
   });
   ipcMain.handle('workspace:set', (_e, workspace, token) => { if (token === generation) save(workspace); });
-  ipcMain.handle('workspace:setPreset', (_e, workspace, token, preset) => {
+  ipcMain.handle('workspace:setPreset', (event, workspace, token, preset, backlog) => {
     try {
       load();
       const board = sanitize(workspace).boards.find(({ id }) => id === workspace?.activeBoardId);
@@ -242,12 +242,23 @@ function register(listener, beforeRestore = () => {}, applyPreset = (_id, _cards
         return { error: t('team.applyFailed') };
       }
       const cards = board.nodes.filter(({ type }) => type === 'terminal').map(({ id }) => id);
-      const existingCards = new Set(current.boards.flatMap(({ nodes }) => nodes.map(({ id }) => id)));
-      if (cards.some((id) => existingCards.has(id))) return { error: t('team.applyFailed') };
-      applyPreset(board.id, cards, preset, () => save(workspace));
+      const existingNodes = new Set(current.boards.flatMap(({ nodes }) => nodes.map(({ id }) => id)));
+      if (cards.some((id) => existingNodes.has(id))) return { error: t('team.applyFailed') };
+      let projectBacklog = null;
+      if (backlog != null) {
+        const matchingNodes = board.nodes.filter(({ id }) => id === backlog.noteId);
+        const note = matchingNodes.length === 1 ? matchingNodes[0] : null;
+        if (!note || note.type !== 'note' || existingNodes.has(note.id) || typeof backlog.cwd !== 'string' ||
+            !board.nodes.some(({ type, data }) => type === 'terminal' && data.cwd === backlog.cwd)) {
+          return { error: t('team.backlogFailed') };
+        }
+        projectBacklog = { noteId: note.id, cwd: backlog.cwd, text: note.data.text };
+      }
+      applyPreset(board.id, cards, preset, projectBacklog, () => save(workspace), event);
       return { ok: true };
     } catch (error) {
-      return { error: error.missingServers ? t('team.missingMcp', { names: error.missingServers.join(', ') }) : t('team.applyFailed') };
+      if (error.missingServers) return { error: t('team.missingMcp', { names: error.missingServers.join(', ') }) };
+      return { error: t(error.noteKey ? 'team.backlogFailed' : 'team.applyFailed') };
     }
   });
   // Version synchrone pour la fermeture de la fenêtre : une sauvegarde asynchrone n'aurait pas le temps de finir.

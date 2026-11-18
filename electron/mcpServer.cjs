@@ -128,6 +128,22 @@ const TOOLS = [
     },
   },
   {
+    name: 'list_visual_tests',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists the visual tests linked to your tile, including runner IDs and latest completion times.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'read_visual_test',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Returns the last completed result of a linked visual test, including HTTP status, failed step, and network and console error counts. Does not start a test. Screenshots stay on the board.',
+    inputSchema: {
+      type: 'object',
+      properties: { runner_id: { type: 'string', description: 'ID from list_visual_tests. Optional when exactly one test is linked.' } },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'write_note',
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     description:
