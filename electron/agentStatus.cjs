@@ -1,16 +1,23 @@
+const { clean, pendingLine, shellPrompt } = require('./terminalText.cjs');
+
 // Statut de chaque case : idle (gris), working (orange), waiting (jaune), done (vert).
 // Claude Code : donné par ses hooks. Les autres agents : déduit de l'activité du terminal.
 // unseen : l'agent a fini et personne n'a encore regardé (lueur verte, PLAN.md §3.6).
-const QUIET_DELAY = 2500; // ms sans sortie après une commande = « a fini »
+const QUIET_DELAY = 2000;
+const PROMPT_DELAY = 150;
+const PROMPT_FALLBACK_DELAY = 10_000;
+const MAX_CAPTURE = 80_000;
 
 const entries = new Map(); // id -> { mode, status, unseen, armed, quietTimer, sessionId, transcriptPath, name, cwd }
 let emit = () => {};
 let onFinish = () => {};
+let onActivityComplete = () => {};
 
 // onChange(id, info) à chaque changement, finished(id, info) quand un agent vient de finir.
-function init(onChange, finished) {
+function init(onChange, finished, activityComplete = () => {}) {
   emit = onChange;
   onFinish = finished;
+  onActivityComplete = activityComplete;
 }
 
 function set(id, entry, status) {
@@ -40,6 +47,10 @@ function register(id, mode, meta = {}) {
     name: meta.name ?? '',
     cwd: meta.cwd ?? null,
     notify: meta.notify !== false,
+    isShell: meta.isShell === true,
+    prompt: '',
+    capture: '',
+    promptTail: '',
     kind: meta.kind ?? null,
     permission: null,
   });
@@ -143,22 +154,52 @@ function onInput(id, data) {
   if (e?.status === 'waiting' && e.kind === 'claude' && data === '\x1b') return set(id, e, 'idle');
   if (!e || data.startsWith('\x1b')) return;
   acknowledge(id);
-  if (e.mode === 'activity' && data.includes('\r')) e.armed = true;
+  if (data.includes('\r')) arm(id);
 }
 
 // Message envoyé par un lien : comme une Entrée de l'utilisateur, la sortie qui suit = travaille.
 function arm(id) {
   const e = entries.get(id);
-  if (e?.mode === 'activity') e.armed = true;
+  if (e?.mode === 'activity') {
+    if (e.status !== 'working') e.capture = '';
+    e.armed = true;
+  }
 }
 
-function onOutput(id) {
+function onOutput(id, data = '') {
   const e = entries.get(id);
-  if (!e || e.mode !== 'activity' || (!e.armed && e.status !== 'working')) return;
+  if (!e || e.mode !== 'activity') return;
+  if (!e.armed && e.status !== 'working') {
+    if (e.isShell) {
+      e.promptTail = (e.promptTail + data).slice(-4096);
+      e.prompt = shellPrompt(e.promptTail) || e.prompt;
+    }
+    return;
+  }
   e.armed = false;
+  e.capture = (e.capture + data).slice(-MAX_CAPTURE);
   set(id, e, 'working');
   clearTimeout(e.quietTimer);
-  e.quietTimer = setTimeout(() => set(id, e, 'done'), QUIET_DELAY);
+  const tail = e.capture.slice(-4096);
+  let prompt = e.isShell ? shellPrompt(tail, e.prompt) : '';
+  let delay = prompt ? PROMPT_DELAY : QUIET_DELAY;
+  // Un prompt connu est plus fiable que le silence (long build). S'il change (venv, cd, ssh, python),
+  // on ne conclut qu'après un long silence sur une ligne inachevée : un build silencieux finit ses lignes.
+  if (e.prompt && !prompt) {
+    prompt = pendingLine(tail);
+    if (!prompt) return;
+    delay = PROMPT_FALLBACK_DELAY;
+  }
+  e.quietTimer = setTimeout(() => {
+    const output = clean(e.capture);
+    const lines = (prompt && output.endsWith(prompt) ? output.slice(0, -prompt.length) : output).split('\n');
+    const reply = lines.filter((line) => !e.prompt || !line.trimStart().startsWith(e.prompt)).join('\n').trim().slice(-20_000);
+    e.prompt = prompt || e.prompt;
+    e.promptTail = '';
+    e.capture = '';
+    onActivityComplete(id, reply);
+    set(id, e, 'done');
+  }, delay);
 }
 
 module.exports = { init, register, unregister, info, busy, rename, acknowledge, onHook, onInput, onOutput, arm, answerPermission };

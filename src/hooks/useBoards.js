@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EMPTY_BOARD, deserializeBoard, serializeBoard } from '../lib/workspace.js';
+import { EMPTY_BOARD, deserializeBoard, restoreToolDragHandle, serializeBoard } from '../lib/workspace.js';
 import useT from './useT.js';
 
 const SAVE_DELAY = 500; // ms après le dernier changement (PLAN.md §3.4)
@@ -62,15 +62,32 @@ export default function useBoards(saved) {
     return id;
   };
 
-  const addBoard = async (name, state) => {
+  const addBoard = async (name, state, mcp, backlog) => {
     if (latest.current.boards.length >= 50) return false;
     const id = 'board-' + crypto.randomUUID();
     const next = [...latest.current.boards, { id, name: name.slice(0, 40) }];
-    content.current[id] = { ...state, nodes: state.nodes.map((node) => node.type === 'terminal' ? { ...node, dragHandle: '.drag-handle' } : node) };
+    content.current[id] = {
+      ...state,
+      fitAtStart: !state.viewport,
+      nodes: state.nodes.map((node) => {
+        if (node.type === 'terminal') return { ...node, dragHandle: '.drag-handle' };
+        return restoreToolDragHandle(node);
+      }),
+    };
     // Enregistrer les rôles et liens côté Node avant le SessionStart des nouveaux agents.
     clearTimeout(saveTimer.current);
     try {
-      await window.workspace.set({ activeBoardId: id, boards: next.map((board) => ({ ...board, ...serializeBoard(content.current[board.id]) })) });
+      const workspace = { activeBoardId: id, boards: next.map((board) => ({ ...board, ...serializeBoard(content.current[board.id]) })) };
+      if (mcp || backlog) {
+        const result = await window.workspace.setPreset(workspace, mcp, backlog);
+        if (result.error) {
+          delete content.current[id];
+          scheduleSave();
+          return result;
+        }
+      } else {
+        await window.workspace.set(workspace);
+      }
     } catch (error) {
       delete content.current[id];
       setSaveError(true);
@@ -91,6 +108,7 @@ export default function useBoards(saved) {
     if (index === -1 || boards.length === 1) return;
     for (const node of content.current[id].nodes) {
       if (node.type === 'terminal') window.pty.kill(node.id);
+      if (node.type === 'visualTest') window.visualTests.cancel(node.id);
     }
     delete content.current[id];
     const rest = boards.filter((b) => b.id !== id);

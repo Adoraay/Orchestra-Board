@@ -413,7 +413,7 @@ That's Orchestra's status hooks (working / done). Choose **Trust all and continu
 <details>
 <summary><b>Which agents can use links?</b></summary>
 
-Claude Code and Codex can relay, delegate, drive a terminal, use linked notes and run task sequences. Other CLIs (Aider, Gemini CLI, your own…) work in a tile and can *receive* relayed messages; their integration does not include Orchestra hooks or orchestration tools.
+Claude Code, Codex, and Antigravity can relay, delegate, drive a terminal, and use linked notes. Task sequences are available for Claude Code and Codex. Other CLIs such as Aider and Gemini CLI can use terminal output as the source of a Relay and receive relayed messages.
 </details>
 
 <details>
@@ -448,6 +448,40 @@ npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 ```
 
 The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds the `.dmg` files (on a Mac), and every push to that branch builds them on GitHub Actions.
+
+### Board extensions
+
+- **Antigravity** — Add Antigravity from **Settings → Agents** and place it on the board. Orchestra loads its hooks and MCP through a temporary workspace using `agy --add-dir`. The integration was verified with AGY 1.5.11.
+- **Linked notes** — Click the paperclip on a note and choose a local UTF-8 Markdown file up to 1 MB. The note follows changes on disk. Clicking a task cycles through `[ ]`, `[~]`, and `[x]` and writes the marker to the file.
+- **Visual Test Runner** — Choose the monitor tool or press `R`, then click the board. Enter a URL, configure the browser steps, and run the test. The card uses an isolated session of installed Google Chrome and keeps the last screenshot, HTTP results, and console errors.
+- **MCP by board and card** — Select servers in **Settings → MCP** or use **MCP servers…** in a card’s context menu. Cards inherit board defaults until you choose a custom selection. Changes apply on the next agent launch. Linear uses the client’s sign-in flow. The Chrome DevTools, agent-browser, and agent-desktop presets use Node.js and `npx`. Custom server definitions and assignments live in the local app profile.
+- **Relay from a terminal** — Link from the terminal to the receiving card, then set the instruction. For an existing Relay, enable **Use terminal output for sources without hooks**. If Orchestra recognizes the shell prompt, it waits for it to return. Other CLI output uses a two-second pause. Review is enabled by default when you turn on terminal capture.
+
+### Reusing a project board
+
+Open **Team templates**, choose a project folder, and pick a preset.
+
+- **Project maintenance** includes a Linear lead, a developer, and QA with Chrome DevTools. The developer requests reviews directly from QA, and QA's reply carries the findings back.
+- **Enterprise squad** adds Antigravity as architect and splits development into backend and frontend cards with dedicated MSBuild and npm terminals. The architect reads the backlog and hands the design to the tech lead. Both developer cards can contact QA. Enable Antigravity in **Settings → Agents** to use `agy`, or pick a compatible agent for that card.
+
+Both presets link the project note to `BACKLOG.md` or fall back to `TODO.md`. If neither file exists, Orchestra creates a `BACKLOG.md` with the preset checklist. Use **Sync the project backlog** to control this when creating a board. The visual link lets QA read the linked runner’s latest status and diagnostics through the Orchestra MCP. Set an application URL when creating the board or configure it on the runner later. Linear authentication happens in the lead’s CLI.
+
+Use **Save this board** to keep your own setup. A preset saves layout, links, roles, notes, test definitions, and the MCP IDs selected at each level. A link to a project-root `BACKLOG.md` or `TODO.md` retains the instruction to bind a backlog in the next project. Register any referenced custom MCP server on this installation first. Set an application URL at creation to point saved tests to a new origin while keeping their paths. Agents start in the project folder with fresh conversations, and test cards start with an empty run history.
+
+### Updating the local branch
+
+In a fork checkout, `origin` points to the fork and `upstream` points to the original repository. The local `main` tracks `upstream/main`. Run these commands to bring upstream changes into the feature branch.
+
+```bash
+git fetch upstream main
+git switch codex/orchestra-enhancements
+git merge upstream/main
+npm ci
+npm test
+npm run build
+```
+
+Target the original repository’s `main` when opening a pull request. The in-app updater points to the original repository’s installers. Use Git to update a customized source build.
 
 <details>
 <summary><b>Windows launcher and build notes</b></summary>

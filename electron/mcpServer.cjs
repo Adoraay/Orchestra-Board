@@ -128,6 +128,46 @@ const TOOLS = [
     },
   },
   {
+    name: 'list_visual_tests',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists the visual tests linked to your tile, including runner IDs and latest completion times.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'read_visual_test',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Returns the last completed result of a linked visual test, including HTTP status, failed step, and network and console error counts. Does not start a test. Screenshots stay on the board.',
+    inputSchema: {
+      type: 'object',
+      properties: { runner_id: { type: 'string', description: 'ID from list_visual_tests. Optional when exactly one test is linked.' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'orchestra_browser_get_state',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists live tabs on Interactive Browser cards you can reach through a Browser link. Returns tab IDs, routes, titles, loading and history state, and console error types and locations. The user opens the site in the browser first.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'orchestra_browser_navigate',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Starts navigation within the current origin of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object',
+      properties: { tabId: { type: 'string' }, url: { type: 'string', maxLength: 4096 } },
+      required: ['tabId', 'url'], additionalProperties: false,
+    },
+  },
+  {
+    name: 'orchestra_browser_reload',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Starts reloading the current page of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object', properties: { tabId: { type: 'string' } }, required: ['tabId'], additionalProperties: false,
+    },
+  },
+  {
     name: 'write_note',
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     description:
@@ -323,7 +363,6 @@ CONDUCTOR_TOOLS.push({
   },
 });
 const TOOLSET = process.env.ORCHESTRA_TOOLSET;
-const SERVED = TOOLSET === 'conductor' ? CONDUCTOR_TOOLS : TOOLSET === 'all' ? [...TOOLS, ...CONDUCTOR_TOOLS] : TOOLS;
 
 function callOrchestra(name, args) {
   return new Promise((resolve) => {
@@ -350,6 +389,41 @@ function callOrchestra(name, args) {
 
 const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\n');
 
+// Outils du Navigateur et du Test visuel : montrés seulement si la case a un lien de ce type (Orchestra décide).
+const TOOL_GROUPS = 'orchestra_tool_groups';
+const GROUP_OF = {
+  orchestra_browser_get_state: 'browser', orchestra_browser_navigate: 'browser', orchestra_browser_reload: 'browser',
+  list_visual_tests: 'visual', read_visual_test: 'visual',
+};
+const GROUP_POLL = 5000;
+let listedGroups = null;
+let pollTimer = null;
+
+async function toolGroups() {
+  const { text, isError } = await callOrchestra(TOOL_GROUPS, {});
+  try {
+    const groups = isError ? [] : JSON.parse(text);
+    return Array.isArray(groups) ? groups.filter((group) => typeof group === 'string').sort().join(',') : '';
+  } catch {
+    return '';
+  }
+}
+
+const visibleTools = (groups) => TOOLS.filter((tool) => !GROUP_OF[tool.name] || groups.split(',').includes(GROUP_OF[tool.name]));
+
+// Un lien ajouté ou retiré pendant la session : l'agent est prévenu que la liste a changé.
+function watchGroups() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    const groups = await toolGroups();
+    if (listedGroups !== null && groups !== listedGroups) {
+      listedGroups = groups;
+      send({ method: 'notifications/tools/list_changed' });
+    }
+  }, GROUP_POLL);
+  pollTimer.unref();
+}
+
 async function handle(message) {
   const { id, method, params } = message;
   if (id === undefined || id === null) return; // notification (initialized, cancelled…) : rien à répondre
@@ -360,14 +434,20 @@ async function handle(message) {
         id,
         result: {
           protocolVersion: params?.protocolVersion ?? PROTOCOL_VERSION,
-          capabilities: { tools: {} },
+          capabilities: { tools: { listChanged: true } },
           serverInfo: { name: 'orchestra', version: '1.0.0' },
         },
       });
     case 'ping':
       return send({ id, result: {} });
-    case 'tools/list':
-      return send({ id, result: { tools: SERVED } });
+    case 'tools/list': {
+      // Session cachée du chef d'orchestre : ses outils seuls (pas de case, donc pas de groupes de liens).
+      if (TOOLSET === 'conductor') return send({ id, result: { tools: CONDUCTOR_TOOLS } });
+      listedGroups = await toolGroups();
+      watchGroups();
+      const tools = visibleTools(listedGroups);
+      return send({ id, result: { tools: TOOLSET === 'all' ? [...tools, ...CONDUCTOR_TOOLS] : tools } });
+    }
     case 'tools/call': {
       const { text, isError } = await callOrchestra(params?.name, params?.arguments ?? {});
       return send({ id, result: { content: [{ type: 'text', text }], isError } });

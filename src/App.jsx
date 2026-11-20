@@ -11,6 +11,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { Minimize2 } from 'lucide-react';
+import { BROWSER_DRAG_TYPE, browserDropPosition, createBrowserNode } from '../electron/browserModel.mjs';
 import AgentDock from './components/AgentDock.jsx';
 import AgentLogo from './components/AgentLogo.jsx';
 import AgentsBar from './components/AgentsBar.jsx';
@@ -26,6 +27,8 @@ import MiniMapNode from './components/MiniMapNode.jsx';
 import NodeMenu from './components/NodeMenu.jsx';
 import NoteNode from './components/NoteNode.jsx';
 import PanelNode from './components/PanelNode.jsx';
+import InteractiveBrowserNode from './components/InteractiveBrowserNode.jsx';
+import VisualTestNode from './components/VisualTestNode.jsx';
 import QuitDialog from './components/QuitDialog.jsx';
 import ResumeDialog from './components/ResumeDialog.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
@@ -71,10 +74,10 @@ import useT from './hooks/useT.js';
 import { numberedName } from './lib/boardOps.js';
 import { PANELS, draggedPanel } from './lib/panels.js';
 
-const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode, ghost: GhostNode };
+const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode, visualTest: VisualTestNode, interactiveBrowser: InteractiveBrowserNode, ghost: GhostNode };
 const DUPLICATE_OFFSET = 40; // px : une copie apparaît en décalé de l'original
 const edgeTypes = { floating: FloatingEdge, ghost: GhostEdge };
-const BOARD_HINTS = ['pen', 'note', 'text', 'link']; // outils avec un bandeau d'aide (board.hint.<outil>)
+const BOARD_HINTS = ['pen', 'note', 'text', 'link', 'visualTest']; // outils avec un bandeau d'aide (board.hint.<outil>)
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
 
 // Les tableaux sauvegardés sont chargés avant l'affichage : chaque map part de son état sauvegardé
@@ -102,7 +105,7 @@ function Workspace({ saved }) {
   const boards = useBoards(saved);
   const { activeId, content, updateContent } = boards;
   const conductor = useConductorRouter(boards);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(null);
   const [teamsOpen, setTeamsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -115,7 +118,7 @@ function Workspace({ saved }) {
     window.blockers.get().then((entries) => { if (!disposed && !changed) setBlockers(entries); });
     return () => { disposed = true; off(); };
   }, []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const closeSettings = useCallback(() => setSettingsOpen(null), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
   // Post-it d'un autre tableau réécrit par un agent (lien Note) ; le tableau ouvert s'en charge lui-même.
   useEffect(
@@ -128,6 +131,14 @@ function Workspace({ saved }) {
       }),
     [content, activeId, updateContent],
   );
+  useEffect(() => window.visualTests.onFinished((id, lastResult) => {
+    if (!lastResult) return;
+    for (const [boardId, state] of Object.entries(content)) {
+      if (boardId === activeId || !state.nodes.some((node) => node.id === id && node.type === 'visualTest')) continue;
+      const nodes = state.nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, lastResult } } : node);
+      updateContent(boardId, { ...state, nodes });
+    }
+  }), [content, activeId, updateContent]);
   const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
   const { settings, agentById, updateSettings } = useSettings();
   // Panneaux épinglés (PLAN.md §7, 3.4) : rouverts au lancement ; Journal prioritaire sur Utilisation (même bord).
@@ -162,16 +173,16 @@ function Workspace({ saved }) {
     updateSettings('general', { tutorialDone: true });
   }, [updateSettings]);
   const startTutorial = useCallback(() => {
-    setSettingsOpen(false);
+    setSettingsOpen(null);
     setTutorial('tour');
   }, []);
   const startSetup = useCallback(() => {
-    setSettingsOpen(false);
+    setSettingsOpen(null);
     setTutorial('setup');
   }, []);
 
   useAppShortcuts({
-    toggleSettings: () => setSettingsOpen((o) => !o),
+    toggleSettings: () => setSettingsOpen((open) => open ? null : {}),
     cycleBoard: (step) => {
       const list = boards.boards;
       const index = list.findIndex((b) => b.id === activeId);
@@ -249,7 +260,7 @@ function Workspace({ saved }) {
         boards={boards}
         boardsWithNews={boardsWithNews}
         renameRequest={renameRequest}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => setSettingsOpen({})}
         onOpenTeams={() => setTeamsOpen(true)}
         onOpenInbox={() => setInboxOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
@@ -277,6 +288,7 @@ function Workspace({ saved }) {
             boardList={boards.boards}
             focusAgent={focusAgent}
             onPanelPlaced={closePanelDrawer}
+            onOpenMcp={(cardId) => setSettingsOpen({ cardId })}
           />
         </ReactFlowProvider>
         <ExplorerPanel
@@ -285,9 +297,19 @@ function Workspace({ saved }) {
           onLaunchAgent={(agentId, cwd) => setLaunchRequest({ agentId, cwd, at: Date.now() })}
         />
       </div>
-      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} onStartSetup={startSetup} />}
+      {settingsOpen && (
+        <SettingsModal
+          onClose={closeSettings}
+          onStartTutorial={startTutorial}
+          onStartSetup={startSetup}
+          boardId={activeId}
+          boardName={boards.boards.find((board) => board.id === activeId)?.name}
+          nodes={content[activeId].nodes}
+          mcpCardId={settingsOpen.cardId}
+        />
+      )}
       {tasksOpen && <TaskSequencesDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
-      {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
+      {teamsOpen && <TeamTemplates boardId={activeId} board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
       {searchOpen && (
         <TileSearch boards={boards.boards} content={content} activeId={activeId} onFocus={focusAgent} onClose={() => setSearchOpen(false)} />
       )}
@@ -313,7 +335,7 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced }) {
+function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced, onOpenMcp }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
@@ -361,8 +383,8 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   const [maxSlot, setMaxSlot] = useState(null);
   const pendingMessages = usePendingMessages();
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot, boardList, focusAgent, ops }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot, boardList, focusAgent, ops],
+    () => ({ boardId, tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot, boardList, focusAgent, ops }),
+    [boardId, tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot, boardList, focusAgent, ops],
   );
 
   // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
@@ -452,7 +474,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   const onNodeClick = useCallback(
     (_event, node) => {
       setSelectedStroke(null);
-      if (tool !== 'link' || (node.type !== 'terminal' && node.type !== 'note')) return;
+      if (tool !== 'link' || !['terminal', 'note', 'visualTest', 'interactiveBrowser'].includes(node.type)) return;
       if (!linkSource || linkSource === node.id) {
         setLinkSource(linkSource ? null : node.id);
         return;
@@ -472,6 +494,13 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
       ),
     [setNodes],
   );
+
+  useEffect(() => window.visualTests.onFinished((id, lastResult) => {
+    if (!lastResult) return;
+    setNodes((nodes) => nodes.some((node) => node.id === id && node.type === 'visualTest')
+      ? nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, lastResult } } : node)
+      : nodes);
+  }), [setNodes]);
 
   // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).
   const selectedEdges = edges.filter((e) => e.selected);
@@ -606,12 +635,14 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
       notes: chosen.filter((n) => n.type === 'note').length,
       texts: chosen.filter((n) => n.type === 'text').length,
       panels: chosen.filter((n) => n.type === 'panel').length,
+      visualTests: chosen.filter((n) => n.type === 'visualTest').length,
+      browsers: chosen.filter((n) => n.type === 'interactiveBrowser').length,
       strokes: stroke ? 1 : 0,
       nodeIds: chosen.map((n) => n.id),
       edgeIds: chosenEdges.map((e) => e.id),
       stroke,
     };
-    if (terminals.length || selection.links || selection.notes || selection.texts || selection.panels || selection.strokes) setDeleteRequest(selection);
+    if (selection.nodeIds.length || selection.links || selection.strokes) setDeleteRequest(selection);
   };
   const confirmDelete = () => {
     ops.removeElements({ nodeIds: deleteRequest.nodeIds, edgeIds: deleteRequest.edgeIds });
@@ -644,15 +675,15 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
       if (tool !== 'select') return;
       if (node.type === 'terminal' && !event.target.closest('.terminal-header')) return;
       event.preventDefault();
-      setNodeMenu({ x: event.clientX, y: event.clientY, id: node.id, type: node.type });
+      setNodeMenu({ x: event.clientX, y: event.clientY, id: node.id, type: node.type, mcp: node.type === 'terminal' && Boolean(agentById(node.data.agentId).hooks) });
     },
-    [tool],
+    [tool, agentById],
   );
 
   // Copie décalée : une case copiée lance un nouvel agent (même agent, dossier, branche, rôle et modèle).
   const duplicate = (node) =>
     setNodes((nds) => {
-      const { label, restored, autoEdit, ...data } = node.data;
+      const { label, restored, autoEdit, lastResult, ...data } = node.data;
       if (node.type === 'terminal') data.label = numberedName(agentById(node.data.agentId).name, nds);
       if (node.type === 'note') data.label = numberedName(t('note.defaultName'), nds);
       return nds
@@ -688,17 +719,19 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
       case 'link':
         pendingLinkSource.current = node.id;
         return setTool('link');
+      case 'mcp':
+        return onOpenMcp(node.id);
       case 'delete':
         return requestDelete(node);
     }
   };
 
-  // Outils Post-it et Texte : un clic sur la map pose l'élément, puis on repasse en Sélection.
+  // Outils de placement : un clic sur la map pose l'élément, puis on repasse en Sélection.
   const onPaneClick = useCallback(
     (event) => {
       setSelectedStroke(null);
       setLinkSource(null);
-      if (tool !== 'note' && tool !== 'text') return;
+      if (!['note', 'text', 'visualTest'].includes(tool)) return;
 
       ops.addAnnotation({ type: tool, point: screenToFlowPosition({ x: event.clientX, y: event.clientY }) });
       setTool('select');
@@ -722,6 +755,11 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
 
   const onDragOver = useCallback(
     (event) => {
+      if (event.dataTransfer.types.includes(BROWSER_DRAG_TYPE)) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        return;
+      }
       // « Branche » se lâche seulement sur une case terminal : elle s'allume au survol.
       if (draggingBranch) {
         event.preventDefault();
@@ -790,6 +828,25 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
 
   // « Lancer un agent ici » (clic droit dans l'explorateur) : nouvelle case au centre de la vue.
   useGridGlow(boardRef, glow && Boolean(GRID_VARIANTS[grid]), settings.appearance.glowSize);
+  const addBrowser = useCallback((center) => {
+    const browser = createBrowserNode(center);
+    setNodes((all) => [...all.map((node) => node.selected ? { ...node, selected: false } : node), browser]);
+    setTool('select');
+  }, [setNodes]);
+
+  const openBrowser = useCallback(() => {
+    const browsers = nodesRef.current.filter((node) => node.type === 'interactiveBrowser');
+    const browser = browsers.find((node) => node.selected) ?? browsers[0];
+    if (browser) {
+      setTool('select');
+      setNodes((all) => all.map((node) => Boolean(node.selected) === (node.id === browser.id) ? node : { ...node, selected: node.id === browser.id }));
+      const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 400;
+      fitView({ nodes: [{ id: browser.id }], duration, padding: 0.16, maxZoom: 1 });
+    } else if (boardRef.current) {
+      const { left, top, width, height } = boardRef.current.getBoundingClientRect();
+      addBrowser(screenToFlowPosition({ x: left + width / 2, y: top + height / 2 }));
+    }
+  }, [addBrowser, fitView, screenToFlowPosition, setNodes]);
   useEffect(() => {
     if (!launchRequest || !boardRef.current) return;
     const rect = boardRef.current.getBoundingClientRect();
@@ -801,6 +858,12 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
+      const browserCenter = browserDropPosition(event, screenToFlowPosition);
+      if (browserCenter) {
+        endDrag();
+        addBrowser(browserCenter);
+        return;
+      }
       if (draggingBranch) {
         const nodeId = branchTarget;
         endDrag();
@@ -823,7 +886,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
 
       addTerminal({ agentId, cwd, center: screenToFlowPosition({ x: event.clientX, y: event.clientY }) });
     },
-    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, addPanel, activeFolder, homeDir, agentById, t],
+    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, addPanel, addBrowser, activeFolder, homeDir, agentById, t],
   );
 
   const maximizedNode = maximized && nodes.find((n) => n.id === maximized && n.type === 'terminal');
@@ -837,6 +900,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
         onDragStart={setDraggedAgentId}
         onBranchDragStart={() => setDraggingBranch(true)}
         onDragEnd={endDrag}
+        onBrowserOpen={openBrowser}
       />
       <main
         ref={boardRef}
@@ -866,6 +930,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
             }}
             onMoveEnd={(_event, v) => setViewport(v)}
             defaultViewport={initial.viewport ?? undefined}
+            fitView={initial.fitAtStart === true}
             nodesDraggable={tool === 'select'}
             nodesConnectable={false}
             elementsSelectable={tool === 'select'}
@@ -950,7 +1015,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
           return <DropPreview name={t(title)} position={previewPos} size={size}><Icon size={32} /></DropPreview>;
         })()}
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
-        {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} onAction={onNodeAction} onClose={closeNodeMenu} />}
+        {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} mcp={nodeMenu.mcp} onAction={onNodeAction} onClose={closeNodeMenu} />}
         {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
         {maximizedNode && (
           <section className="terminal-max" aria-label={maximizedName}>

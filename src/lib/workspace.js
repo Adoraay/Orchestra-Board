@@ -1,3 +1,5 @@
+import { BROWSER_DRAG_HANDLE } from '../../electron/browserModel.mjs';
+
 // Passage entre l'état d'un tableau et workspace.json (validé côté Node par electron/workspaceStore.cjs).
 
 export function serializeBoard({ nodes, edges, strokes, groups = [], viewport }) {
@@ -15,13 +17,20 @@ export function serializeBoard({ nodes, edges, strokes, groups = [], viewport })
 export function deserializeBoard(saved) {
   return {
     nodes: saved.nodes.map((n) =>
-      n.type === 'terminal' ? { ...n, dragHandle: '.drag-handle', data: { ...n.data, restored: true } } : n,
+      n.type === 'terminal' ? { ...n, dragHandle: '.drag-handle', data: { ...n.data, restored: true } }
+        : restoreToolDragHandle(n),
     ),
     edges: saved.edges,
     strokes: saved.strokes,
     groups: saved.groups ?? [],
     viewport: saved.viewport,
   };
+}
+
+export function restoreToolDragHandle(node) {
+  if (node.type === 'visualTest') return { ...node, dragHandle: '.visual-test-header' };
+  if (node.type === 'interactiveBrowser') return { ...node, dragHandle: BROWSER_DRAG_HANDLE };
+  return node;
 }
 
 export const EMPTY_BOARD = { nodes: [], edges: [], strokes: [], groups: [], viewport: null };

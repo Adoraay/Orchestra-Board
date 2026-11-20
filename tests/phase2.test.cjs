@@ -6,6 +6,7 @@ const path = require('path');
 const { load, i18n } = require('./helpers.cjs');
 const { createBlockers } = require('../electron/blockers.cjs');
 const { createRoleState } = require('../electron/roleState.cjs');
+const { createMcpCatalog } = require('../electron/mcpCatalog.cjs');
 const { sharedWorktrees } = require('../electron/sharedWorktrees.cjs');
 
 function fixture(t) {
@@ -13,7 +14,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
-const agents = [{ id: 'claude-code', hooks: 'claude' }, { id: 'codex', hooks: 'codex' }, { id: 'shell' }];
+const agents = [{ id: 'claude-code', hooks: 'claude' }, { id: 'codex', hooks: 'codex' }, { id: 'antigravity', hooks: 'antigravity' }, { id: 'shell' }];
 const node = (id, role = '') => ({ id, type: 'terminal', position: { x: 10, y: 20 }, style: { width: 640, height: 400 }, data: { agentId: 'claude-code', label: id, role } });
 const workspace = (role = 'Old role') => ({ boards: [{ id: 'one', name: 'One', nodes: [node('a', role), node('b')], edges: [{ id: 'ab', source: 'a', target: 'b', data: { mode: 'delegate', enabled: true } }] }, { id: 'two', name: 'Two', nodes: [node('c')], edges: [] }] });
 
@@ -61,7 +62,7 @@ test('missing agents require compatible replacements, without reusing their mode
 
 test('recipes are usable and invalid or unreadable libraries are never overwritten', (t) => {
   const { teams, directory } = templates(t);
-  assert.equal(teams.list().length, 3);
+  assert.equal(teams.list().length, 5);
   for (const recipe of teams.list()) assert.ok(teams.instantiate(recipe.id, directory).board.nodes.length >= 2);
   assert.throws(() => teams.save('', { nodes: [] }), /invalidName/);
   assert.throws(() => teams.save('Empty', { nodes: [] }), /empty/);
@@ -70,6 +71,90 @@ test('recipes are usable and invalid or unreadable libraries are never overwritt
   const file = path.join(directory, 'team-templates.json'); fs.writeFileSync(file, '{ broken');
   assert.throws(() => teams.save('More', { nodes: [node('a')] }), /unreadable/);
   assert.equal(fs.readFileSync(file, 'utf8'), '{ broken');
+});
+
+test('a saved preset reuses MCP IDs across repositories and preserves explicit card overrides', (t) => {
+  const { teams, directory } = templates(t);
+  const catalog = createMcpCatalog(directory);
+  catalog.save('source', null, {
+    add: { id: 'project-tools', type: 'http', url: 'http://localhost:8080/mcp' },
+    selection: ['linear', 'project-tools'],
+  });
+  catalog.save('source', 'a', { selection: ['chrome-devtools'] });
+  catalog.save('source', 'b', { selection: [] });
+  const template = teams.save('Project setup', { nodes: [node('a'), node('b'), node('c')] }, 'source');
+  const target = path.join(directory, 'other-repo');
+  fs.mkdirSync(target);
+  const created = teams.instantiate(template.id, target);
+  const [a, b, c] = created.board.nodes;
+  assert.equal(a.data.cwd, target);
+  assert.notEqual(a.id, 'a');
+  assert.doesNotMatch(fs.readFileSync(path.join(directory, 'team-templates.json'), 'utf8'), /localhost:8080/);
+  catalog.applyPreset('created', [a.id, b.id, c.id], created.mcp, () => {
+    assert.deepEqual(Object.keys(catalog.resolve('created', a.id)), ['chrome-devtools']);
+    assert.deepEqual(catalog.resolve('created', b.id), {});
+    assert.deepEqual(Object.keys(catalog.resolve('created', c.id)), ['linear', 'project-tools']);
+  });
+  catalog.save('source', null, { remove: 'project-tools' });
+  assert.throws(() => catalog.applyPreset('new-board', [], created.mcp, () => assert.fail()), { missingServers: ['project-tools'] });
+});
+
+test('the maintenance preset provides Linear and Chrome roles plus a project test URL', (t) => {
+  const { teams, directory } = templates(t);
+  const result = teams.instantiate('recipe-maintenance', directory, {}, agents, 'http://localhost:3001/tasks');
+  const [lead, developer, qa, plan, visual] = result.board.nodes;
+  assert.deepEqual(result.mcp.cards, { [lead.id]: ['linear'], [qa.id]: ['chrome-devtools'] });
+  assert.equal(result.mcp.cards[developer.id], undefined);
+  assert.match(lead.data.role, /team.guide.linear/);
+  assert.match(qa.data.role, /team.guide.chrome/);
+  assert.equal(visual.data.url, 'http://localhost:3001/tasks');
+  assert.deepEqual(result.backlog, { noteId: plan.id, cwd: directory });
+  assert.ok(result.board.edges.some(({ source, target, data }) => source === developer.id && target === qa.id && data.mode === 'delegate' && data.bidirectional));
+  assert.ok(result.board.edges.some(({ source, target, data }) => source === qa.id && target === visual.id && data.mode === 'visual'));
+  assert.throws(() => teams.instantiate('recipe-maintenance', directory, {}, agents, 'file:///local'), /invalidTestUrl/);
+  const catalog = createMcpCatalog(directory);
+  assert.throws(() => catalog.applyPreset('new-board', [lead.id, qa.id], result.mcp, () => {
+    assert.deepEqual(Object.keys(catalog.resolve('new-board', lead.id)), ['linear']);
+    throw new Error('workspace failed');
+  }), /workspace failed/);
+  assert.equal(catalog.get('new-board', lead.id).card, null);
+});
+
+test('enterprise roles have independent agent choices and the expected collaboration paths', (t) => {
+  const { teams, directory } = templates(t);
+  const setup = teams.instantiate('recipe-enterprise-squad', directory, {}, agents, '', { backend: 'claude-code' });
+  const [architect, lead, backend, frontend, qa, msbuild, npm, plan, visual] = setup.board.nodes;
+  const linked = (from, to, mode, twoWay = false) =>
+    setup.board.edges.some(({ source, target, data }) => source === from.id && target === to.id && data.mode === mode && data.bidirectional === twoWay);
+  assert.equal(architect.data.agentId, 'antigravity');
+  assert.equal(backend.data.agentId, 'claude-code');
+  assert.equal(qa.data.agentId, 'codex');
+  assert.equal(msbuild.data.agentId, 'shell');
+  assert.equal(npm.data.agentId, 'shell');
+  assert.ok(linked(architect, lead, 'delegate'));
+  assert.ok(linked(architect, plan, 'note'));
+  assert.ok(linked(backend, msbuild, 'terminal'));
+  assert.ok(linked(frontend, npm, 'terminal'));
+  assert.ok(linked(backend, qa, 'delegate', true));
+  assert.ok(linked(frontend, qa, 'delegate', true));
+  assert.ok(linked(qa, visual, 'visual'));
+  assert.deepEqual(setup.backlog, { noteId: plan.id, cwd: directory });
+  assert.deepEqual(setup.mcp.cards, { [lead.id]: ['linear'], [qa.id]: ['chrome-devtools'] });
+});
+
+test('saving a project backlog as a preset retains only its portable binding intent', (t) => {
+  const { teams, directory } = templates(t);
+  const project = path.join(directory, 'original');
+  fs.mkdirSync(project);
+  const dev = node('dev');
+  dev.data.cwd = project;
+  const plan = { id: 'plan', type: 'note', position: { x: 80, y: 50 }, data: { text: '- [ ] Check' } };
+  const saved = teams.save('With backlog', { nodes: [dev, plan] }, 'original-board',
+    (id) => id === plan.id ? { file: path.join(project, 'TODO.md') } : null);
+  assert.equal(saved.backlog, plan.id);
+  assert.doesNotMatch(fs.readFileSync(path.join(directory, 'team-templates.json'), 'utf8'), /TODO\.md|cwd/);
+  const setup = teams.instantiate(saved.id, directory);
+  assert.deepEqual(setup.backlog, { cwd: directory, noteId: setup.board.nodes[1].id });
 });
 
 test('permission blockers deduplicate, survive clear-resolved, and resolve on work resumption', () => {
@@ -160,4 +245,19 @@ test('shared folders use worktree roots, including subfolders and excluding dist
   const result = await sharedWorktrees(value, first, 'a', async (cwd) => cwd.toLowerCase() === second.toLowerCase() ? second : first);
   assert.deepEqual(result.map((entry) => entry.id).sort(), ['b', 'c']);
   assert.equal(result.find((entry) => entry.id === 'c').boardName, 'Two');
+});
+
+test('team presets drop visual test fill values but keep other steps', () => {
+  const { templateBoard } = require('./helpers.cjs').load('teamTemplates.cjs', {
+    electron: { app: { getPath: () => require('os').tmpdir() }, ipcMain: { handle() {} } },
+    './i18n.cjs': require('./helpers.cjs').i18n,
+  });
+  const board = templateBoard({ nodes: [{ id: 'v', type: 'visualTest', position: { x: 0, y: 0 }, data: {
+    url: 'http://localhost:3000', steps: [
+      { id: 'a', action: 'fill', target: 'label:Password', value: 'secret' },
+      { id: 'b', action: 'text', target: 'h1', value: 'Welcome' },
+    ] } }], edges: [] });
+  const steps = board.nodes[0].data.steps;
+  assert.equal(steps[0].value, '');
+  assert.equal(steps[1].value, 'Welcome');
 });

@@ -94,9 +94,13 @@ test('Node link rules match the ones used by the map (src/lib/boardOps.js)', asy
     { id: 'n', type: 'note', data: {} },
     { id: 'm', type: 'note', data: {} },
     { id: 'p', type: 'panel', data: {} },
+    { id: 'g', type: 'terminal', data: { agentId: 'aider' } },
+    { id: 'v', type: 'visualTest', data: {} },
+    { id: 'w', type: 'interactiveBrowser', data: {} },
   ];
+  const hasHooks = (agentId) => ['claude-code', 'codex', 'antigravity'].includes(agentId);
   for (const a of tiles) for (const b of tiles) for (const mode of ['relay', 'delegate']) {
-    assert.deepEqual(nodeRule(a, b, mode), linkRule(a, b, mode), `${a.id} -> ${b.id} (${mode})`);
+    assert.deepEqual(nodeRule(a, b, mode, hasHooks), linkRule(a, b, mode, hasHooks), `${a.id} -> ${b.id} (${mode})`);
   }
 });
 

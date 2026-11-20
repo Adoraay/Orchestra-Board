@@ -4,14 +4,12 @@ const { app, ipcMain } = require('electron');
 
 // Paramètres de l'app (PLAN.md §3.3), dans userData/settings.json.
 // Agents de base : toujours présents, seuls leur ordre et « masqué » sont modifiables.
-// resumeArgs : capacité de reprise ; main.cjs impose la session exacte pour Claude/Codex,
-// les autres CLI utilisent leurs propres arguments.
-// hooks : 'claude' ou 'codex' = statut, réponses et orchestration par les hooks et le serveur MCP de l'agent
-// (sinon statut déduit de l'activité du terminal).
+// resumeArgs : capacité de reprise ; pour les agents à hooks, main.cjs impose la session exacte.
+// hooks : identifiant de l'adaptateur qui gère le statut, les réponses et le MCP d'Orchestra.
 const BUILTIN_AGENTS = [
   { id: 'claude-code', name: 'Claude Code', command: 'claude', color: '#d97757', resumeArgs: '--continue', hooks: 'claude' },
   { id: 'codex', name: 'Codex', command: 'codex', color: '#10a37f', resumeArgs: 'resume --last', hooks: 'codex' },
-  { id: 'antigravity', name: 'Antigravity', command: 'agy', color: '#3186ff', resumeArgs: '--continue' }, // successeur de Gemini CLI
+  { id: 'antigravity', name: 'Antigravity', command: 'agy', color: '#3186ff', resumeArgs: '--continue', hooks: 'antigravity' }, // successeur de Gemini CLI
   { id: 'shell', name: 'Terminal', command: null, color: '#8b93a7' }, // juste un terminal vide
 ];
 
@@ -101,7 +99,7 @@ function sanitizeAgents(input) {
   return agents;
 }
 
-// Modèle choisi dans le dock pour chaque agent qui le permet (Claude Code, Codex) : agent -> modèle.
+// Modèle choisi dans le dock pour chaque agent qui le permet : agent -> modèle.
 function sanitizeModels(input, agents) {
   const models = {};
   for (const agent of agents) {

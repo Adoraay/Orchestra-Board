@@ -7,6 +7,9 @@ import useT from './useT.js';
 
 export const NODE_SIZE = { width: 640, height: 400 };
 export const NOTE_SIZE = { width: 270, height: 180 }; // plus large que haut : les lignes écrites par un agent restent lisibles
+export const VISUAL_TEST_SIZE = { width: 500, height: 480 };
+// Taille et poignée de déplacement des cases posées par un outil de la barre (post-it, texte, test visuel).
+const ANNOTATIONS = { note: { size: NOTE_SIZE }, text: {}, visualTest: { size: VISUAL_TEST_SIZE, dragHandle: '.visual-test-header' } };
 
 // Opérations d'un tableau (cases, liens, rôles), utilisées par l'interface et par le chef d'orchestre :
 // une seule logique, la map se met à jour de la même façon d'où que vienne la demande.
@@ -37,21 +40,28 @@ export default function useBoardOps({ setNodes, setEdges }) {
     [setNodes, agentById, models],
   );
 
-  // Post-it ou texte posé en « point » (coordonnées de la map) ; autoEdit = saisie ouverte, select = seul choisi.
+  // Post-it, texte ou test visuel posé en « point » (coordonnées de la map) ; autoEdit = saisie ouverte,
+  // select = seul choisi.
   const addAnnotation = useCallback(
     ({ type, point, text = '', label, autoEdit = true, select = true }) => {
       const id = crypto.randomUUID();
+      const { size, dragHandle } = ANNOTATIONS[type];
       const note = type === 'note';
+      // Étape d'exemple d'un test visuel : vérifier qu'un titre s'affiche marche sur presque toutes les pages.
+      const data = type === 'visualTest'
+        ? { steps: [{ id: crypto.randomUUID(), action: 'visible', target: 'role:heading', value: '' }] }
+        : { text, ...(autoEdit && { autoEdit: true }) };
       setNodes((nds) =>
         nds
           .map((n) => (select && n.selected ? { ...n, selected: false } : n))
           .concat({
             id,
             type,
-            position: note ? { x: point.x - NOTE_SIZE.width / 2, y: point.y - NOTE_SIZE.height / 2 } : { x: point.x, y: point.y - 14 },
-            style: note ? { ...NOTE_SIZE } : undefined,
+            position: size ? { x: point.x - size.width / 2, y: point.y - size.height / 2 } : { x: point.x, y: point.y - 14 },
+            style: size ? { ...size } : undefined,
+            ...(dragHandle && { dragHandle }),
             selected: select,
-            data: { text, ...(autoEdit && { autoEdit: true }), ...(note && { label: label || numberedName(t('note.defaultName'), nds) }) },
+            data: { ...data, ...(note && { label: label || numberedName(t('note.defaultName'), nds) }) },
           }),
       );
       return id;
@@ -59,21 +69,22 @@ export default function useBoardOps({ setNodes, setEdges }) {
     [setNodes, t],
   );
 
-  // Lien entre deux cases selon linkRule (Note, Terminal ou type par défaut). Un post-it relié reçoit un nom.
-  // data : réglages du lien (chef d'orchestre) ; data.mode remplace le type par défaut entre deux agents.
+  // Lien entre deux cases selon linkRule (Navigateur, Test visuel, Note, Terminal ou type par défaut). Un post-it
+  // relié reçoit un nom. data : réglages du lien (chef d'orchestre) ; data.mode remplace le type par défaut.
+  const hasHooks = useCallback((agentId) => Boolean(agentById(agentId).hooks), [agentById]);
   const addLink = useCallback(
     (fromId, toId, data = {}) => {
       const nodes = getNodes();
-      const rule = linkRule(nodes.find((n) => n.id === fromId), nodes.find((n) => n.id === toId), data.mode ?? linkMode);
+      const rule = linkRule(nodes.find((n) => n.id === fromId), nodes.find((n) => n.id === toId), data.mode ?? linkMode, hasHooks);
       if (!rule) return null;
       if (rule.mode === 'note' && !nodes.find((n) => n.id === rule.target).data.label) {
         setNodes((nds) => nds.map((n) => (n.id === rule.target ? { ...n, data: { ...n.data, label: numberedName(t('note.defaultName'), nds) } } : n)));
       }
       const id = edgeId(rule.source, rule.target);
-      setEdges((eds) => addEdge({ id, source: rule.source, target: rule.target, type: 'floating', data: { ...DEFAULT_LINK, ...data, mode: rule.mode } }, eds));
+      setEdges((eds) => addEdge({ id, source: rule.source, target: rule.target, type: 'floating', data: { ...DEFAULT_LINK, ...data, mode: rule.mode, ...rule.extra } }, eds));
       return id;
     },
-    [getNodes, setNodes, setEdges, linkMode, t],
+    [getNodes, setNodes, setEdges, linkMode, hasHooks, t],
   );
 
   const updateLink = useCallback(
@@ -86,11 +97,16 @@ export default function useBoardOps({ setNodes, setEdges }) {
   );
   const removeLink = useCallback((id) => setEdges((eds) => eds.filter((e) => e.id !== id)), [setEdges]);
 
-  // Cases et liens retirés ; les agents des cases terminal sont arrêtés. deleteElements retire aussi les liens attachés.
+  // Cases et liens retirés ; les agents des cases terminal sont arrêtés, les tests visuels en cours annulés.
+  // deleteElements retire aussi les liens attachés.
   const removeElements = useCallback(
     ({ nodeIds = [], edgeIds = [] }) => {
       const chosen = new Set(nodeIds);
-      for (const node of getNodes()) if (chosen.has(node.id) && node.type === 'terminal') window.pty.kill(node.id);
+      for (const node of getNodes()) {
+        if (!chosen.has(node.id)) continue;
+        if (node.type === 'terminal') window.pty.kill(node.id);
+        if (node.type === 'visualTest') window.visualTests.cancel(node.id);
+      }
       deleteElements({ nodes: nodeIds.map((id) => ({ id })), edges: edgeIds.map((id) => ({ id })) });
     },
     [getNodes, deleteElements],

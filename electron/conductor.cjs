@@ -83,10 +83,17 @@ function nameOf(id) {
 
 // Mêmes règles que linkRule de src/lib/boardOps.js (vérifié par tests/conductor.test.cjs) : Node doit refuser
 // un lien impossible avant de le proposer, y compris entre éléments encore en aperçu.
-function linkRule(a, b, mode) {
+const TOOL_CARDS = ['visualTest', 'interactiveBrowser'];
+function linkRule(a, b, defaultMode, hasHooks = () => false) {
   if (!a || !b || a.id === b.id) return null;
-  const linkable = (n) => n.type === 'terminal' || n.type === 'note';
+  const linkable = (n) => ['terminal', 'note', ...TOOL_CARDS].includes(n.type);
   if (!linkable(a) || !linkable(b)) return null;
+  const isCard = (n) => TOOL_CARDS.includes(n.type);
+  if (isCard(a) || isCard(b)) {
+    const [agent, card] = isCard(b) ? [a, b] : [b, a];
+    if (agent.type !== 'terminal' || !hasHooks(agent.data?.agentId)) return null;
+    return { source: agent.id, target: card.id, mode: card.type === 'interactiveBrowser' ? 'browser' : 'visual' };
+  }
   const isNote = (n) => n.type === 'note';
   if (isNote(a) || isNote(b)) {
     const [agent, note] = isNote(b) ? [a, b] : [b, a];
@@ -94,10 +101,11 @@ function linkRule(a, b, mode) {
     return { source: agent.id, target: note.id, mode: 'note' };
   }
   const isShell = (n) => n.data?.agentId === 'shell';
-  const terminal = isShell(a) !== isShell(b);
-  const [source, target] = terminal && isShell(a) ? [b.id, a.id] : [a.id, b.id];
-  return { source, target, mode: terminal ? 'terminal' : mode };
+  const mode = !isShell(a) && isShell(b) ? 'terminal' : isShell(a) ? 'relay' : defaultMode;
+  const fallback = mode === 'relay' && !hasHooks(a.data?.agentId);
+  return { source: a.id, target: b.id, mode, ...(fallback && { extra: { terminalFallback: true, review: true } }) };
 }
+const hasHooks = (agentId) => Boolean(agentOf(agentId)?.hooks);
 
 // Les outils du chef d'orchestre sont-ils donnés à cette case Claude Code (réglage de test) ?
 function tileTools(id) {
@@ -261,13 +269,13 @@ function planLink(ctx, args = {}) {
   const b = resolve(ctx, args.to, ['agent', 'terminal', 'sticky']);
   if (!b) return { error: fail('conductor.notFound', { ref: args.to }) };
   if (args.mode !== undefined && !LINK_MODES.includes(args.mode)) return { error: fail('conductor.badMode') };
-  const rule = linkRule(a.node, b.node, args.mode ?? 'delegate');
+  const rule = linkRule(a.node, b.node, args.mode ?? 'delegate', hasHooks);
   if (!rule) return { error: fail('conductor.linkImpossible') };
   const existing = resolveLink(ctx, { from: a.id, to: b.id });
   if (existing) return { error: fail('conductor.linkExists', { id: existing.id }) };
   const patch = linkPatch(args);
   if (patch.error) return patch;
-  return { action: { type: 'create_link', source: rule.source, target: rule.target, data: { mode: rule.mode, prompt: '', maxTurns: 3, bidirectional: false, ...patch.value } } };
+  return { action: { type: 'create_link', source: rule.source, target: rule.target, data: { mode: rule.mode, prompt: '', maxTurns: 3, bidirectional: false, ...patch.value, ...rule.extra } } };
 }
 
 function linkPatch(args) {

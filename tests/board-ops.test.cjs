@@ -15,22 +15,32 @@ const note = (id) => ({ id, type: 'note', data: { text: '' } });
 
 test('linkRule keeps the link rules of the Link tool', async () => {
   const { linkRule } = await boardOps();
-  assert.deepEqual(linkRule(agent('a'), agent('b'), 'relay'), { source: 'a', target: 'b', mode: 'relay' });
-  assert.deepEqual(linkRule(agent('a'), agent('b'), 'delegate'), { source: 'a', target: 'b', mode: 'delegate' });
+  const hooks = (agentId) => ['claude-code', 'codex', 'antigravity'].includes(agentId);
+  const fallback = { terminalFallback: true, review: true };
+  assert.deepEqual(linkRule(agent('a'), agent('b'), 'relay', hooks), { source: 'a', target: 'b', mode: 'relay' });
+  assert.deepEqual(linkRule(agent('a'), agent('b'), 'delegate', hooks), { source: 'a', target: 'b', mode: 'delegate' });
+  // Une Transmission depuis un agent sans hooks passe par l'écran de son terminal, toujours à valider.
+  assert.deepEqual(linkRule(agent('g', 'aider'), agent('b'), 'relay', hooks), { source: 'g', target: 'b', mode: 'relay', extra: fallback });
   // Note : toujours de l'agent vers le post-it, quel que soit l'ordre des clics.
-  assert.deepEqual(linkRule(note('n'), agent('a'), 'relay'), { source: 'a', target: 'n', mode: 'note' });
-  assert.deepEqual(linkRule(agent('a'), note('n'), 'relay'), { source: 'a', target: 'n', mode: 'note' });
-  // Terminal : toujours vers la case Terminal.
-  assert.deepEqual(linkRule(shell('s'), agent('a'), 'delegate'), { source: 'a', target: 's', mode: 'terminal' });
-  assert.deepEqual(linkRule(agent('a'), shell('s'), 'delegate'), { source: 'a', target: 's', mode: 'terminal' });
-  // Deux terminaux : type par défaut, comme avant.
-  assert.deepEqual(linkRule(shell('s'), shell('t'), 'relay'), { source: 's', target: 't', mode: 'relay' });
+  assert.deepEqual(linkRule(note('n'), agent('a'), 'relay', hooks), { source: 'a', target: 'n', mode: 'note' });
+  assert.deepEqual(linkRule(agent('a'), note('n'), 'relay', hooks), { source: 'a', target: 'n', mode: 'note' });
+  // Agent → Terminal : lien Terminal ; Terminal → agent (ou Terminal) : Transmission de sa sortie, à valider.
+  assert.deepEqual(linkRule(agent('a'), shell('s'), 'delegate', hooks), { source: 'a', target: 's', mode: 'terminal' });
+  assert.deepEqual(linkRule(shell('s'), agent('a'), 'delegate', hooks), { source: 's', target: 'a', mode: 'relay', extra: fallback });
+  assert.deepEqual(linkRule(shell('s'), shell('t'), 'delegate', hooks), { source: 's', target: 't', mode: 'relay', extra: fallback });
+  // Navigateur et Test visuel : d'un agent à hooks vers la case, dans un sens ou dans l'autre.
+  const browser = { id: 'w', type: 'interactiveBrowser', data: {} };
+  const visual = { id: 'v', type: 'visualTest', data: {} };
+  assert.deepEqual(linkRule(browser, agent('a'), 'relay', hooks), { source: 'a', target: 'w', mode: 'browser' });
+  assert.deepEqual(linkRule(agent('a'), visual, 'relay', hooks), { source: 'a', target: 'v', mode: 'visual' });
+  assert.equal(linkRule(agent('g', 'aider'), visual, 'relay', hooks), null, 'only agents with hooks have these tools');
+  assert.equal(linkRule(shell('s'), browser, 'relay', hooks), null);
   // Impossibles : deux post-it, post-it et Terminal, même case, case absente ou panneau.
-  assert.equal(linkRule(note('n'), note('m'), 'relay'), null);
-  assert.equal(linkRule(note('n'), shell('s'), 'relay'), null);
-  assert.equal(linkRule(agent('a'), agent('a'), 'relay'), null);
-  assert.equal(linkRule(agent('a'), undefined, 'relay'), null);
-  assert.equal(linkRule(agent('a'), { id: 'p', type: 'panel', data: { panel: 'log' } }, 'relay'), null);
+  assert.equal(linkRule(note('n'), note('m'), 'relay', hooks), null);
+  assert.equal(linkRule(note('n'), shell('s'), 'relay', hooks), null);
+  assert.equal(linkRule(agent('a'), agent('a'), 'relay', hooks), null);
+  assert.equal(linkRule(agent('a'), undefined, 'relay', hooks), null);
+  assert.equal(linkRule(agent('a'), { id: 'p', type: 'panel', data: { panel: 'log' } }, 'relay', hooks), null);
 });
 
 test('numberedName takes the smallest free number and edgeId matches React Flow', async () => {

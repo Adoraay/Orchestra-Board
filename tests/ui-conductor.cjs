@@ -38,7 +38,9 @@ module.exports = async ({ evaluate, until, sleep, data, errors }) => {
   const link = await tool('lead', 'create_link', { from: 'Lead', to: 'Runner', mode: 'delegate' });
   assert.equal(link.isError, false, link.text);
   await until("document.querySelectorAll('.react-flow__edge').length === 1");
-  assert.equal(saved().boards[0].edges[0].data.mode, 'delegate');
+  // Un lien qui part d'une case Terminal transmet sa sortie (Transmission à valider), quel que soit le type demandé.
+  assert.equal(saved().boards[0].edges[0].data.mode, 'relay');
+  assert.equal(saved().boards[0].edges[0].data.terminalFallback, true);
   assert.equal((await tool('lead', 'update_sticky', { sticky: 'Plan', text: '- [x] Build' })).isError, false);
   await until("[...document.querySelectorAll('.react-flow__node-note')].some((n) => n.textContent.includes('Build') && !n.textContent.includes('Test'))");
 

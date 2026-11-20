@@ -10,7 +10,7 @@ const { TOOLS: CONDUCTOR_TOOLS } = require('./conductor.cjs');
 //   run_in_terminal : Claude demande la permission avant de lancer une commande (PLAN.md §3.17) ;
 // - <id>.mcp.json, passé avec `claude --mcp-config` : le serveur MCP « orchestra » (PLAN.md §3.11).
 const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRequest', 'Notification', 'Stop'];
-const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies', 'list_terminals', 'read_terminal', 'interrupt_terminal', 'list_notes', 'read_note', 'write_note'].map(
+const ORCHESTRA_TOOLS = ['list_agents', 'send_to_agent', 'wait_for_replies', 'list_terminals', 'read_terminal', 'interrupt_terminal', 'list_notes', 'read_note', 'write_note', 'list_visual_tests', 'read_visual_test'].map(
   (tool) => `mcp__orchestra__${tool}`,
 );
 
@@ -34,7 +34,8 @@ function writeSettings(id, { conductor = false } = {}) {
 // Dans l'app empaquetée, il est hors de l'archive (app.asar.unpacked) : c'est Claude qui le lance.
 const mcpServerPath = () => path.join(__dirname.replace(/app\.asar(?=[\\/])/, 'app.asar.unpacked'), 'mcpServer.cjs');
 
-function writeMcpConfig(id, { conductor = false } = {}) {
+// extraServers : serveurs MCP propres à la case ; conductor : outils du chef d'orchestre en plus (réglage de test).
+function writeMcpConfig(id, extraServers = {}, { conductor = false } = {}) {
   const server = {
     type: 'stdio',
     command: process.execPath,
@@ -42,7 +43,7 @@ function writeMcpConfig(id, { conductor = false } = {}) {
     env: { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_URL: toolUrl(id), ...(conductor && { ORCHESTRA_TOOLSET: 'all' }) },
   };
   fs.mkdirSync(dir(), { recursive: true });
-  fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { orchestra: server } }, null, 2));
+  fs.writeFileSync(mcpFileFor(id), JSON.stringify({ mcpServers: { ...extraServers, orchestra: server } }, null, 2));
   return mcpFileFor(id);
 }
 
