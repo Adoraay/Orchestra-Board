@@ -11,14 +11,13 @@ const { app, ipcMain } = require('electron');
 const BUILTIN_AGENTS = [
   { id: 'claude-code', name: 'Claude Code', command: 'claude', color: '#d97757', resumeArgs: '--continue', hooks: 'claude' },
   { id: 'codex', name: 'Codex', command: 'codex', color: '#10a37f', resumeArgs: 'resume --last', hooks: 'codex' },
-  { id: 'gemini', name: 'Gemini CLI', command: 'gemini', color: '#4285f4', resumeArgs: '--resume latest' },
+  { id: 'antigravity', name: 'Antigravity', command: 'agy', color: '#3186ff', resumeArgs: '--continue' }, // successeur de Gemini CLI
   { id: 'shell', name: 'Terminal', command: null, color: '#8b93a7' }, // juste un terminal vide
 ];
 
 // Catalogue : agents connus, absents du dock tant qu'on ne les ajoute pas (Paramètres › Agents). Logos dans
 // src/assets/agents/<id>, descriptions dans src/locales (catalog.<id>). resumeArgs seulement quand l'option de reprise est sûre.
 const CATALOG_AGENTS = [
-  { id: 'antigravity', name: 'Antigravity', command: 'agy', color: '#3186ff', resumeArgs: '--continue' }, // successeur de Gemini CLI
   { id: 'aider', name: 'Aider', command: 'aider', color: '#14b014', resumeArgs: '--restore-chat-history' },
   { id: 'qwen', name: 'Qwen Code', command: 'qwen', color: '#615ced' },
   { id: 'opencode', name: 'OpenCode', command: 'opencode', color: '#8b93a7', resumeArgs: '--continue' },
@@ -57,6 +56,13 @@ const filePath = () => path.join(app.getPath('userData'), 'settings.json');
 const logosDir = () => path.join(app.getPath('userData'), 'logos');
 
 const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+// Gemini CLI n'est plus pris en charge (remplacé par Antigravity) : refusé même ajouté à la main.
+// Même règle que GEMINI dans src/components/AgentForm.jsx.
+function isGemini(name, command) {
+  const program = command.trim().match(/^"([^"]+)"|^(\S+)/);
+  const file = program ? (program[1] || program[2]).split(/[\\/]/).pop().replace(/\.(cmd|exe|bat|ps1)$/i, '') : '';
+  return /\bgemini\b/i.test(name) || file.toLowerCase() === 'gemini' || /gemini-cli/i.test(command);
+}
 const isText = (value, max) => typeof value === 'string' && value.trim().length > 0 && value.length <= max && !/[\r\n]/.test(value);
 
 function sanitizeAgents(input) {
@@ -72,7 +78,7 @@ function sanitizeAgents(input) {
       agents.push({ ...builtin, builtin: true, hidden: raw.hidden === true, logo: null });
     } else if (catalog) {
       agents.push({ ...catalog, builtin: false, catalog: true, hidden: raw.hidden === true, logo: null });
-    } else if (CUSTOM_ID.test(raw.id) && isText(raw.name, 40) && isText(raw.command, 200)) {
+    } else if (CUSTOM_ID.test(raw.id) && isText(raw.name, 40) && isText(raw.command, 200) && !isGemini(raw.name, raw.command)) {
       agents.push({
         id: raw.id,
         name: raw.name.trim(),

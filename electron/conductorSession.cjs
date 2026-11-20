@@ -1,4 +1,5 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
 const { randomUUID } = require('crypto');
@@ -302,7 +303,23 @@ function claudeArgs(conv, files, settings) {
   ];
 }
 
-function codexArgs(conv, boardId, settings) {
+// Serveurs MCP de l'utilisateur (config de Codex et du projet) : ils tournent hors du bac à sable de Codex et
+// pourraient écrire sur le disque. Tous désactivés pour le chef d'orchestre, sauf celui d'Orchestra.
+const MCP_TABLE = /^\s*\[\s*mcp_servers\.(?:"([^"\]]+)"|([A-Za-z0-9_-]+))\s*\]/gm;
+function userMcpServers(folder) {
+  const home = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+  const names = new Set();
+  for (const file of [path.join(home, 'config.toml'), path.join(folder, '.codex', 'config.toml')]) {
+    let text = '';
+    try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    for (const match of text.matchAll(MCP_TABLE)) names.add(match[1] ?? match[2]);
+  }
+  names.delete('orchestra');
+  return [...names];
+}
+const tomlKey = (name) => (/^[A-Za-z0-9_-]+$/.test(name) ? name : toml(name));
+
+function codexArgs(conv, boardId, settings, folder) {
   const env = `{ ELECTRON_RUN_AS_NODE = "1", ORCHESTRA_TOOLSET = "conductor", ORCHESTRA_URL = ${toml(deps.toolUrl(callerOf(boardId)))} }`;
   return [
     'exec', ...(conv.started ? ['resume'] : []), '--json', '--skip-git-repo-check',
@@ -314,6 +331,7 @@ function codexArgs(conv, boardId, settings) {
     '-c', `mcp_servers.orchestra.args=[${toml(deps.mcpServerPath())}]`,
     '-c', `mcp_servers.orchestra.env=${env}`,
     '-c', 'mcp_servers.orchestra.default_tools_approval_mode="approve"',
+    ...userMcpServers(folder).flatMap((name) => ['-c', `mcp_servers.${tomlKey(name)}.enabled=false`]),
     '-c', `developer_instructions=${toml(SYSTEM_PROMPT + CODEX_RULE)}`,
     ...(settings.model ? ['-m', settings.model] : []),
     ...(conv.started ? [conv.sessionId] : []),
@@ -350,7 +368,7 @@ async function send(boardId, message, folder) {
   deps.openSession(callerOf(boardId), { boardId, folder, preview: !settings.autoApply });
   const input = [...(conv.notes ?? []).map((text) => `[Orchestra] ${text}`), message.trim()].join('\n\n');
   conv.notes = [];
-  const args = engine === 'codex' ? codexArgs(conv, boardId, settings) : claudeArgs(conv, writeFiles(boardId), settings);
+  const args = engine === 'codex' ? codexArgs(conv, boardId, settings, folder) : claudeArgs(conv, writeFiles(boardId), settings);
   const onLine = engine === 'codex' ? codexLine : claudeLine;
 
   addEntry(boardId, { kind: 'user', text: clip(message.trim(), MAX_MESSAGE) });
@@ -476,4 +494,4 @@ function get(boardId) {
   return typeof boardId === 'string' && ID.test(boardId) ? snapshot(boardId) : { history: [], running: false, live: '', pending: [] };
 }
 
-module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, callerOf, onLine: claudeLine, codexLine, SYSTEM_PROMPT };
+module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, callerOf, onLine: claudeLine, codexLine, codexArgs, userMcpServers, SYSTEM_PROMPT };

@@ -29,7 +29,7 @@ const size = (v) => (isNum(v) && v > 0 && v <= 10000 ? v : undefined);
 const text = (v) => (typeof v === 'string' ? v.slice(0, MAX_TEXT) : '');
 const clamp = (v, min, max, fallback) => (isNum(v) ? Math.min(max, Math.max(min, v)) : fallback);
 
-const USAGE_AGENTS = ['claude-code', 'codex', 'gemini'];
+const USAGE_AGENTS = ['claude-code', 'codex'];
 
 function sanitizeData(type, data = {}) {
   switch (type) {

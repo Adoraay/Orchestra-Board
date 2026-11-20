@@ -4,7 +4,7 @@ import AgentLogo from './AgentLogo.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useT from '../hooks/useT.js';
 
-const USAGE_AGENTS = ['claude-code', 'codex', 'gemini'];
+const USAGE_AGENTS = ['claude-code', 'codex'];
 const LIVE_REFRESH = 5 * 60 * 1000; // ms : une case posée sur la map se relit seule, sans lancer un Claude invisible trop souvent
 
 function ago(ms, t) {

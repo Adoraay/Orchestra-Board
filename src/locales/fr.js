@@ -739,6 +739,7 @@ export default {
   'agentForm.title': 'Ajouter un agent',
   'agentForm.name': 'Nom',
   'agentForm.command': 'Commande à lancer',
+  'agentForm.geminiUnsupported': "Malheureusement, Gemini n'est plus pris en charge, utilise plutôt Antigravity.",
   'agentForm.test': 'Tester',
   'agentForm.logo': 'Logo et couleur de secours',
   'agentForm.changeLogo': 'Changer le logo',

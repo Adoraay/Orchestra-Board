@@ -285,3 +285,27 @@ test('Codex events become tool lines and replies', async () => {
   assert.equal(history[2].text, 'Done **now**');
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("Codex engine: the user's own MCP servers are turned off (they run outside Codex's sandbox)", async (t) => {
+  const s = setup(t);
+  const home = path.join(s.dir, 'codex-home');
+  fs.mkdirSync(home);
+  fs.writeFileSync(path.join(home, 'config.toml'), [
+    'model = "x"',
+    '[mcp_servers.node_repl]', 'command = "node"', '[mcp_servers.node_repl.env]', 'A = "1"',
+    '[mcp_servers."my server"]', 'command = "x"',
+    '[mcp_servers.orchestra]', 'command = "old"',
+    '[plugins."browser@openai-bundled"]', 'enabled = true',
+  ].join('\n'));
+  fs.mkdirSync(path.join(s.folder, '.codex'));
+  fs.writeFileSync(path.join(s.folder, '.codex', 'config.toml'), '[mcp_servers.project_db]\ncommand = "db"\n');
+  const previous = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = home;
+  t.after(() => { if (previous === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previous; });
+
+  assert.deepEqual(s.session.userMcpServers(s.folder).sort(), ['my server', 'node_repl', 'project_db']);
+  const args = s.session.codexArgs({ started: false }, 'main', {}, s.folder);
+  const off = args.filter((a, i) => args[i - 1] === '-c' && a.endsWith('.enabled=false'));
+  assert.deepEqual(off.sort(), ['mcp_servers."my server".enabled=false', 'mcp_servers.node_repl.enabled=false', 'mcp_servers.project_db.enabled=false']);
+  assert.ok(args.includes('sandbox_mode="read-only"') && args.includes('approval_policy="never"'));
+});

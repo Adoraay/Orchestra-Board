@@ -52,8 +52,8 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   // La case Utilisation lit ses chiffres elle-même, et son agent est gardé.
   await until("document.querySelector('.panel-node .usage-percent')?.textContent.includes('42')");
   await until("[...document.querySelectorAll('.panel-node .usage-agent')].length >= 2");
-  await evaluate("[...document.querySelectorAll('.panel-node .usage-agent')].find((b) => b.textContent.includes('Gemini')).click()");
-  await until("document.querySelector('.panel-node .usage-agent.active')?.textContent.includes('Gemini')");
+  await evaluate("[...document.querySelectorAll('.panel-node .usage-agent')].find((b) => b.textContent.includes('Codex')).click()");
+  await until("document.querySelector('.panel-node .usage-agent.active')?.textContent.includes('Codex')");
   await evaluate("[...document.querySelectorAll('.panel-node .usage-agent')].find((b) => b.textContent.includes('Claude')).click()");
   await until("document.querySelector('.panel-node .usage-agent.active')?.textContent.includes('Claude')");
   await until("document.querySelector('.panel-node .log-list')?.textContent.length > 0");

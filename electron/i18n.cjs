@@ -244,7 +244,6 @@ const DICTIONARIES = {
     'usage.days': '{n} days',
     'usage.hours': '{n} h',
     'usage.codexNote': 'Updated with every Codex reply.',
-    'usage.geminiUnavailable': "Gemini CLI doesn't record its quota on this computer.",
     'usage.unknownAgent': 'No known quota for this agent.',
     'usage.noAnswer': "Claude didn't answer /usage.",
 
@@ -536,7 +535,6 @@ const DICTIONARIES = {
     'usage.days': '{n} jours',
     'usage.hours': '{n} h',
     'usage.codexNote': 'Mis à jour à chaque réponse de Codex.',
-    'usage.geminiUnavailable': "Gemini CLI n'enregistre pas son quota sur cet ordinateur.",
     'usage.unknownAgent': 'Pas de quota connu pour cet agent.',
     'usage.noAnswer': "Claude n'a pas répondu à /usage.",
 
