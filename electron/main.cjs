@@ -262,8 +262,18 @@ noteLink.init({
   emit: emitLink,
 });
 
+// Groupes d'outils que le serveur MCP montre à une case : un lien Navigateur ou Test visuel actif depuis elle.
+function toolGroups(caller) {
+  if (!agentStatus.info(caller)) return [];
+  const board = workspaceStore.get().boards.find((b) => b.nodes.some((node) => node.id === caller));
+  const modes = new Set((board?.edges ?? []).filter((edge) =>
+    edge.source === caller && edge.data.enabled !== false && ['browser', 'visual'].includes(edge.data.mode)).map((edge) => edge.data.mode));
+  return [...modes];
+}
+
 // Outils du serveur MCP d'une case : liens Note, Test visuel, Terminal et Délégation.
 function callTool(caller, name, args, signal) {
+  if (name === 'orchestra_tool_groups') return { text: JSON.stringify(toolGroups(caller)), isError: false };
   if (noteLink.isTool(name)) return noteLink.callTool(caller, name, args);
   if (isBrowserTool(name)) {
     if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
@@ -605,6 +615,10 @@ app.whenReady().then(async () => {
   antigravityHooks.clearAll();
   await hookServer.start(onHook, callTool);
   codexProfile.ensure();
+  if (!workspaceStore.recovering()) {
+    codexProfile.pruneCardProfiles(workspaceStore.get().boards.flatMap((board) =>
+      board.nodes.filter((node) => node.type === 'terminal').map((node) => node.id)));
+  }
   createWindow();
 });
 

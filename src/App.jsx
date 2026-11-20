@@ -680,7 +680,8 @@ function Board({ boardId, initial, onChange, focusRequest, onFocusDone, overlays
             style: size ? { ...size } : undefined,
             ...(visualTest && { dragHandle: '.visual-test-header' }),
             selected: true,
-            data: visualTest ? {} : { text: '', autoEdit: true, ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
+            // Étape d'exemple : vérifier qu'un titre s'affiche marche sur presque toutes les pages.
+            data: visualTest ? { steps: [{ id: crypto.randomUUID(), action: 'visible', target: 'role:heading', value: '' }] } : { text: '', autoEdit: true, ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
           }),
       );
       setTool('select');

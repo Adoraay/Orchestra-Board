@@ -1522,6 +1522,9 @@ kbd {
   box-shadow: 0 8px 24px var(--shadow);
 }
 .interactive-browser-node:is(.selected, .link-source), .tool-link .interactive-browser-node:hover { border-color: var(--accent); }
+/* Mode Lien : la page (webview) ne doit pas capter le clic qui choisit la case. */
+.tool-link .interactive-browser-node { cursor: pointer; }
+.tool-link .interactive-browser-node * { pointer-events: none; }
 .tool-link .interactive-browser-node { cursor: pointer; }
 .tool-link .interactive-browser-node * { pointer-events: none; }
 .interactive-browser-header, .browser-tab-strip, .browser-navigation {
@@ -1679,6 +1682,7 @@ kbd {
 .visual-test-result { display: grid; gap: 8px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
 .visual-test-summary { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .visual-test-summary time, .visual-test-url, .visual-test-help { color: var(--text-muted); }
+.visual-test-intro { margin: 6px 0 10px; font-size: 12px; line-height: 1.45; }
 .visual-test-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .visual-test-success { color: var(--success); }
 .visual-test-error { color: var(--danger); margin: 0; overflow-wrap: anywhere; }
@@ -2247,6 +2251,7 @@ kbd {
 .link-panel code { color: var(--accent-hover); font-family: var(--font-mono); }
 .link-warning, .link-status { margin: 0; font-size: 12px; }
 .link-warning { color: var(--warning); }
+.mcp-warning { margin: 0 0 4px 26px; font-size: 12px; }
 .link-status { color: var(--text-muted); }
 .link-status.sent { color: var(--success); }
 .link-status.queued { color: var(--warning); }

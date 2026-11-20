@@ -1,10 +1,11 @@
-const { clean, shellPrompt } = require('./terminalText.cjs');
+const { clean, pendingLine, shellPrompt } = require('./terminalText.cjs');
 
 // Statut de chaque case : idle (gris), working (orange), waiting (jaune), done (vert).
 // Claude Code : donné par ses hooks. Les autres agents : déduit de l'activité du terminal.
 // unseen : l'agent a fini et personne n'a encore regardé (lueur verte, PLAN.md §3.6).
 const QUIET_DELAY = 2000;
 const PROMPT_DELAY = 150;
+const PROMPT_FALLBACK_DELAY = 10_000;
 const MAX_CAPTURE = 80_000;
 
 const entries = new Map(); // id -> { mode, status, unseen, armed, quietTimer, sessionId, transcriptPath, name, cwd }
@@ -179,19 +180,26 @@ function onOutput(id, data = '') {
   e.capture = (e.capture + data).slice(-MAX_CAPTURE);
   set(id, e, 'working');
   clearTimeout(e.quietTimer);
-  const prompt = e.isShell ? shellPrompt(e.capture.slice(-4096), e.prompt) : '';
-  // A known shell prompt is more reliable than silence during a build or a prompt for input.
-  if (e.prompt && !prompt) return;
+  const tail = e.capture.slice(-4096);
+  let prompt = e.isShell ? shellPrompt(tail, e.prompt) : '';
+  let delay = prompt ? PROMPT_DELAY : QUIET_DELAY;
+  // Un prompt connu est plus fiable que le silence (long build). S'il change (venv, cd, ssh, python),
+  // on ne conclut qu'après un long silence sur une ligne inachevée : un build silencieux finit ses lignes.
+  if (e.prompt && !prompt) {
+    prompt = pendingLine(tail);
+    if (!prompt) return;
+    delay = PROMPT_FALLBACK_DELAY;
+  }
   e.quietTimer = setTimeout(() => {
     const output = clean(e.capture);
-    const lines = (prompt ? output.slice(0, -prompt.length) : output).split('\n');
+    const lines = (prompt && output.endsWith(prompt) ? output.slice(0, -prompt.length) : output).split('\n');
     const reply = lines.filter((line) => !e.prompt || !line.trimStart().startsWith(e.prompt)).join('\n').trim().slice(-20_000);
     e.prompt = prompt || e.prompt;
     e.promptTail = '';
     e.capture = '';
     onActivityComplete(id, reply);
     set(id, e, 'done');
-  }, prompt ? PROMPT_DELAY : QUIET_DELAY);
+  }, delay);
 }
 
 module.exports = { init, register, unregister, info, busy, rename, acknowledge, onHook, onInput, onOutput, arm, answerPermission };

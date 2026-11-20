@@ -210,6 +210,41 @@ function callOrchestra(name, args) {
 
 const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\n');
 
+// Outils du Navigateur et du Test visuel : montrés seulement si la case a un lien de ce type (Orchestra décide).
+const TOOL_GROUPS = 'orchestra_tool_groups';
+const GROUP_OF = {
+  orchestra_browser_get_state: 'browser', orchestra_browser_navigate: 'browser', orchestra_browser_reload: 'browser',
+  list_visual_tests: 'visual', read_visual_test: 'visual',
+};
+const GROUP_POLL = 5000;
+let listedGroups = null;
+let pollTimer = null;
+
+async function toolGroups() {
+  const { text, isError } = await callOrchestra(TOOL_GROUPS, {});
+  try {
+    const groups = isError ? [] : JSON.parse(text);
+    return Array.isArray(groups) ? groups.filter((group) => typeof group === 'string').sort().join(',') : '';
+  } catch {
+    return '';
+  }
+}
+
+const visibleTools = (groups) => TOOLS.filter((tool) => !GROUP_OF[tool.name] || groups.split(',').includes(GROUP_OF[tool.name]));
+
+// Un lien ajouté ou retiré pendant la session : l'agent est prévenu que la liste a changé.
+function watchGroups() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    const groups = await toolGroups();
+    if (listedGroups !== null && groups !== listedGroups) {
+      listedGroups = groups;
+      send({ method: 'notifications/tools/list_changed' });
+    }
+  }, GROUP_POLL);
+  pollTimer.unref();
+}
+
 async function handle(message) {
   const { id, method, params } = message;
   if (id === undefined || id === null) return; // notification (initialized, cancelled…) : rien à répondre
@@ -220,14 +255,17 @@ async function handle(message) {
         id,
         result: {
           protocolVersion: params?.protocolVersion ?? PROTOCOL_VERSION,
-          capabilities: { tools: {} },
+          capabilities: { tools: { listChanged: true } },
           serverInfo: { name: 'orchestra', version: '1.0.0' },
         },
       });
     case 'ping':
       return send({ id, result: {} });
-    case 'tools/list':
-      return send({ id, result: { tools: TOOLS } });
+    case 'tools/list': {
+      listedGroups = await toolGroups();
+      watchGroups();
+      return send({ id, result: { tools: visibleTools(listedGroups) } });
+    }
     case 'tools/call': {
       const { text, isError } = await callOrchestra(params?.name, params?.arguments ?? {});
       return send({ id, result: { content: [{ type: 'text', text }], isError } });

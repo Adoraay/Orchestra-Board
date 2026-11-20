@@ -246,3 +246,18 @@ test('shared folders use worktree roots, including subfolders and excluding dist
   assert.deepEqual(result.map((entry) => entry.id).sort(), ['b', 'c']);
   assert.equal(result.find((entry) => entry.id === 'c').boardName, 'Two');
 });
+
+test('team presets drop visual test fill values but keep other steps', () => {
+  const { templateBoard } = require('./helpers.cjs').load('teamTemplates.cjs', {
+    electron: { app: { getPath: () => require('os').tmpdir() }, ipcMain: { handle() {} } },
+    './i18n.cjs': require('./helpers.cjs').i18n,
+  });
+  const board = templateBoard({ nodes: [{ id: 'v', type: 'visualTest', position: { x: 0, y: 0 }, data: {
+    url: 'http://localhost:3000', steps: [
+      { id: 'a', action: 'fill', target: 'label:Password', value: 'secret' },
+      { id: 'b', action: 'text', target: 'h1', value: 'Welcome' },
+    ] } }], edges: [] });
+  const steps = board.nodes[0].data.steps;
+  assert.equal(steps[0].value, '');
+  assert.equal(steps[1].value, 'Welcome');
+});

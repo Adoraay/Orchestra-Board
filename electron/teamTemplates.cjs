@@ -18,8 +18,10 @@ function templateBoard(input) {
     ...board,
     nodes: board.nodes.map((node) => {
       if (node.type === 'visualTest') {
+        // Les valeurs « fill » (mots de passe…) ne partent pas dans un preset.
         const { lastResult, ...data } = node.data;
-        return { ...node, data };
+        const steps = data.steps.map((step) => step.action === 'fill' ? { ...step, value: '' } : step);
+        return { ...node, data: { ...data, steps } };
       }
       if (node.type !== 'terminal') return node;
       return {

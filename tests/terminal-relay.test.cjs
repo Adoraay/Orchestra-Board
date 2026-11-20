@@ -63,3 +63,44 @@ test('legacy links do not auto-forward terminal output and native hooks still re
   time.tick(relay.READ_DELAY);
   assert.equal(relay.pendingList()[0].text, 'Read: native reply');
 });
+
+test('an unrecognized new shell prompt (venv then cd) finishes after a long silence and becomes the known prompt', () => {
+  const { time, status, relay } = setup(true, true);
+  status.onOutput('source', 'PS F:\\repo> ');
+  status.onInput('source', '\r');
+  status.onOutput('source', 'PS F:\\repo> .venv\\Scripts\\activate\r\n(venv) PS F:\\repo> ');
+  time.tick(150 + relay.READ_DELAY);
+  assert.equal(status.info('source').status, 'done');
+  status.onInput('source', '\r');
+  status.onOutput('source', '(venv) PS F:\\repo> cd ..\\app\r\n(venv) PS F:\\app> ');
+  time.tick(9999);
+  assert.equal(status.info('source').status, 'working');
+  time.tick(1 + relay.READ_DELAY);
+  assert.equal(status.info('source').status, 'done');
+  status.onInput('source', '\r');
+  status.onOutput('source', '(venv) PS F:\\app> python -V\r\nPython 3.12.0\r\n(venv) PS F:\\app> ');
+  time.tick(150 + relay.READ_DELAY);
+  assert.equal(status.info('source').status, 'done');
+  assert.equal(relay.pendingList().at(-1).text, 'Read: Python 3.12.0');
+});
+
+test('a python REPL prompt ends the turn through the fallback delay', () => {
+  const { time, status } = setup(true, true);
+  status.onOutput('source', 'PS F:\\repo> ');
+  status.onInput('source', '\r');
+  status.onOutput('source', 'PS F:\\repo> python\r\nPython 3.12.0\r\n>>> ');
+  time.tick(10000);
+  assert.equal(status.info('source').status, 'done');
+});
+
+test('a long silent build after a finished line stays working until the known prompt returns', () => {
+  const { time, status } = setup(true, true);
+  status.onOutput('source', 'PS F:\\repo> ');
+  status.onInput('source', '\r');
+  status.onOutput('source', 'PS F:\\repo> npm run build\r\nBuilding...\r\n');
+  time.tick(120000);
+  assert.equal(status.info('source').status, 'working');
+  status.onOutput('source', 'Done\r\nPS F:\\repo> ');
+  time.tick(150);
+  assert.equal(status.info('source').status, 'done');
+});

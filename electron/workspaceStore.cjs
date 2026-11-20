@@ -276,4 +276,7 @@ function register(listener, beforeRestore = () => {}, applyPreset = (_id, _cards
   });
 }
 
-module.exports = { register, getSession, setSession, setRole, get: load, sanitizeContent };
+// Vrai si workspace.json n'a pas pu être lu tel quel : la liste des cases n'est alors pas fiable.
+const recovering = () => { load(); return recovery != null; };
+
+module.exports = { register, getSession, setSession, setRole, get: load, recovering, sanitizeContent };

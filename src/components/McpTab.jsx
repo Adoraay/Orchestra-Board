@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import useT from '../hooks/useT.js';
 
@@ -79,7 +79,8 @@ export default function McpTab({ boardId, boardName, nodes, initialCardId }) {
             <legend className="field-label">{t('mcp.servers')}</legend>
             <label className="check-row"><input type="checkbox" checked disabled /> Orchestra</label>
             {[...config.presets, ...config.custom].map(({ id, label }) => (
-              <div className="field-row" key={id}>
+              <Fragment key={id}>
+              <div className="field-row">
                 <label className="check-row">
                   <input
                     type="checkbox"
@@ -91,8 +92,11 @@ export default function McpTab({ boardId, boardName, nodes, initialCardId }) {
                 </label>
                 {!label && <button type="button" className="text-button danger" aria-label={t('mcp.removeNamed', { id })} onClick={() => save({ remove: id })}>{t('mcp.remove')}</button>}
               </div>
+              {id === 'agent-desktop' && <p className="link-warning mcp-warning">{t('mcp.desktopWarning')}</p>}
+              </Fragment>
             ))}
           </fieldset>
+          <p className="field-hint">{t('mcp.npxNote')}</p>
           {form ? (
             <form className="field" onSubmit={addServer}>
               <label className="field"><span className="field-label">{t('mcp.serverId')}</span>

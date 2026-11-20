@@ -66,11 +66,27 @@ function ensureProfile(name = PROFILE, servers = {}) {
   fs.writeFileSync(file, next);
 }
 
+const cardProfile = (id) => `${PROFILE}-card-${createHash('sha256').update(id).digest('hex').slice(0, 24)}`;
+const CARD_PROFILE_FILE = new RegExp(`^${PROFILE}-card-[0-9a-f]{24}\\.config\\.toml$`);
+
 function profileFor(id, servers) {
   if (!Object.keys(servers).length) return PROFILE;
-  const name = `${PROFILE}-card-${createHash('sha256').update(id).digest('hex').slice(0, 24)}`;
+  const name = cardProfile(id);
   ensureProfile(name, servers);
   return name;
+}
+
+// Profils des cases qui n'existent plus : supprimés au démarrage. Ceux des cases restantes gardent
+// l'approbation des hooks enregistrée par Codex.
+function pruneCardProfiles(cardIds) {
+  const keep = new Set(cardIds.map((id) => `${cardProfile(id)}.config.toml`));
+  let files;
+  try { files = fs.readdirSync(codexHome()); } catch { return; }
+  for (const file of files) {
+    if (!CARD_PROFILE_FILE.test(file) || keep.has(file)) continue;
+    try { fs.rmSync(path.join(codexHome(), file), { force: true }); }
+    catch (error) { console.warn('Codex profile cleanup failed:', error.code); }
+  }
 }
 
 const isOurs = (handler) => typeof handler?.command === 'string' && handler.command.includes(MARKER);
@@ -124,4 +140,4 @@ function ensure() {
 // Variables d'environnement du terminal d'une case Codex.
 const env = (id) => ({ ORCHESTRA_HOOK_URL: hookBase(id), ORCHESTRA_URL: toolUrl(id) });
 
-module.exports = { PROFILE, ensure, env, profileFor };
+module.exports = { PROFILE, ensure, env, profileFor, pruneCardProfiles };

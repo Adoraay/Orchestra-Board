@@ -48,9 +48,10 @@ function parseMarkdown(bytes) {
   return { text: source.replace(/\r\n?/g, '\n'), tasks, revision };
 }
 
-function sameFile(before, after) {
+// byPath : sous Windows, le ctime lu par le chemin peut retarder sur celui du descripteur juste après une écriture.
+function sameFile(before, after, byPath = false) {
   return before.dev === after.dev && before.ino === after.ino && before.size === after.size &&
-    before.mtimeNs === after.mtimeNs && before.ctimeNs === after.ctimeNs;
+    before.mtimeNs === after.mtimeNs && (byPath || before.ctimeNs === after.ctimeNs);
 }
 
 function withMarkdown(file, writable, useFile) {
@@ -62,7 +63,7 @@ function withMarkdown(file, writable, useFile) {
   const fd = fs.openSync(file, mode | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0));
   try {
     const opened = fs.fstatSync(fd, { bigint: true });
-    if (!opened.isFile() || opened.nlink !== 1n || !sameFile(expected, opened)) throw fileError('note.fileConflict');
+    if (!opened.isFile() || opened.nlink !== 1n || !sameFile(expected, opened, true)) throw fileError('note.fileConflict');
     const bytes = Buffer.allocUnsafe(Number(opened.size));
     for (let offset = 0; offset < bytes.length;) {
       const count = fs.readSync(fd, bytes, offset, bytes.length - offset, offset);
@@ -252,7 +253,7 @@ function createNoteFiles(directory, emit) {
     try {
       withMarkdown(entry.file, true, (snapshot, fd, opened) => {
         const task = snapshot.tasks.find((item) => item.line === line);
-        if (snapshot.revision !== revision || !task || !sameFile(opened, fs.lstatSync(entry.file, { bigint: true }))) {
+        if (snapshot.revision !== revision || !task || !sameFile(opened, fs.lstatSync(entry.file, { bigint: true }), true)) {
           throw fileError('note.fileConflict');
         }
         const marker = Buffer.from(NEXT_MARKER[task.marker]);

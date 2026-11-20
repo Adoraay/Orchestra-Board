@@ -4,6 +4,7 @@ import { MonitorCheck, Play, Plus, X } from 'lucide-react';
 import useT from '../hooks/useT.js';
 
 const ACTIONS = ['click', 'fill', 'visible', 'text'];
+const TARGET_EXAMPLES = { click: 'role:button:Continue', fill: 'label:Email', visible: 'role:heading', text: 'h1' };
 const MAX_STEPS = 12;
 
 function TestResult({ result, t }) {
@@ -95,6 +96,7 @@ export default function VisualTestNode({ id, data, selected }) {
           <form onSubmit={run} noValidate>
             <details className="visual-test-setup" open={!lastResult || Boolean(error)}>
               <summary>{t('visualTest.setup')}</summary>
+              {!lastResult && <p className="visual-test-help visual-test-intro">{t('visualTest.intro')}</p>}
               <fieldset disabled={running}>
                 <div className="visual-test-inputs">
                   <label>{t('visualTest.url')}
@@ -115,13 +117,13 @@ export default function VisualTestNode({ id, data, selected }) {
                         <select aria-label={t('visualTest.action', { step: index + 1 })} value={step.action} onChange={(event) => updateStep(index, { action: event.target.value })}>
                           {ACTIONS.map((action) => <option key={action} value={action}>{t(`visualTest.action.${action}`)}</option>)}
                         </select>
-                        <input aria-label={t('visualTest.target', { step: index + 1 })} placeholder="role:button:Continue" required maxLength={512} value={step.target} onChange={(event) => updateStep(index, { target: event.target.value })} />
+                        <input aria-label={t('visualTest.target', { step: index + 1 })} placeholder={TARGET_EXAMPLES[step.action]} required maxLength={512} value={step.target} onChange={(event) => updateStep(index, { target: event.target.value })} />
                         <button type="button" className="icon-button" aria-label={t('visualTest.removeStep', { step: index + 1 })} onClick={() => update({ steps: steps.filter((_step, i) => i !== index) })}>
                           <X size={15} aria-hidden="true" />
                         </button>
                       </div>
                       {['fill', 'text'].includes(step.action) && (
-                        <input className="visual-test-value" aria-label={t('visualTest.value', { step: index + 1 })} placeholder={t('visualTest.valuePlaceholder')} required={step.action === 'text'} maxLength={1000} value={step.value} onChange={(event) => updateStep(index, { value: event.target.value })} />
+                        <input className="visual-test-value" type={step.action === 'fill' ? 'password' : 'text'} autoComplete="off" aria-label={t('visualTest.value', { step: index + 1 })} placeholder={t('visualTest.valuePlaceholder')} required={step.action === 'text'} maxLength={1000} value={step.value} onChange={(event) => updateStep(index, { value: event.target.value })} />
                       )}
                     </li>
                   ))}
