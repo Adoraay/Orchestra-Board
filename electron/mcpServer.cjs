@@ -207,7 +207,7 @@ const CONDUCTOR_TOOLS = [
     name: 'create_agent',
     annotations: ADD,
     description:
-      'Adds a tile to the board: a Claude Code or Codex agent (each in its own visible terminal), or a plain terminal. ' +
+      'Adds a tile to the board: a Claude Code, Codex or Antigravity agent (each in its own visible terminal), or a plain terminal. ' +
       'role = lasting instructions given to the agent at the start of its session (who it is, what it must and must not do). ' +
       'prompt = its first task, sent once it has started; write it self-contained, the agent does not see your conversation. ' +
       'Agents that edit code in parallel must not share a folder: give each one its own worktree_branch. ' +
@@ -215,10 +215,10 @@ const CONDUCTOR_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['claude', 'codex', 'terminal'] },
+        type: { type: 'string', enum: ['claude', 'codex', 'antigravity', 'terminal'] },
         name: { type: 'string', description: 'Short unique tile name (40 characters max), e.g. "Backend". Other agents address it by this name.' },
-        role: { type: 'string', description: 'Role of the agent (2,000 characters max). Claude and Codex only.' },
-        prompt: { type: 'string', description: 'First message sent to the agent. Claude and Codex only.' },
+        role: { type: 'string', description: 'Role of the agent (2,000 characters max). Agents only, not terminals.' },
+        prompt: { type: 'string', description: 'First message sent to the agent. Agents only, not terminals.' },
         folder: { type: 'string', description: 'Existing subfolder of the working folder (relative path). Default: the working folder.' },
         worktree_branch: { type: 'string', description: 'Run the agent in a Git worktree of this branch, created from HEAD if it does not exist (e.g. "maestro/backend"). The folder must be in a Git repository.' },
         near: NEAR,
@@ -305,7 +305,7 @@ const CONDUCTOR_TOOLS = [
   {
     name: 'set_role',
     annotations: CHANGE,
-    description: 'Sets the role of a Claude or Codex agent. A running agent applies it from its next session.',
+    description: 'Sets the role of a Claude, Codex or Antigravity agent. A running agent applies it from its next session.',
     inputSchema: {
       type: 'object',
       properties: { agent: REF('Agent'), role: { type: 'string', description: 'New role; empty to remove it.' } },
@@ -317,7 +317,7 @@ const CONDUCTOR_TOOLS = [
     name: 'send_to',
     annotations: ADD,
     description:
-      'Sends a message to a running Claude or Codex agent, as if the user typed it (queued until the agent is free). ' +
+      'Sends a message to a running Claude, Codex or Antigravity agent, as if the user typed it (queued until the agent is free). ' +
       'Use it to give a new task or to unblock an agent. Its answer is not returned to you: check later with read_board or read_agent_output.',
     inputSchema: {
       type: 'object',
@@ -359,6 +359,18 @@ CONDUCTOR_TOOLS.push({
       top: REF('Pyramid only: the tile at the top'),
     },
     required: ['layout'],
+    additionalProperties: false,
+  },
+});
+CONDUCTOR_TOOLS.push({
+  name: 'create_board',
+  annotations: ADD,
+  description:
+    'Creates a new empty board (a tab), opens it, and makes it the target of your next actions in this message. ' +
+    'Use it only when the user asks for a new board; otherwise work on the current one. At most 3 per message.',
+  inputSchema: {
+    type: 'object',
+    properties: { name: { type: 'string', description: 'Short board name (40 characters max), e.g. "API". Default: "Board N".' } },
     additionalProperties: false,
   },
 });

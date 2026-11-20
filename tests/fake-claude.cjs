@@ -39,6 +39,21 @@ process.stdin.on('end', async () => {
     return;
   }
   for (const text of ['Je ', 'construis…']) out({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text } } });
+  // « NEWBOARD » : un nouveau tableau, puis une case dedans.
+  const actions = message.includes('NEWBOARD')
+    ? [['create_board', { name: 'API' }], ['create_agent', { type: 'terminal', name: 'Server' }]]
+    : null;
+  if (actions) {
+    const config = JSON.parse(fs.readFileSync(after('--mcp-config'), 'utf8'));
+    const url = config.mcpServers.orchestra.env.ORCHESTRA_URL;
+    let n = 0;
+    for (const [name, input] of actions) {
+      const id = `board-tool-${++n}`;
+      out({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name: `mcp__orchestra__${name}`, input }] } });
+      const result = await tool(url, name, input);
+      out({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: id, content: [{ type: 'text', text: result.text }], is_error: result.isError }] } });
+    }
+  }
   if (message.includes('BUILD')) {
     const config = JSON.parse(fs.readFileSync(after('--mcp-config'), 'utf8'));
     const url = config.mcpServers.orchestra.env.ORCHESTRA_URL;

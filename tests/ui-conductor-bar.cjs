@@ -121,7 +121,32 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   await until("[...document.querySelectorAll('.conductor-msg.error')].some((m) => m.textContent.includes('not logged in'))");
   await until("!document.querySelector('.conductor-send.stop')");
 
+  // « Fais un nouveau tableau avec… » : le tableau s'ouvre, le plan s'y affiche, la conversation le suit.
+  const tabs = "document.querySelectorAll('.board-tab').length";
+  const before = await evaluate(tabs);
+  await type('NEWBOARD with a server');
+  await enter();
+  await until(`${tabs} === ${before + 1}`);
+  await until("document.querySelector('.board-tab.active')?.textContent.includes('API')");
+  await until("!document.querySelector('.conductor-send.stop') && !!document.querySelector('.conductor-plan')");
+  await until("document.querySelectorAll('.react-flow__node-ghost').length === 1");
+  assert.ok(await evaluate("[...document.querySelectorAll('.conductor-msg.user')].some((m) => m.textContent.includes('NEWBOARD'))"), 'same conversation on the new board');
+  await evaluate("[...document.querySelectorAll('.conductor-plan-actions button')].find((b) => b.textContent.includes('Approve')).click()");
+  await until("[...document.querySelectorAll('.react-flow__node-terminal')].some((n) => n.textContent.includes('Server'))");
+  for (let i = 0; i < 30 && !JSON.parse(fs.readFileSync(path.join(data, 'workspace.json'), 'utf8')).boards.some((b) => b.name === 'API' && b.nodes.some((n) => n.data.label === 'Server')); i++) await sleep(100);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(data, 'workspace.json'), 'utf8')).boards.some((b) => b.name === 'API' && b.nodes.some((n) => n.data.label === 'Server')));
+
+  // Même demande puis Annuler : le tableau créé pour l'aperçu, resté vide, disparaît.
+  await type('NEWBOARD again');
+  await enter();
+  await until(`${tabs} === ${before + 2}`);
+  await until("!document.querySelector('.conductor-send.stop') && !!document.querySelector('.conductor-plan')");
+  await evaluate("[...document.querySelectorAll('.conductor-plan-actions button')].find((b) => b.textContent.includes('Cancel')).click()");
+  await until(`${tabs} === ${before + 1}`);
+
   // Nouvelle conversation : historique vidé.
+  await until(`document.querySelector('.conductor-header button[title="New conversation"]')?.disabled === false && !document.querySelector('.conductor-send.stop')`);
+  await sleep(300);
   await evaluate(`document.querySelector('.conductor-header button[title="New conversation"]').click()`);
   await until("!!document.querySelector('.conductor-empty')");
   assert.deepEqual(errors, []);

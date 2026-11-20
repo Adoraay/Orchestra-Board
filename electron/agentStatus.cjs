@@ -7,6 +7,10 @@ const QUIET_DELAY = 2000;
 const PROMPT_DELAY = 150;
 const PROMPT_FALLBACK_DELAY = 10_000;
 const MAX_CAPTURE = 80_000;
+// Antigravity n'envoie aucun hook pour ses demandes d'autorisation (vérifié avec agy 1.5.13) : on les lit à
+// l'écran. « 1 » accepte (« Yes, run command »), Échap refuse (« esc to cancel », sans hook Stop ensuite).
+const AGY_SCREEN = 8192;
+const AGY_PERMISSION = 'Requesting permission for:';
 
 const entries = new Map(); // id -> { mode, status, unseen, armed, quietTimer, sessionId, transcriptPath, name, cwd }
 let emit = () => {};
@@ -53,6 +57,7 @@ function register(id, mode, meta = {}) {
     promptTail: '',
     kind: meta.kind ?? null,
     permission: null,
+    screen: '',
   });
 }
 
@@ -150,8 +155,8 @@ function answerPermission(id, allow) {
 // Sans Entrée avant, la sortie (démarrage, écho des touches, animations) ne change rien.
 function onInput(id, data) {
   const e = entries.get(id);
-  // Échap seul pendant une demande de permission de Claude = refus tapé dans le terminal.
-  if (e?.status === 'waiting' && e.kind === 'claude' && data === '\x1b') return set(id, e, 'idle');
+  // Échap seul pendant une demande de permission de Claude ou d'Antigravity = refus tapé dans le terminal.
+  if (e?.status === 'waiting' && ['claude', 'antigravity'].includes(e.kind) && data === '\x1b') return set(id, e, 'idle');
   if (!e || data.startsWith('\x1b')) return;
   acknowledge(id);
   if (data.includes('\r')) arm(id);
@@ -166,8 +171,25 @@ function arm(id) {
   }
 }
 
+// Demande d'autorisation d'Antigravity, lue dans sa sortie pendant qu'il travaille : la commande (ou le fichier)
+// est la ligne qui suit l'en-tête. Le reste de son statut vient de ses hooks.
+function watchAntigravity(id, e, data) {
+  if (e.status !== 'working') { e.screen = ''; return; }
+  e.screen = (e.screen + data).slice(-AGY_SCREEN);
+  const text = clean(e.screen);
+  const at = text.lastIndexOf(AGY_PERMISSION);
+  if (at < 0) return;
+  const lines = text.slice(at + AGY_PERMISSION.length).split('\n').map((line) => line.trim()).filter(Boolean);
+  if (!lines.some((line) => /^>?\s*1\.\s*Yes/.test(line))) return; // le choix n'est pas encore affiché
+  e.screen = '';
+  e.status = 'waiting';
+  e.permission = { tool: /command/i.test(lines.find((line) => line.endsWith('?')) ?? '') ? 'Command' : 'Antigravity', detail: (lines[0] ?? '').slice(0, 300), actionable: true };
+  emit(id, info(id));
+}
+
 function onOutput(id, data = '') {
   const e = entries.get(id);
+  if (e?.kind === 'antigravity') return watchAntigravity(id, e, data);
   if (!e || e.mode !== 'activity') return;
   if (!e.armed && e.status !== 'working') {
     if (e.isShell) {

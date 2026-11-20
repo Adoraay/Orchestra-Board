@@ -309,3 +309,30 @@ test("Codex engine: the user's own MCP servers are turned off (they run outside 
   assert.deepEqual(off.sort(), ['mcp_servers."my server".enabled=false', 'mcp_servers.node_repl.enabled=false', 'mcp_servers.project_db.enabled=false']);
   assert.ok(args.includes('sandbox_mode="read-only"') && args.includes('approval_policy="never"'));
 });
+
+test('a board created by the conductor shares the conversation of the board it was asked from', async (t) => {
+  const s = setup(t);
+  const boards = new Set(['main']);
+  s.session.init({ boardExists: (id) => boards.has(id) });
+  await s.session.send('main', 'Bonjour', s.folder);
+  await s.idle();
+  boards.add('board-new');
+  s.session.linkBoard('conductor-main', 'board-new');
+  assert.deepEqual(s.session.get('board-new').history, s.session.get('main').history);
+  assert.ok(s.events.some((e) => e.boardId === 'board-new' && e.type === 'snapshot'));
+
+  // Écrire depuis le nouveau tableau : même conversation (même session), mais c'est lui que le chef d'orchestre vise.
+  await s.session.send('board-new', 'Ici', s.folder);
+  for (let i = 0; i < 200 && s.session.get('main').running; i++) await new Promise((r) => setTimeout(r, 25));
+  const args = s.calls().at(-1);
+  const first = s.calls()[0];
+  assert.equal(args[args.indexOf('--resume') + 1], first[first.indexOf('--session-id') + 1]);
+  assert.deepEqual(s.sessions.at(-1), { id: 'conductor-main', boardId: 'board-new', folder: s.folder, preview: true });
+  assert.equal(s.session.get('main').history.at(-1).text, 'Fait : Ici');
+
+  // Tableau d'origine supprimé : la conversation reste tant que le nouveau existe.
+  s.session.prune(['board-new']);
+  assert.equal(s.session.get('board-new').history.length, 4);
+  s.session.prune([]);
+  assert.deepEqual(s.session.get('board-new').history, []);
+});

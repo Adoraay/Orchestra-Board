@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { arrangeShape, autoPlace, besideGroup, placeAgent } from '../lib/autoPlace.js';
+import { EMPTY_BOARD } from '../lib/workspace.js';
 import { NODE_SIZE, NOTE_SIZE } from './useBoardOps.js';
 
 const COMMIT_WAIT = 300; // ms : un changement sans effet sur la map (lien en double…) ne bloque pas la réponse
@@ -18,7 +19,19 @@ export function useConductorRouter(boards) {
   useEffect(
     () =>
       window.conductor.onOp((request) => {
-        const { boards: list, activeId, setActiveId } = latest.current;
+        const { boards: list, activeId, setActiveId, content, addBoard, deleteBoard } = latest.current;
+        // Tableaux : créés ou retirés ici, hors de toute map (create_board, aperçu annulé).
+        if (request.op?.type === 'createBoard') {
+          addBoard(request.op.name, EMPTY_BOARD)
+            .then((id) => window.conductor.done(request.reqId, typeof id === 'string' ? { id } : { error: id?.error ?? 'limit' }))
+            .catch(() => window.conductor.done(request.reqId, { error: 'failed' }));
+          return;
+        }
+        if (request.op?.type === 'deleteBoard') {
+          const empty = content[request.op.id]?.nodes.length === 0;
+          if (empty && list.length > 1) deleteBoard(request.op.id);
+          return window.conductor.done(request.reqId, empty ? {} : { error: 'notEmpty' });
+        }
         if (!list.some((b) => b.id === request.boardId)) return window.conductor.done(request.reqId, { error: 'board' });
         if (slot.current?.boardId === request.boardId) return slot.current.apply(request);
         waiting.current.push(request);

@@ -11,8 +11,8 @@ const { t } = require('./i18n.cjs');
 // d'orchestre n'a jamais ces outils.
 // Aperçu : les actions sont gardées en attente avec des ids temporaires (pending-N), utilisables par les outils
 // suivants et visibles dans read_board ; commit() les applique dans l'ordre en remplaçant ces ids.
-const TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output', 'arrange'];
-const TYPES = { claude: 'claude-code', codex: 'codex', terminal: 'shell' };
+const TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output', 'arrange', 'create_board'];
+const TYPES = { claude: 'claude-code', codex: 'codex', antigravity: 'antigravity', terminal: 'shell' };
 const TYPE_NAMES = Object.fromEntries(Object.entries(TYPES).map(([type, agentId]) => [agentId, type]));
 const LINK_MODES = ['relay', 'delegate'];
 const LAYOUTS = ['pyramid', 'row', 'column', 'grid'];
@@ -26,6 +26,7 @@ const LOG_ENTRIES = 20;
 const SHORT = 300; // caractères gardés par texte dans read_board
 const START_DELAY = 1500; // ms après SessionStart : l'invite du CLI finit de s'afficher avant le collage
 const START_TIMEOUT = 90000;
+const MAX_NEW_BOARDS = 3; // tableaux que le chef d'orchestre peut créer par message de l'utilisateur
 
 let deps = {
   requestOp: async () => ({ error: 'unavailable' }), // (boardId, op) -> { id } | { error }, appliqué par l'interface
@@ -40,6 +41,7 @@ let deps = {
   logEntries: () => [],
   log: () => {},
   onPending: () => {}, // (appelant, actions en attente) : l'aperçu a changé
+  onBoardCreated: () => {}, // (appelant, tableau) : la conversation suit dans le nouveau tableau
 };
 let boards = [];
 const sessions = new Map(); // appelant -> { boardId, folder, preview, pending, next }
@@ -117,8 +119,12 @@ function tileTools(id) {
 // Session du chef d'orchestre (étape 2) : tableau, dossier de travail, aperçu ou non.
 function openSession(id, { boardId, folder, preview }) {
   const previous = sessions.get(id);
-  // runStickies : post-it créés depuis le dernier message de l'utilisateur (rangés avec les agents par arrange).
-  sessions.set(id, { boardId, folder, preview: Boolean(preview), pending: previous?.boardId === boardId ? previous.pending : [], next: previous?.next ?? 1, runStickies: [] });
+  // runStickies : post-it créés depuis le dernier message de l'utilisateur (rangés avec les agents par arrange) ;
+  // newBoards : tableaux créés pendant ce message ; planBoards : tableaux créés pour un aperçu pas encore validé.
+  sessions.set(id, {
+    boardId, folder, preview: Boolean(preview), pending: previous?.boardId === boardId ? previous.pending : [], next: previous?.next ?? 1,
+    runStickies: [], newBoards: 0, planBoards: previous?.planBoards ?? [],
+  });
 }
 function closeSession(id) {
   sessions.delete(id);
@@ -209,6 +215,8 @@ function readBoard(ctx) {
   const recent = deps.logEntries().filter((e) => e.boardId === board.id).slice(-LOG_ENTRIES);
   const view = {
     board: board.name,
+    board_id: board.id,
+    boards: boards.map((b) => ({ id: b.id, name: b.name })),
     folder: session.folder,
     mode: session.preview ? 'preview' : 'direct',
     conductor_agents: { used: conductorAgents(ctx), max: deps.settings().maxAgents },
@@ -401,10 +409,10 @@ function addProposal(ctx, action) {
     if (action.type === 'create_agent') item.node = { id: tempId, type: 'terminal', data: { agentId: action.agentId, label: action.name, cwd: action.cwd, role: action.role, createdBy: 'conductor' } };
     if (action.type === 'create_sticky') item.node = { id: tempId, type: 'note', data: { label: action.name, text: action.text } };
     if (action.type === 'create_link') item.name = tempId;
-    session.pending.push(item);
+    session.pending.push({ ...item, boardId: ctx.board.id });
     return result(t('conductor.proposed', { what, id: tempId }));
   }
-  session.pending.push({ ...action, summary: what });
+  session.pending.push({ ...action, summary: what, boardId: ctx.board.id });
   return result(t('conductor.proposedChange', { what }));
 }
 
@@ -577,6 +585,7 @@ async function runTool(caller, name, args) {
   if (ctx.error) return ctx.error;
   if (name === 'read_board') return readBoard(ctx);
   if (name === 'read_agent_output') return readAgentOutput(ctx, args);
+  if (name === 'create_board') return createBoard(ctx, args);
   const planned = plan(ctx, name, args);
   if (planned.error) return planned.error;
   if (planned.action.branch && ctx.session.preview) {
@@ -586,21 +595,40 @@ async function runTool(caller, name, args) {
   return ctx.session.preview ? propose(ctx, planned.action) : execute(ctx, planned.action);
 }
 
+// Nouveau tableau (onglet), ouvert et cible des actions suivantes de ce message. Créé tout de suite, même en
+// aperçu (un tableau vide ne change rien) ; un tableau d'aperçu resté vide disparaît si le plan est annulé.
+async function createBoard(ctx, args = {}) {
+  if (!sessions.has(ctx.caller)) return fail('conductor.boardOnlyBar');
+  const name = args.name === undefined ? null : cleanName(args.name);
+  if (args.name !== undefined && !name) return fail('conductor.badName');
+  if (ctx.session.newBoards >= MAX_NEW_BOARDS) return fail('conductor.boardLimit', { max: MAX_NEW_BOARDS });
+  const response = await deps.requestOp(null, { type: 'createBoard', name });
+  if (response?.error || !response?.id) return opError(response);
+  const boardName = boards.find((b) => b.id === response.id)?.name ?? name ?? '';
+  ctx.session.newBoards++;
+  ctx.session.boardId = response.id;
+  if (ctx.session.preview) ctx.session.planBoards.push(response.id);
+  deps.onBoardCreated(ctx.caller, response.id);
+  deps.log({ kind: 'conductor', from: ctx.caller, to: null, text: t('conductor.log.board', { name: boardName }) });
+  return result(t('conductor.boardCreated', { name: boardName, id: response.id }));
+}
+
 // Aperçu validé : actions appliquées dans l'ordre, ids temporaires remplacés par les vrais. Renvoie les résultats.
 async function commit(caller) {
   const session = sessions.get(caller);
   if (!session) return [];
   const pending = session.pending;
   session.pending = [];
+  session.planBoards = [];
   notify(caller);
   const ids = new Map();
   const map = (id) => (id && ids.has(id) ? ids.get(id) : id);
   const results = [];
   for (const item of pending) {
     const run = chain.then(async () => {
-      const board = boards.find((b) => b.id === session.boardId);
+      const board = boards.find((b) => b.id === (item.boardId ?? session.boardId));
       if (!board) return fail('conductor.noBoard');
-      const { tempId, summary, node, ...action } = item;
+      const { tempId, summary, node, boardId, ...action } = item;
       for (const key of ['source', 'target', 'near', 'top']) if (key in action) action[key] = map(action[key]);
       for (const key of ['targets', 'companions']) if (action[key]) action[key] = action[key].map(map).filter((id) => !id.startsWith('pending-'));
       if ([action.source, action.target, action.near].some((id) => id?.startsWith('pending-'))) return fail('conductor.notFound', { ref: summary });
@@ -616,7 +644,13 @@ async function commit(caller) {
 
 function discard(caller) {
   const session = sessions.get(caller);
-  if (session) session.pending = [];
+  if (session) {
+    session.pending = [];
+    for (const boardId of session.planBoards) {
+      if (boards.find((b) => b.id === boardId)?.nodes.length === 0) deps.requestOp(boardId, { type: 'deleteBoard', id: boardId });
+    }
+    session.planBoards = [];
+  }
   notify(caller);
 }
 

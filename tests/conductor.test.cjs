@@ -10,6 +10,7 @@ const { load, clock, i18n } = require('./helpers.cjs');
 const AGENTS = [
   { id: 'claude-code', name: 'Claude Code', hooks: 'claude' },
   { id: 'codex', name: 'Codex', hooks: 'codex' },
+  { id: 'antigravity', name: 'Antigravity', hooks: 'antigravity' },
   { id: 'gemini', name: 'Gemini CLI', hooks: null },
   { id: 'shell', name: 'Terminal', hooks: null },
 ];
@@ -500,4 +501,95 @@ test('sticky notes written in the same message, or linked to the group, follow i
   assert.equal(beside.y, Math.min(...['a', 'b'].map((id) => shape.get(id).y)));
   const view = previewLayout(nodes, [], [{ type: 'arrange', targets: ['a', 'b'], layout: 'pyramid', top: 'a', companions: ['n'] }], { origin: { x: 0, y: 0 }, agentSize: size, noteSize: { width: 270, height: 180 } });
   assert.deepEqual(view.ghosts.find((g) => g.of === 'n').position, besideGroup(nodes, arrangeShape(nodes, [], ['a', 'b'], 'pyramid', 'a'), ['n']).get('n'));
+});
+
+test('the conductor creates Antigravity agents like Claude and Codex ones', async (t) => {
+  const s = setup(t);
+  const created = await s.call('create_agent', { type: 'antigravity', name: 'Designer', role: 'You design the UI.', prompt: 'Sketch the page', worktree_branch: 'maestro/ui', near: 'Lead' });
+  assert.equal(created.isError, false, created.text);
+  const add = s.ops.find((op) => op.type === 'addAgent');
+  assert.equal(add.agentId, 'antigravity');
+  assert.equal(add.role, 'You design the UI.');
+  assert.equal(add.branch, 'maestro/ui');
+  // Prompt initial : après son SessionStart (normalisé par antigravityHooks comme pour Claude et Codex).
+  s.live.add(add.id);
+  s.conductor.onHook(add.id, { provider: 'antigravity', hook_event_name: 'SessionStart' });
+  s.timers.tick(1500);
+  assert.equal(s.enqueued.at(-1).item.text, 'Sketch the page');
+  // Délégation depuis un Claude, et Antigravity compté dans la limite des agents.
+  assert.equal((await s.call('create_link', { from: 'Lead', to: 'Designer', mode: 'delegate' })).isError, false);
+  assert.equal(s.board().edges[0].data.mode, 'delegate');
+  const view = JSON.parse((await s.call('read_board', {})).text);
+  assert.equal(view.agents.find((a) => a.name === 'Designer').type, 'antigravity');
+  assert.deepEqual(view.conductor_agents, { used: 1, max: 6 });
+});
+
+test('create_board opens a new board that receives the next actions; preview boards left empty go away on cancel', async (t) => {
+  const s = setup(t);
+  const linked = [];
+  const deleted = [];
+  let n = 0;
+  const base = s.conductor;
+  // Fausse interface à plusieurs tableaux (createBoard / deleteBoard hors de toute map).
+  const workspace = s.workspace;
+  const boardOf = (id) => workspace.boards.find((b) => b.id === id);
+  base.init({
+    onBoardCreated: (caller, boardId) => linked.push({ caller, boardId }),
+    requestOp: async (boardId, op) => {
+      s.ops.push({ boardId, ...op });
+      if (op.type === 'createBoard') {
+        const id = `board-${++n}`;
+        workspace.boards.push({ id, name: op.name ?? `Board ${n + 1}`, nodes: [], edges: [] });
+        base.setWorkspace(workspace);
+        return { id };
+      }
+      if (op.type === 'deleteBoard') {
+        deleted.push(op.id);
+        workspace.boards = workspace.boards.filter((b) => b.id !== op.id);
+        base.setWorkspace(workspace);
+        return {};
+      }
+      const board = boardOf(boardId);
+      if (!board) return { error: 'board' };
+      if (op.type === 'addAgent') board.nodes.push({ id: op.id, type: 'terminal', data: { agentId: op.agentId, label: op.label, cwd: op.cwd, createdBy: 'conductor' } });
+      if (op.type === 'addSticky') board.nodes.push({ id: `note-${board.nodes.length}`, type: 'note', data: { label: op.label, text: op.text } });
+      base.setWorkspace(workspace);
+      return { id: op.id ?? board.nodes.at(-1).id };
+    },
+  });
+  // Une case de test ne crée pas de tableau.
+  assert.match((await s.call('create_board', { name: 'X' })).text, /conductor.boardOnlyBar/);
+
+  // Mode direct : tableau créé, conversation liée, actions suivantes dessus.
+  base.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: false });
+  const call = (name, args) => base.callTool('conductor-main', name, args);
+  assert.match((await call('create_board', { name: 'API' })).text, /conductor.boardCreated API board-1/);
+  assert.deepEqual(linked, [{ caller: 'conductor-main', boardId: 'board-1' }]);
+  await call('create_agent', { type: 'terminal', name: 'Server' });
+  assert.equal(s.ops.find((op) => op.type === 'addAgent').boardId, 'board-1');
+  assert.equal(JSON.parse((await call('read_board', {})).text).board_id, 'board-1');
+  await call('create_board', {});
+  await call('create_board', { name: 'Three' });
+  assert.match((await call('create_board', { name: 'Four' })).text, /conductor.boardLimit 3/, 'at most 3 per message');
+
+  // Aperçu : le tableau est créé tout de suite, les actions attendent avec leur tableau.
+  base.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  await call('create_sticky', { text: 'on main', name: 'Main note' });
+  await call('create_board', { name: 'Plan B' });
+  await call('create_agent', { type: 'terminal', name: 'Worker' });
+  const pending = base.pendingOf('conductor-main');
+  assert.deepEqual(pending.map((p) => p.boardId), ['main', 'board-4']);
+  base.discard('conductor-main');
+  assert.deepEqual(deleted, ['board-4'], 'the empty preview board is removed on cancel');
+
+  // Validation : chaque action va sur son tableau.
+  base.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  await call('create_sticky', { text: 'still main', name: 'Main note 2' });
+  await call('create_board', { name: 'Plan C' });
+  await call('create_agent', { type: 'terminal', name: 'Worker C' });
+  await base.commit('conductor-main');
+  assert.ok(boardOf('main').nodes.some((node) => node.data.label === 'Main note 2'));
+  assert.ok(boardOf('board-5').nodes.some((node) => node.data.label === 'Worker C'));
+  base.discard('conductor-main');
+  assert.deepEqual(deleted, ['board-4'], 'boards of an approved plan stay');
 });

@@ -62,10 +62,11 @@ export default function useBoards(saved) {
     return id;
   };
 
+  // Nouveau tableau rempli (modèle d'équipe) ou vide (chef d'orchestre) ; sans nom, « Board N ». Renvoie son id.
   const addBoard = async (name, state, mcp, backlog) => {
     if (latest.current.boards.length >= 50) return false;
     const id = 'board-' + crypto.randomUUID();
-    const next = [...latest.current.boards, { id, name: name.slice(0, 40) }];
+    const next = [...latest.current.boards, { id, name: (name || nextName(latest.current.boards, t)).slice(0, 40) }];
     content.current[id] = {
       ...state,
       fitAtStart: !state.viewport,
@@ -95,7 +96,7 @@ export default function useBoards(saved) {
     }
     setBoards(next);
     setActiveId(id);
-    return true;
+    return id;
   };
 
   const renameBoard = (id, name) => setBoards((list) => list.map((b) => (b.id === id ? { ...b, name } : b)));

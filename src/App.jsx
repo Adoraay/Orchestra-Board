@@ -574,9 +574,11 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
 
   // Aperçu : ses propositions en fantômes, ajoutées à l'affichage seulement (jamais à l'état du tableau : ni
   // sauvegardées, ni dans Ctrl+Z), montrées une fois le plan fini ; les cases à retirer en pointillés rouges.
+  // Un plan peut viser plusieurs tableaux (create_board) : chacun ne montre que ses propres fantômes.
+  const boardPending = useMemo(() => conductorSession.pending.filter((item) => !item.boardId || item.boardId === boardId), [conductorSession.pending, boardId]);
   const preview = useMemo(
-    () => (conductorSession.pending.length && !conductorRunning ? previewLayout(nodes, edges, conductorSession.pending, { origin: PLAN_ORIGIN, agentSize: NODE_SIZE, noteSize: NOTE_SIZE }) : null),
-    [conductorSession.pending, conductorRunning, nodes, edges],
+    () => (boardPending.length && !conductorRunning ? previewLayout(nodes, edges, boardPending, { origin: PLAN_ORIGIN, agentSize: NODE_SIZE, noteSize: NOTE_SIZE }) : null),
+    [boardPending, conductorRunning, nodes, edges],
   );
   const shownNodes = useMemo(() => {
     if (!preview && !building.length && !appearing.length) return nodes;

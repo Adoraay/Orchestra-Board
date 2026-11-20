@@ -27,7 +27,7 @@ const ENGINES = ['claude', 'codex'];
 
 const SYSTEM_PROMPT = `# You are the conductor of Orchestra
 
-Orchestra is a desktop app with an infinite board. Each tile on it is a real terminal running an AI coding agent (Claude Code or Codex) or a plain shell. The user talks to you in a command bar on top of the board. You build and direct their orchestra of agents on the current board with the mcp__orchestra__ tools. To the user, it is the app that does it.
+Orchestra is a desktop app with an infinite board. Each tile on it is a real terminal running an AI coding agent (Claude Code, Codex or Antigravity) or a plain shell. The user talks to you in a command bar on top of the board. You build and direct their orchestra of agents on the current board with the mcp__orchestra__ tools. To the user, it is the app that does it.
 
 You never write code, read files or run commands yourself: you have no such tools. You delegate all the work to agents you create, or to agents already on the board.
 
@@ -37,9 +37,10 @@ You never write code, read files or run commands yourself: you have no such tool
 3. For each new agent: a short unique name; a role saying who it is, its scope and what it must not do; a self-contained first prompt with the concrete task, constraints and what "done" means. Agents never see this conversation. The role is given silently at the start of the agent's session and shown on its tile; the prompt is pasted in its terminal to start the work: never repeat the role inside the prompt. Leave the prompt out when the agent should wait for instructions (for example a reviewer fed by a relay link).
 4. Agents that edit code at the same time must each get their own worktree_branch (for example "maestro/api"), otherwise they overwrite each other's files. Read-only agents (reviewers, planners) can share the working folder.
 5. Links: "delegate" when a lead agent should hand out work and collect the replies itself; "relay" with an instruction containing {response} to pass an agent's finished answer on automatically (for example coder → reviewer). Keep max_turns low (2 or 3) and add links only when they are needed. Place workers below their lead with near.
-6. Follow the user's words exactly, including the number of agents and any shape ("pyramid", "in a row", "in a column", "grid"): create the tiles, link them, then call arrange with that layout (a pyramid of a lead and two workers: layout "pyramid", top = the lead).
-7. Write the plan in a sticky note (create_sticky, named "Plan") with "- [ ]" task lines. Link the lead agent to it if it should keep it up to date.
-8. End with a short summary for the user: who does what, and what to watch. Do not wait for the agents to finish: you act only when the user writes to you.
+6. If the user asks for a new board (tab), call create_board first: your next actions go to that new board. Otherwise work on the current board.
+7. Follow the user's words exactly, including the number of agents and any shape ("pyramid", "in a row", "in a column", "grid"): create the tiles, link them, then call arrange with that layout (a pyramid of a lead and two workers: layout "pyramid", top = the lead).
+8. Write the plan in a sticky note (create_sticky, named "Plan") with "- [ ]" task lines. Link the lead agent to it if it should keep it up to date.
+9. End with a short summary for the user: who does what, and what to watch. Do not wait for the agents to finish: you act only when the user writes to you.
 
 ## Later messages
 The user may ask you to add an agent, change a role, or help a stuck agent: read_board, read_agent_output for that agent, then send_to it a precise message, or adjust links and roles.
@@ -66,8 +67,11 @@ let deps = {
   commit: async () => [],
   discard: () => {},
 };
-let conversations = null; // boardId -> { engine, sessionId, started, history, notes }
-const runs = new Map(); // boardId -> { child, live, stopped, result, stderr, tools }
+// Une conversation par tableau, sauf pour les tableaux que le chef d'orchestre a créés : ils partagent celle du
+// tableau d'où on lui a écrit (aliases). Les clés internes (key) sont donc des tableaux « d'origine ».
+let conversations = null; // key -> { engine, sessionId, started, history, notes }
+let aliases = new Map(); // tableau créé par le chef d'orchestre -> key de sa conversation
+const runs = new Map(); // key -> { child, live, stopped, result, stderr, tools }
 let saveTimer = null;
 
 function init(d) {
@@ -75,7 +79,10 @@ function init(d) {
 }
 
 const file = () => path.join(deps.dir(), 'conductor.json');
-const callerOf = (boardId) => `conductor-${boardId}`;
+const callerOf = (key) => `conductor-${key}`;
+const keyOf = (boardId) => { load(); return aliases.get(boardId) ?? boardId; };
+const boardsOf = (key) => [key, ...[...aliases].filter(([, k]) => k === key).map(([boardId]) => boardId)];
+const emitAll = (key, event) => { for (const boardId of boardsOf(key)) deps.emit(boardId, event); };
 const clip = (text, max = MAX_ENTRY) => {
   const value = String(text ?? '');
   return value.length > max ? `${value.slice(0, max)}…` : value;
@@ -93,6 +100,7 @@ function load() {
       const notes = Array.isArray(entry.notes) ? entry.notes.filter((n) => typeof n === 'string').slice(-10) : [];
       conversations.set(boardId, { engine, sessionId, started: entry.started === true && Boolean(sessionId), history: entry.history.slice(-MAX_HISTORY), notes });
     }
+    for (const [boardId, key] of Object.entries(data?.aliases ?? {})) if (ID.test(boardId) && ID.test(key)) aliases.set(boardId, key);
   } catch {}
   return conversations;
 }
@@ -102,7 +110,7 @@ function save() {
   saveTimer = setTimeout(() => {
     try {
       fs.mkdirSync(deps.dir(), { recursive: true });
-      const data = { version: 1, boards: Object.fromEntries(load()) };
+      const data = { version: 1, boards: Object.fromEntries(load()), aliases: Object.fromEntries(aliases) };
       fs.writeFileSync(file() + '.tmp', JSON.stringify(data));
       fs.renameSync(file() + '.tmp', file());
     } catch (error) {
@@ -125,7 +133,7 @@ function snapshot(boardId) {
   const run = runs.get(boardId);
   return { history: load().get(boardId)?.history ?? [], running: Boolean(run), live: run?.live ?? '', pending: deps.pendingOf(callerOf(boardId)) };
 }
-const publish = (boardId) => deps.emit(boardId, { type: 'snapshot', ...snapshot(boardId) });
+const publish = (key) => emitAll(key, { type: 'snapshot', ...snapshot(key) });
 
 function addEntry(boardId, entry) {
   const conv = conversation(boardId);
@@ -164,7 +172,7 @@ function claudeLine(boardId, run, line) {
       const event = message.event;
       if (event?.type === 'content_block_delta' && event.delta?.type === 'text_delta' && typeof event.delta.text === 'string') {
         run.live += event.delta.text;
-        deps.emit(boardId, { type: 'delta', text: event.delta.text });
+        emitAll(boardId, { type: 'delta', text: event.delta.text });
       }
       return;
     }
@@ -342,47 +350,48 @@ function codexArgs(conv, boardId, settings, folder) {
 // Message de l'utilisateur : une exécution du moteur choisi, dans le dossier de travail, sur le tableau donné.
 async function send(boardId, message, folder) {
   if (typeof boardId !== 'string' || !ID.test(boardId) || !deps.boardExists(boardId)) return { error: t('conductorSession.noBoard') };
+  const key = keyOf(boardId);
   if (typeof message !== 'string' || !message.trim() || message.length > MAX_MESSAGE) return { error: t('conductorSession.badMessage', { max: MAX_MESSAGE }) };
   try {
     if (typeof folder !== 'string' || !path.isAbsolute(folder) || !fs.statSync(folder).isDirectory()) throw new Error();
   } catch { return { error: t('conductorSession.badFolder') }; }
-  if (runs.has(boardId)) return { error: t('conductorSession.busy') };
+  if (runs.has(key)) return { error: t('conductorSession.busy') };
 
   const settings = deps.settings();
   const engine = engineOf(settings);
   const program = await deps.findCommand(engine);
   if (!program?.ok) return { error: t('conductorSession.notFound', { engine: t(`conductorSession.engine.${engine}`) }) };
-  if (runs.has(boardId)) return { error: t('conductorSession.busy') };
+  if (runs.has(key)) return { error: t('conductorSession.busy') };
 
-  const conv = conversation(boardId);
+  const conv = conversation(key);
   // Autre moteur que la dernière fois : nouvelle session (une session Claude ne se reprend pas dans Codex).
   if (conv.engine !== engine) {
     Object.assign(conv, freshSession(engine));
-    if (conv.history.length) addEntry(boardId, { kind: 'info', text: t('conductorSession.engineChanged', { engine: t(`conductorSession.engine.${engine}`) }) });
+    if (conv.history.length) addEntry(key, { kind: 'info', text: t('conductorSession.engineChanged', { engine: t(`conductorSession.engine.${engine}`) }) });
   }
   // Un message pendant un aperçu = une correction : l'ancien plan est effacé, un nouveau est proposé.
-  if (deps.pendingOf(callerOf(boardId)).length) {
-    deps.discard(callerOf(boardId));
-    note(boardId, 'The user rejected your proposed plan (nothing was applied) and asks for the changes below. Propose the whole corrected plan again.');
+  if (deps.pendingOf(callerOf(key)).length) {
+    deps.discard(callerOf(key));
+    note(key, 'The user rejected your proposed plan (nothing was applied) and asks for the changes below. Propose the whole corrected plan again.');
   }
-  deps.openSession(callerOf(boardId), { boardId, folder, preview: !settings.autoApply });
+  deps.openSession(callerOf(key), { boardId, folder, preview: !settings.autoApply });
   const input = [...(conv.notes ?? []).map((text) => `[Orchestra] ${text}`), message.trim()].join('\n\n');
   conv.notes = [];
-  const args = engine === 'codex' ? codexArgs(conv, boardId, settings, folder) : claudeArgs(conv, writeFiles(boardId), settings);
+  const args = engine === 'codex' ? codexArgs(conv, key, settings, folder) : claudeArgs(conv, writeFiles(key), settings);
   const onLine = engine === 'codex' ? codexLine : claudeLine;
 
-  addEntry(boardId, { kind: 'user', text: clip(message.trim(), MAX_MESSAGE) });
+  addEntry(key, { kind: 'user', text: clip(message.trim(), MAX_MESSAGE) });
   const run = { child: null, live: '', stopped: false, result: null, stderr: '', tools: new Map() };
-  runs.set(boardId, run);
-  publish(boardId);
+  runs.set(key, run);
+  publish(key);
 
   let child;
   try {
     child = launch(program.message, args, { cwd: folder, windowsHide: true, env: { ...process.env } });
   } catch (error) {
-    runs.delete(boardId);
-    addEntry(boardId, { kind: 'error', text: t('conductorSession.exited', { code: '?', detail: error.message }) });
-    publish(boardId);
+    runs.delete(key);
+    addEntry(key, { kind: 'error', text: t('conductorSession.exited', { code: '?', detail: error.message }) });
+    publish(key);
     return { ok: true };
   }
   run.child = child;
@@ -394,18 +403,18 @@ async function send(boardId, message, folder) {
     while ((newline = buffer.indexOf('\n')) !== -1) {
       const line = buffer.slice(0, newline).trim();
       buffer = buffer.slice(newline + 1);
-      if (line) onLine(boardId, run, line);
+      if (line) onLine(key, run, line);
     }
   });
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => { run.stderr = (run.stderr + chunk).slice(-MAX_STDERR); });
   child.on('error', (error) => { run.stderr = (run.stderr + error.message).slice(-MAX_STDERR); });
   child.on('close', (code) => {
-    if (buffer.trim()) onLine(boardId, run, buffer.trim());
-    runs.delete(boardId);
-    if (run.stopped) addEntry(boardId, { kind: 'info', text: t('conductorSession.stopped') });
-    else if (!run.result) addEntry(boardId, { kind: 'error', text: t('conductorSession.exited', { code: code ?? '?', detail: clip(run.stderr.trim(), 1000) }) });
-    publish(boardId);
+    if (buffer.trim()) onLine(key, run, buffer.trim());
+    runs.delete(key);
+    if (run.stopped) addEntry(key, { kind: 'info', text: t('conductorSession.stopped') });
+    else if (!run.result) addEntry(key, { kind: 'error', text: t('conductorSession.exited', { code: code ?? '?', detail: clip(run.stderr.trim(), 1000) }) });
+    publish(key);
   });
   child.stdin.on('error', () => {});
   child.stdin.end(input);
@@ -421,40 +430,51 @@ function note(boardId, text) {
 // Valider l'aperçu : les actions s'appliquent dans l'ordre (conductor.commit), le résultat est noté.
 async function approve(boardId) {
   if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
-  if (runs.has(boardId)) return { error: t('conductorSession.busy') };
-  if (!deps.pendingOf(callerOf(boardId)).length) return { error: t('conductorSession.nothingPending') };
-  const results = await deps.commit(callerOf(boardId));
+  const key = keyOf(boardId);
+  if (runs.has(key)) return { error: t('conductorSession.busy') };
+  if (!deps.pendingOf(callerOf(key)).length) return { error: t('conductorSession.nothingPending') };
+  const results = await deps.commit(callerOf(key));
   const failed = results.filter((r) => r.isError);
-  addEntry(boardId, { kind: 'info', text: t('conductorSession.applied', { ok: results.length - failed.length, total: results.length }) });
-  for (const r of failed) addEntry(boardId, { kind: 'error', text: clip(`${r.summary} : ${r.text}`, 1000) });
-  note(boardId, failed.length
+  addEntry(key, { kind: 'info', text: t('conductorSession.applied', { ok: results.length - failed.length, total: results.length }) });
+  for (const r of failed) addEntry(key, { kind: 'error', text: clip(`${r.summary} : ${r.text}`, 1000) });
+  note(key, failed.length
     ? `The user approved your plan. Applied, except: ${failed.map((r) => `${r.summary} (${r.text})`).join('; ')}.`
     : 'The user approved your plan: everything was applied.');
-  publish(boardId);
+  publish(key);
   return { ok: true };
 }
 
 // Annuler l'aperçu : rien n'est appliqué.
 function cancel(boardId) {
   if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
-  if (runs.has(boardId)) return { error: t('conductorSession.busy') };
-  if (!deps.pendingOf(callerOf(boardId)).length) return { error: t('conductorSession.nothingPending') };
-  deps.discard(callerOf(boardId));
-  addEntry(boardId, { kind: 'info', text: t('conductorSession.cancelled') });
-  note(boardId, 'The user cancelled your proposed plan: nothing was applied.');
-  publish(boardId);
+  const key = keyOf(boardId);
+  if (runs.has(key)) return { error: t('conductorSession.busy') };
+  if (!deps.pendingOf(callerOf(key)).length) return { error: t('conductorSession.nothingPending') };
+  deps.discard(callerOf(key));
+  addEntry(key, { kind: 'info', text: t('conductorSession.cancelled') });
+  note(key, 'The user cancelled your proposed plan: nothing was applied.');
+  publish(key);
   return { ok: true };
 }
 
 // Aperçu changé (outil proposé, validé ou annulé) : la bulle et les fantômes de la map suivent.
 function onPending(caller, items) {
-  const boardId = caller.startsWith('conductor-') ? caller.slice('conductor-'.length) : null;
-  if (boardId) deps.emit(boardId, { type: 'pending', items });
+  const key = caller.startsWith('conductor-') ? caller.slice('conductor-'.length) : null;
+  if (key) emitAll(key, { type: 'pending', items });
+}
+
+// Tableau créé par le chef d'orchestre (outil create_board) : il partage la conversation de son appelant.
+function linkBoard(caller, boardId) {
+  const key = caller.startsWith('conductor-') ? caller.slice('conductor-'.length) : null;
+  if (!key || !ID.test(boardId) || boardId === key) return;
+  aliases.set(boardId, key);
+  save();
+  publish(key);
 }
 
 // Arrêt demandé par l'utilisateur : le processus et ses enfants (serveur MCP compris).
 function stop(boardId) {
-  const run = runs.get(boardId);
+  const run = runs.get(keyOf(boardId));
   if (!run?.child) return;
   run.stopped = true;
   if (process.platform === 'win32') execFile('taskkill', ['/pid', String(run.child.pid), '/T', '/F'], { windowsHide: true }, () => {});
@@ -464,23 +484,29 @@ function stop(boardId) {
 // Nouvelle conversation : nouvelle session Claude, historique vidé.
 function reset(boardId) {
   if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
-  if (runs.has(boardId)) return { error: t('conductorSession.busy') };
-  deps.discard(callerOf(boardId));
-  load().set(boardId, { ...freshSession(engineOf(deps.settings())), history: [], notes: [] });
-  deps.closeSession(callerOf(boardId));
+  const key = keyOf(boardId);
+  if (runs.has(key)) return { error: t('conductorSession.busy') };
+  deps.discard(callerOf(key));
+  load().set(key, { ...freshSession(engineOf(deps.settings())), history: [], notes: [] });
+  deps.closeSession(callerOf(key));
   save();
-  publish(boardId);
+  publish(key);
   return { ok: true };
 }
 
-// Tableaux supprimés : leur conversation disparaît.
+// Tableaux supprimés : leur lien disparaît, et une conversation dont aucun tableau ne reste aussi.
 function prune(boardIds) {
   const keep = new Set(boardIds);
   let changed = false;
-  for (const boardId of [...load().keys()]) {
-    if (keep.has(boardId) || runs.has(boardId)) continue;
-    load().delete(boardId);
-    deps.closeSession(callerOf(boardId));
+  for (const boardId of [...aliases.keys()]) {
+    if (keep.has(boardId)) continue;
+    aliases.delete(boardId);
+    changed = true;
+  }
+  for (const key of [...load().keys()]) {
+    if (runs.has(key) || boardsOf(key).some((boardId) => keep.has(boardId))) continue;
+    load().delete(key);
+    deps.closeSession(callerOf(key));
     changed = true;
   }
   if (changed) save();
@@ -491,7 +517,7 @@ function stopAll() {
 }
 
 function get(boardId) {
-  return typeof boardId === 'string' && ID.test(boardId) ? snapshot(boardId) : { history: [], running: false, live: '', pending: [] };
+  return typeof boardId === 'string' && ID.test(boardId) ? snapshot(keyOf(boardId)) : { history: [], running: false, live: '', pending: [] };
 }
 
-module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, callerOf, onLine: claudeLine, codexLine, codexArgs, userMcpServers, SYSTEM_PROMPT };
+module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, linkBoard, callerOf, onLine: claudeLine, codexLine, codexArgs, userMcpServers, SYSTEM_PROMPT };

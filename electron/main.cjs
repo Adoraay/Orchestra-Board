@@ -302,6 +302,7 @@ conductor.init({
   logEntries: activityLog.list,
   log: activityLog.add,
   onPending: (caller, items) => conductorSession.onPending(caller, items),
+  onBoardCreated: (caller, boardId) => conductorSession.linkBoard(caller, boardId),
 });
 
 // Session cachée du chef d'orchestre, une par tableau, lancée à chaque message de la bulle.
