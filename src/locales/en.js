@@ -709,6 +709,8 @@ export default {
   'conductor.engineLabel': 'Engine',
   'conductor.engine.claude': 'Claude Code',
   'conductor.engine.codex': 'Codex',
+  'conductor.engine.antigravity': 'Antigravity',
+  'general.conductorEngine.antigravity': 'Antigravity cannot be fully limited to those tools. Commands, the web and sub-agents are blocked and it works in a private empty folder, but it keeps its file tools: only its plan mode keeps it from writing.',
   'general.conductorEngine.claude': 'Recommended: it can only use the tools that build and direct the board; it never reads or edits files.',
   'general.conductorEngine.codex': 'Codex cannot be limited to those tools. It runs read-only (it cannot change anything), but it can read files in the working folder and run read-only commands.',
   'general.conductorModel': 'Model',

@@ -88,6 +88,7 @@ export default function ConductorBar({ boardId, session, open, onToggle, nameOf 
         >
           <option value="claude">{t('conductor.engine.claude')}</option>
           <option value="codex">{t('conductor.engine.codex')}</option>
+          <option value="antigravity">{t('conductor.engine.antigravity')}</option>
         </select>
         <button className="icon-button" onClick={reset} disabled={running || !history.length} title={t('conductor.reset')}><RotateCcw size={14} /></button>
         <button className="icon-button" onClick={onToggle} title={t('common.close')}><X size={15} /></button>

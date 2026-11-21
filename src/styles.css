@@ -183,7 +183,7 @@ button { font: inherit; color: inherit; }
 .dock-item:hover .dock-model, .dock-model.active, .dock-model.open { opacity: 1; }
 .dock-model:hover, .dock-model.open { color: var(--accent); border-color: var(--accent); }
 .dock-model.active { color: var(--accent); }
-.model-menu { min-width: 200px; }
+.model-menu { min-width: 200px; overflow-y: auto; }
 .menu-title { padding: 6px 8px 4px; font-size: 11px; color: var(--text-muted); }
 .menu-hint { padding: 6px 8px; font-size: 12px; color: var(--text-muted); }
 .model-tag { flex-shrink: 0; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); color: var(--text-muted); font-size: 11px; }

@@ -11,7 +11,7 @@ import useT from '../hooks/useT.js';
 
 const MAX_CONDUCTOR_AGENTS = 20; // = settingsStore.cjs
 const MODEL = /^[a-z0-9][\w.\-[\]]{0,63}$/i; // = settingsStore.cjs
-const ENGINES = ['claude', 'codex'];
+const ENGINES = ['claude', 'codex', 'antigravity'];
 
 // Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
 const SHELLS = [

@@ -29,6 +29,16 @@ function codexShim(dir) {
   return file;
 }
 
+// Faux agy derrière un script au format npm : lancé directement avec Node, arguments intacts (comme le vrai agy.exe).
+function agyShim(dir) {
+  const file = path.join(dir, 'agy.cmd');
+  if (!fs.existsSync(file)) {
+    fs.copyFileSync(path.join(__dirname, 'fake-agy.cjs'), path.join(dir, 'fake-agy.cjs'));
+    fs.writeFileSync(file, '@ECHO off\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\fake-agy.cjs" %*\r\n');
+  }
+  return file;
+}
+
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-session-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -43,7 +53,7 @@ function setup(t) {
   const deps = {
     dir: () => dir,
     settings: () => ({}),
-    findCommand: async (engine) => ({ ok: true, message: engine === 'codex' ? codexShim(dir) : program }),
+    findCommand: async (engine) => ({ ok: true, message: engine === 'codex' ? codexShim(dir) : engine === 'antigravity' ? agyShim(dir) : program }),
     toolUrl: (id) => `http://127.0.0.1:9/tool/${id}?t=x`,
     mcpServerPath: () => path.join(dir, 'mcpServer.cjs'),
     tools: ['read_board', 'create_agent'],
@@ -335,4 +345,68 @@ test('a board created by the conductor shares the conversation of the board it w
   assert.equal(s.session.get('board-new').history.length, 4);
   s.session.prune([]);
   assert.deepEqual(s.session.get('board-new').history, []);
+});
+
+test('Antigravity engine: plan mode in a private folder, Orchestra tools only, instructions in the first message, resume', { skip: process.platform !== 'win32' }, async (t) => {
+  const s = setup(t);
+  s.settings.engine = 'antigravity';
+  s.settings.model = 'gemini-4-neon-high';
+  await s.session.send('main', 'Salut', s.folder);
+  await s.idle();
+  const args = s.calls().at(-1);
+  assert.deepEqual(args.slice(0, 4), ['--output-format', 'stream-json', '--mode', 'plan']);
+  const settings = JSON.parse(args[args.indexOf('--settings') + 1]);
+  assert.deepEqual(settings.permissions, { allow: ['mcp(orchestra/*)'], deny: ['command(*)', 'url(*)', 'agent(*)'] });
+  assert.equal(settings.allowNonWorkspaceAccess, false);
+  assert.equal(args[args.indexOf('--model') + 1], 'gemini-4-neon-high');
+  const prompt = args.at(-1);
+  assert.ok(prompt.startsWith('-p=# You are the conductor of Orchestra'), 'the instructions open the first message');
+  assert.match(prompt, /## Antigravity/);
+  assert.ok(prompt.endsWith('Salut'));
+  // Dossier privé : seulement la config MCP d'Orchestra (pas le dossier du projet).
+  const workspace = path.join(s.dir, 'conductor', 'agy-main');
+  const mcp = JSON.parse(fs.readFileSync(path.join(workspace, '.agents', 'mcp_config.json'), 'utf8')).mcpServers.orchestra;
+  assert.equal(mcp.env.ORCHESTRA_TOOLSET, 'conductor');
+  assert.equal(mcp.env.ORCHESTRA_URL, 'http://127.0.0.1:9/tool/conductor-main?t=x');
+  assert.deepEqual(fs.readdirSync(s.folder), []);
+  const history = s.session.get('main').history;
+  assert.equal(history.at(-1).text, 'Agy : Salut', 'text deltas become one reply');
+  assert.equal(history.filter((e) => e.kind === 'tool').length, 0, 'reading the MCP tool schemas is not shown');
+
+  // Suite : même conversation, sans répéter les consignes.
+  await s.session.send('main', 'Encore', s.folder);
+  await s.idle();
+  const second = s.calls().at(-1);
+  assert.ok(second.includes('--conversation'));
+  assert.equal(second.at(-1), '-p=Encore');
+
+  await s.session.send('main', 'FAIL', s.folder);
+  await s.idle();
+  assert.match(s.session.get('main').history.at(-1).text, /sign in to Antigravity/);
+
+  // Nouvelle conversation : dossier privé retiré.
+  assert.deepEqual(s.session.reset('main'), { ok: true });
+  assert.equal(fs.existsSync(workspace), false);
+});
+
+test('Antigravity events become tool lines and replies', async () => {
+  const session = load('conductorSession.cjs', { './i18n.cjs': i18n });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-session-'));
+  session.init({ dir: () => dir, emit: () => {}, settings: () => ({ engine: 'antigravity' }) });
+  const run = { live: '', tools: new Map(), answered: false };
+  const line = (m) => session.agyLine('b', run, JSON.stringify(m));
+  line({ event: 'init', conversation_id: 'c-1' });
+  line({ event: 'step_update', step_update: { step_index: 2, state: 'ACTIVE', step_type: 'tool', tool_name: 'call_mcp_tool', tool_info: { parameters: { ServerName: 'orchestra', ToolName: 'create_agent', Arguments: { type: 'codex', name: 'API', prompt: 'secret' } } } } });
+  line({ event: 'step_update', step_update: { step_index: 2, state: 'ERROR', step_type: 'tool', tool_name: 'call_mcp_tool', tool_info: { parameters: { ServerName: 'orchestra', ToolName: 'create_agent' }, error: { message: 'limit reached' } } } });
+  line({ event: 'step_update', step_update: { step_index: 3, state: 'DONE', step_type: 'tool', tool_name: 'write_file', tool_info: { parameters: { Path: 'C:/work/a.txt' } } } });
+  line({ event: 'step_update', step_update: { step_index: 4, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'Done ' } });
+  line({ event: 'step_update', step_update: { step_index: 4, state: 'DONE', step_type: 'agent_response', text_delta: '**now**' } });
+  line({ event: 'result', result: { status: 'SUCCESS', response: 'Done **now**' } });
+  const history = session.get('b').history;
+  assert.deepEqual(history.map((e) => e.kind), ['tool', 'tool', 'assistant'], 'the final result does not repeat the reply');
+  assert.deepEqual(history[0].input, { type: 'codex', name: 'API' });
+  assert.equal(history[0].error, 'limit reached');
+  assert.equal(history[1].tool, 'write_file', 'other Antigravity tools stay visible');
+  assert.equal(history[2].text, 'Done **now**');
+  fs.rmSync(dir, { recursive: true, force: true });
 });

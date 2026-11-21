@@ -708,6 +708,8 @@ export default {
   'conductor.engineLabel': 'Moteur',
   'conductor.engine.claude': 'Claude Code',
   'conductor.engine.codex': 'Codex',
+  'conductor.engine.antigravity': 'Antigravity',
+  'general.conductorEngine.antigravity': "Antigravity ne peut pas être limité entièrement à ces outils. Les commandes, le web et les sous-agents sont bloqués et il travaille dans un dossier privé vide, mais il garde ses outils de fichiers : seul son mode plan l'empêche d'écrire.",
   'general.conductorEngine.claude': "Recommandé : il ne peut utiliser que les outils qui construisent et dirigent le tableau ; il ne lit ni ne modifie aucun fichier.",
   'general.conductorEngine.codex': "Codex ne peut pas être limité à ces outils. Il tourne en lecture seule (il ne peut rien modifier), mais il peut lire les fichiers du dossier de travail et lancer des commandes de lecture.",
   'general.conductorModel': 'Modèle',

@@ -12,7 +12,10 @@ const { t } = require('./i18n.cjs');
 //   outil intégré ; il ne lit ni n'écrit de fichier, il délègue ;
 // - Codex (`codex exec`, reprise par `exec resume`) : ne peut pas être limité à ces outils. Il tourne en lecture
 //   seule sans approbation possible (aucune modification), avec la plupart de ses fonctions désactivées, mais
-//   garde la lecture de fichiers et les commandes de lecture : limite signalée dans les paramètres.
+//   garde la lecture de fichiers et les commandes de lecture : limite signalée dans les paramètres ;
+// - Antigravity (`agy -p --mode plan`, reprise par --conversation) : dans un dossier privé qui contient seulement la
+//   config MCP d'Orchestra ; ses permissions n'autorisent que les outils d'Orchestra et refusent commandes, web et
+//   sous-agents. Ses outils de fichiers restent (le mode plan les retient) : limite signalée dans les paramètres.
 // Conversation gardée dans userData/conductor.json (messages et actions affichés dans la bulle).
 // Aperçu (par défaut, sauf Paramètres › mode auto) : ses changements restent en attente, montrés en fantômes sur
 // la map ; Valider les applique, Annuler les efface, un nouveau message les remplace par un nouveau plan. Le
@@ -23,7 +26,7 @@ const MAX_ENTRY = 8000;
 const MAX_STDERR = 4000;
 const SAVE_DELAY = 500;
 const ID = /^[\w-]{1,100}$/;
-const ENGINES = ['claude', 'codex'];
+const ENGINES = ['claude', 'codex', 'antigravity'];
 
 const SYSTEM_PROMPT = `# You are the conductor of Orchestra
 
@@ -121,7 +124,7 @@ function save() {
 
 // Nouvelle session pour un moteur : Claude reçoit son identifiant d'avance, Codex donne le sien à son démarrage.
 const freshSession = (engine) => ({ engine, sessionId: engine === 'claude' ? randomUUID() : null, started: false });
-const engineOf = (settings) => (settings.engine === 'codex' ? 'codex' : 'claude');
+const engineOf = (settings) => (ENGINES.includes(settings.engine) ? settings.engine : 'claude');
 
 function conversation(boardId) {
   const all = load();
@@ -208,6 +211,61 @@ function claudeLine(boardId, run, line) {
         addEntry(boardId, { kind: 'error', text: clip(message.result || message.errors?.join('\n') || message.subtype) });
       }
       return;
+  }
+}
+
+// Une ligne du flux stream-json d'Antigravity : init (conversation), step_update (texte et outils), result.
+// Ses lectures des schémas d'outils MCP (~/.gemini/…/mcp/) ne sont pas montrées.
+const AGY_SCHEMA = /[\\/]\.gemini[\\/]antigravity-cli[\\/]mcp[\\/]/i;
+function agyLine(key, run, line) {
+  let message;
+  try { message = JSON.parse(line); } catch { return; }
+  const conv = conversation(key);
+  if (message.event === 'init') {
+    if (!conv.started && typeof message.conversation_id === 'string') {
+      conv.sessionId = message.conversation_id;
+      conv.started = true;
+      save();
+    }
+    return;
+  }
+  if (message.event === 'step_update') {
+    const step = message.step_update ?? {};
+    if (step.step_type === 'agent_response') {
+      if (typeof step.text_delta === 'string' && step.text_delta) {
+        run.live += step.text_delta;
+        emitAll(key, { type: 'delta', text: step.text_delta });
+      }
+      if (step.state === 'DONE') {
+        if (run.live.trim()) { addEntry(key, { kind: 'assistant', text: clip(run.live.trim()) }); run.answered = true; }
+        run.live = '';
+        publish(key);
+      }
+      return;
+    }
+    if (step.step_type !== 'tool') return;
+    const info = step.tool_info ?? {};
+    const params = info.parameters ?? {};
+    const mcp = step.tool_name === 'call_mcp_tool';
+    if (!mcp && Object.values(params).some((value) => typeof value === 'string' && AGY_SCHEMA.test(value))) return;
+    const tool = mcp ? (params.ServerName === 'orchestra' ? params.ToolName : `${params.ServerName}.${params.ToolName}`) : step.tool_name;
+    const id = `agy-${step.step_index}`;
+    addTool(key, run, id, String(tool ?? ''), mcp && params.Arguments && typeof params.Arguments === 'object' ? params.Arguments : {});
+    if (step.state === 'DONE' || step.state === 'ERROR') {
+      const index = run.tools.get(id);
+      const entry = conv.history[index];
+      if (entry) conv.history[index] = { ...entry, done: true, ...(step.state === 'ERROR' && { error: clip(info.error?.message ?? info.output ?? '', 500) }) };
+      save();
+    }
+    publish(key);
+    return;
+  }
+  if (message.event === 'result') {
+    const outcome = message.result ?? {};
+    run.result = outcome;
+    if (outcome.status !== 'SUCCESS') addEntry(key, { kind: 'error', text: clip(outcome.error?.message ?? outcome.response ?? outcome.status ?? 'error') });
+    else if (!run.answered && outcome.response?.trim()) addEntry(key, { kind: 'assistant', text: clip(outcome.response.trim()) });
+    publish(key);
   }
 }
 
@@ -347,6 +405,30 @@ function codexArgs(conv, boardId, settings, folder) {
   ];
 }
 
+const AGY_RULE = '\n## Antigravity\nYou run in plan mode inside a private, empty folder: never read, write or edit files and never run commands. Only call the orchestra MCP tools (they apply at once or as a proposal the user approves), then answer the user.\n';
+const AGY_SETTINGS = JSON.stringify({ permissions: { allow: ['mcp(orchestra/*)'], deny: ['command(*)', 'url(*)', 'agent(*)'] }, allowNonWorkspaceAccess: false });
+const agyDir = (key) => path.join(deps.dir(), 'conductor', `agy-${key}`);
+
+// Dossier privé d'Antigravity : sa seule config est le serveur MCP d'Orchestra (adresse et jeton de ce lancement).
+function agyWorkspace(key) {
+  const dir = agyDir(key);
+  fs.mkdirSync(path.join(dir, '.agents'), { recursive: true });
+  const env = { ELECTRON_RUN_AS_NODE: '1', ORCHESTRA_TOOLSET: 'conductor', ORCHESTRA_URL: deps.toolUrl(callerOf(key)) };
+  fs.writeFileSync(path.join(dir, '.agents', 'mcp_config.json'), JSON.stringify({ mcpServers: { orchestra: { command: process.execPath, args: [deps.mcpServerPath()], env, timeoutSeconds: 60 } } }));
+  return dir;
+}
+
+// Pas d'option de consignes système : elles ouvrent le premier message de la conversation.
+function agyArgs(conv, settings, input) {
+  const prompt = conv.started ? input : `${SYSTEM_PROMPT}${AGY_RULE}\n---\n\n${input}`;
+  return [
+    '--output-format', 'stream-json', '--mode', 'plan', '--settings', AGY_SETTINGS,
+    ...(conv.started ? ['--conversation', conv.sessionId] : []),
+    ...(settings.model ? ['--model', settings.model] : []),
+    `-p=${prompt}`,
+  ];
+}
+
 // Message de l'utilisateur : une exécution du moteur choisi, dans le dossier de travail, sur le tableau donné.
 async function send(boardId, message, folder) {
   if (typeof boardId !== 'string' || !ID.test(boardId) || !deps.boardExists(boardId)) return { error: t('conductorSession.noBoard') };
@@ -377,17 +459,18 @@ async function send(boardId, message, folder) {
   deps.openSession(callerOf(key), { boardId, folder, preview: !settings.autoApply });
   const input = [...(conv.notes ?? []).map((text) => `[Orchestra] ${text}`), message.trim()].join('\n\n');
   conv.notes = [];
-  const args = engine === 'codex' ? codexArgs(conv, key, settings, folder) : claudeArgs(conv, writeFiles(key), settings);
-  const onLine = engine === 'codex' ? codexLine : claudeLine;
+  const agy = engine === 'antigravity';
+  const args = engine === 'codex' ? codexArgs(conv, key, settings, folder) : agy ? agyArgs(conv, settings, input) : claudeArgs(conv, writeFiles(key), settings);
+  const onLine = engine === 'codex' ? codexLine : agy ? agyLine : claudeLine;
 
   addEntry(key, { kind: 'user', text: clip(message.trim(), MAX_MESSAGE) });
-  const run = { child: null, live: '', stopped: false, result: null, stderr: '', tools: new Map() };
+  const run = { child: null, live: '', stopped: false, result: null, stderr: '', tools: new Map(), answered: false };
   runs.set(key, run);
   publish(key);
 
   let child;
   try {
-    child = launch(program.message, args, { cwd: folder, windowsHide: true, env: { ...process.env } });
+    child = launch(program.message, args, { cwd: agy ? agyWorkspace(key) : folder, windowsHide: true, env: { ...process.env } });
   } catch (error) {
     runs.delete(key);
     addEntry(key, { kind: 'error', text: t('conductorSession.exited', { code: '?', detail: error.message }) });
@@ -417,7 +500,7 @@ async function send(boardId, message, folder) {
     publish(key);
   });
   child.stdin.on('error', () => {});
-  child.stdin.end(input);
+  child.stdin.end(agy ? '' : input);
   return { ok: true };
 }
 
@@ -488,6 +571,7 @@ function reset(boardId) {
   if (runs.has(key)) return { error: t('conductorSession.busy') };
   deps.discard(callerOf(key));
   load().set(key, { ...freshSession(engineOf(deps.settings())), history: [], notes: [] });
+  fs.rmSync(agyDir(key), { recursive: true, force: true });
   deps.closeSession(callerOf(key));
   save();
   publish(key);
@@ -507,6 +591,7 @@ function prune(boardIds) {
     if (runs.has(key) || boardsOf(key).some((boardId) => keep.has(boardId))) continue;
     load().delete(key);
     deps.closeSession(callerOf(key));
+    fs.rmSync(agyDir(key), { recursive: true, force: true });
     changed = true;
   }
   if (changed) save();
@@ -520,4 +605,4 @@ function get(boardId) {
   return typeof boardId === 'string' && ID.test(boardId) ? snapshot(keyOf(boardId)) : { history: [], running: false, live: '', pending: [] };
 }
 
-module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, linkBoard, callerOf, onLine: claudeLine, codexLine, codexArgs, userMcpServers, SYSTEM_PROMPT };
+module.exports = { init, send, stop, reset, prune, stopAll, get, approve, cancel, onPending, linkBoard, callerOf, onLine: claudeLine, codexLine, agyLine, codexArgs, userMcpServers, SYSTEM_PROMPT };

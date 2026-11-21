@@ -33,7 +33,7 @@ const DEFAULTS = {
   general: { language: 'en', rootPath: null, shell: 'default', confirmClose: true, notifySound: true, notifyDesktop: true, linkMode: 'relay', trustFolders: true, pinned: {} },
   // Chef d'orchestre (PLAN.md §3.25) : agents qu'il peut créer par tableau ; tileTools = ses outils donnés aussi
   // aux cases Claude Code (pour le tester depuis une case normale) ; autoApply = mode auto, sans aperçu à valider.
-  // engine : moteur de la session cachée (claude ou codex), model : son modèle (null = celui par défaut du CLI).
+  // engine : moteur de la session cachée (claude, codex ou antigravity), model : son modèle (null = celui par défaut du CLI).
   conductor: { maxAgents: 6, tileTools: false, autoApply: false, engine: 'claude', model: null },
 };
 const MAX_CONDUCTOR_AGENTS = 20;
@@ -159,7 +159,7 @@ function sanitize(input) {
       maxAgents: Number.isInteger(maxAgents) && maxAgents >= 1 && maxAgents <= MAX_CONDUCTOR_AGENTS ? maxAgents : DEFAULTS.conductor.maxAgents,
       tileTools: c.tileTools === true,
       autoApply: c.autoApply === true,
-      engine: c.engine === 'codex' ? 'codex' : 'claude',
+      engine: ['codex', 'antigravity'].includes(c.engine) ? c.engine : 'claude',
       model: typeof c.model === 'string' && MODEL.test(c.model) ? c.model : null,
     },
   };
