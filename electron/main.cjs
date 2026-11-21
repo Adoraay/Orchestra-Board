@@ -472,7 +472,7 @@ ipcMain.handle('pty:create', (_e, { id, boardId, agentId, cwd, label, cols, rows
       id,
       command,
       shell: settings.general.shell,
-      cwd,
+      cwd: antigravityLaunch ? antigravityHooks.caseFolder(cwd) : cwd,
       env: antigravityLaunch?.env ?? (agent.hooks === 'codex' ? codexProfile.env(id) : null),
       cols,
       rows,

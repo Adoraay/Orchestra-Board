@@ -7,7 +7,16 @@ const { hookUrl, toolUrl } = require('./hookServer.cjs');
 
 const DIRECTORY_VAR = 'ORCHESTRA_AGY_WORKSPACE';
 const CONVERSATION_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-const runtimeDir = () => path.join(app.getPath('userData'), 'antigravity-sessions');
+// agy trie ses dossiers de travail (celui du lancement + les --add-dir) par ordre alphabétique, en tenant compte de la
+// casse, et lance ses commandes dans le premier : le dossier temporaire doit donc se ranger après le projet. Sous
+// Windows, sa lettre de lecteur en minuscule (« c:\ ») passe après « C:\ », « D:\ »… ; ailleurs, le dossier
+// temporaire du système (/var/folders, /tmp) passe après /Users, /Volumes et /home.
+const runtimeDir = () => process.platform === 'win32'
+  ? path.join(app.getPath('userData'), 'antigravity-sessions')
+  : path.join(os.tmpdir(), 'orchestra-antigravity-sessions');
+const driveCase = (dir, toCase) => (/^[a-z]:/i.test(dir) ? dir[0][toCase]() + dir.slice(1) : dir);
+// Dossier d'une case Antigravity : lettre de lecteur en majuscule, pour qu'il reste avant le dossier temporaire.
+const caseFolder = (cwd) => (process.platform === 'win32' && typeof cwd === 'string' ? driveCase(cwd, 'toUpperCase') : cwd);
 const workspaces = new Map();
 
 // The CLI discovers hooks and MCPs in every workspace passed to --add-dir.
@@ -41,7 +50,8 @@ function prepare(id, servers, shell) {
   workspaces.set(id, workspace);
   const powerShell = shell === 'powershell' || shell === 'pwsh' || (shell === 'default' && process.platform === 'win32');
   const directory = powerShell ? `$env:${DIRECTORY_VAR}` : shell === 'cmd' ? `%${DIRECTORY_VAR}%` : `$${DIRECTORY_VAR}`;
-  return { args: ` --add-dir "${directory}"`, env: { [DIRECTORY_VAR]: workspace } };
+  const listed = process.platform === 'win32' ? driveCase(workspace, 'toLowerCase') : workspace;
+  return { args: ` --add-dir "${directory}"`, env: { [DIRECTORY_VAR]: listed } };
 }
 
 function remove(id) {
@@ -77,4 +87,4 @@ function transcriptFor(sessionId, reportedPath) {
   return path.relative(expected, reportedPath) === '' ? expected : null;
 }
 
-module.exports = { prepare, remove, clearAll, normalize };
+module.exports = { prepare, remove, clearAll, normalize, caseFolder };

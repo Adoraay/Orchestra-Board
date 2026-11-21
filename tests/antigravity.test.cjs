@@ -10,7 +10,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const adapter = load('antigravityHooks.cjs', {
     electron: { app: { getPath: () => root } },
-    os: { homedir: () => root },
+    os: { homedir: () => root, tmpdir: () => root },
     './claudeHooks.cjs': { mcpServerPath: () => '/orchestra/mcpServer.cjs' },
     './hookServer.cjs': {
       hookUrl: (id) => `http://127.0.0.1:3210/hook/${id}?t=token`,
@@ -44,6 +44,21 @@ test('AGY cards get distinct workspace hooks and the selected native MCP servers
   adapter.remove('lead');
   assert.equal(fs.existsSync(a), false);
   assert.equal(fs.existsSync(b), true);
+});
+
+// agy lance ses commandes dans le premier de ses dossiers triés (casse comprise) : le dossier temporaire doit passer
+// après celui de la case, sinon les commandes partent dans le dossier des hooks.
+test('AGY hook workspace sorts after the card folder, so commands run in the card folder', { skip: process.platform !== 'win32' }, (t) => {
+  const { root, adapter } = fixture(t);
+  const listed = adapter.prepare('lead', {}, 'powershell').env.ORCHESTRA_AGY_WORKSPACE;
+  assert.match(listed, /^[a-z]:\\/);
+  assert.ok(fs.existsSync(path.join(listed, '.agents', 'hooks.json')));
+  const folder = adapter.caseFolder(root[0].toLowerCase() + root.slice(1));
+  assert.match(folder, /^[A-Z]:\\/);
+  for (const project of [folder, 'D:\\work', 'Z:\\app', '\\\\server\\share\\app']) assert.equal([listed, project].sort()[0], project);
+  assert.equal(adapter.caseFolder(undefined), undefined);
+  adapter.remove('lead');
+  assert.equal(fs.existsSync(listed), false);
 });
 
 test('AGY stop hooks relay the current turn only, after the agent is fully idle', (t) => {
