@@ -89,7 +89,7 @@ export function placeAgent(nodes, siblingIds, near, size, origin) {
 // Aperçu d'un plan du chef d'orchestre (actions en attente, dans l'ordre) : mêmes calculs que leur application,
 // pour que les fantômes soient là où les cases arriveront. Renvoie les cases fantômes (créations, et nouvelle
 // place des cases existantes déplacées), les liens proposés et les cases à retirer.
-export function previewLayout(nodes, edges, pending, { origin, agentSize, noteSize }) {
+export function previewLayout(nodes, edges, pending, { origin, agentSize, noteSize, cardSizes = {} }) {
   let work = nodes.map(({ id, position, style, measured, width, height }) => ({ id, position, style, measured, width, height }));
   const children = new Map();
   const ghosts = new Map();
@@ -107,6 +107,10 @@ export function previewLayout(nodes, edges, pending, { origin, agentSize, noteSi
     } else if (item.type === 'create_sticky') {
       work.push({ id: item.tempId, position: autoPlace(work, noteSize, { near: item.near, origin }), style: { ...noteSize } });
       ghosts.set(item.tempId, { kind: 'sticky', data: { label: item.name, text: item.text } });
+    } else if (item.type === 'create_card') {
+      const size = cardSizes[item.kind] ?? agentSize;
+      work.push({ id: item.tempId, position: autoPlace(work, size, { near: item.near, origin }), style: { ...size } });
+      ghosts.set(item.tempId, { kind: item.kind, data: { label: item.name, url: item.url } });
     } else if (item.type === 'create_link') {
       links.push({ id: item.tempId, source: item.source, target: item.target, mode: item.data.mode });
     } else if (item.type === 'remove_agent') {

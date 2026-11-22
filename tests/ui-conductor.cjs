@@ -85,6 +85,19 @@ module.exports = async ({ evaluate, until, sleep, data, errors }) => {
   assert.equal(tile('Left').position.x, tile('Lead').position.x);
   assert.equal(tile('Right').position.x, tile('Lead').position.x);
 
+  // Cases outils : un navigateur ouvert sur l'adresse donnée et un test visuel déjà réglé, sauvegardés.
+  const browserCard = await tool('lead', 'create_card', { type: 'browser', url: 'http://127.0.0.1:9/', near: 'Lead' });
+  assert.equal(browserCard.isError, false, browserCard.text);
+  const testCard = await tool('lead', 'create_card', { type: 'visual_test', url: 'http://127.0.0.1:9/login' });
+  assert.equal(testCard.isError, false, testCard.text);
+  await until("!!document.querySelector('.interactive-browser-node') && !!document.querySelector('.visual-test-node')");
+  const card = (type) => saved().boards[0].nodes.find((n) => n.type === type);
+  for (let i = 0; i < 30 && !(card('interactiveBrowser') && card('visualTest')); i++) await sleep(100);
+  assert.equal(card('interactiveBrowser').data.tabs[0].url, 'http://127.0.0.1:9/');
+  assert.equal(card('visualTest').data.url, 'http://127.0.0.1:9/login');
+  const cards = JSON.parse((await tool('lead', 'read_board')).text).cards;
+  assert.deepEqual(cards.map((c) => c.type).sort(), ['browser', 'visual_test']);
+
   // Session du chef d'orchestre sur un autre tableau : ce tableau s'ouvre, le changement y est appliqué.
   conductor.openSession('conductor-other', { boardId: 'other', folder: data, preview: false });
   const remote = await tool('conductor-other', 'create_sticky', { text: 'Other board plan', name: 'Remote plan' });

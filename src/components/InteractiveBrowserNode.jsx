@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { NodeResizer, useReactFlow } from '@xyflow/react';
+import { Handle, NodeResizer, Position, useReactFlow } from '@xyflow/react';
 import { ArrowLeft, ArrowRight, Braces, Cookie, Globe, Plus, RotateCw, Settings2, X } from 'lucide-react';
 import { BLANK_URL, BROWSER_PARTITION, MAX_BROWSER_TABS, PREFERENCE_COOKIE_MAX_VALUE, PREFERENCE_COOKIE_NAMES, addressUrl, browserTitle, browserUrl, isPreferenceCookieValue, newBrowserTab } from '../../electron/browserModel.mjs';
 import { useBoard } from '../context/BoardContext.jsx';
@@ -309,6 +309,9 @@ export default function InteractiveBrowserNode({ id, data, selected }) {
       panelTrigger.current?.focus();
     }}>
     <NodeResizer isVisible={selected && tool === 'select'} minWidth={450} minHeight={310} />
+    {/* Poignées invisibles : sans elles, React Flow ne dessine pas les liens de la case. */}
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
     <header className="interactive-browser-header">
       <Globe size={17} aria-hidden="true" /><strong>{t('dock.browser')}</strong>
       <BrowserButton icon={Cookie} label={t('browser.cookies')} aria-expanded={panel === 'cookies'} onClick={(event) => togglePanel('cookies', event)} />

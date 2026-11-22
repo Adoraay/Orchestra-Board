@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK } from '../lib/links.js';
 import { edgeId, linkRule, numberedName } from '../lib/boardOps.js';
 import useT from './useT.js';
+import { createBrowserNode, newBrowserTab } from '../../electron/browserModel.mjs';
 
 export const NODE_SIZE = { width: 640, height: 400 };
 export const NOTE_SIZE = { width: 270, height: 180 }; // plus large que haut : les lignes écrites par un agent restent lisibles
@@ -41,15 +42,15 @@ export default function useBoardOps({ setNodes, setEdges }) {
   );
 
   // Post-it, texte ou test visuel posé en « point » (coordonnées de la map) ; autoEdit = saisie ouverte,
-  // select = seul choisi.
+  // select = seul choisi ; url = page vérifiée par un test visuel.
   const addAnnotation = useCallback(
-    ({ type, point, text = '', label, autoEdit = true, select = true }) => {
+    ({ type, point, text = '', label, url, autoEdit = true, select = true }) => {
       const id = crypto.randomUUID();
       const { size, dragHandle } = ANNOTATIONS[type];
       const note = type === 'note';
       // Étape d'exemple d'un test visuel : vérifier qu'un titre s'affiche marche sur presque toutes les pages.
       const data = type === 'visualTest'
-        ? { steps: [{ id: crypto.randomUUID(), action: 'visible', target: 'role:heading', value: '' }] }
+        ? { steps: [{ id: crypto.randomUUID(), action: 'visible', target: 'role:heading', value: '' }], ...(url && { url }) }
         : { text, ...(autoEdit && { autoEdit: true }) };
       setNodes((nds) =>
         nds
@@ -67,6 +68,21 @@ export default function useBoardOps({ setNodes, setEdges }) {
       return id;
     },
     [setNodes, t],
+  );
+
+  // Navigateur interactif centré sur « point » ; url = page ouverte dans son premier onglet.
+  const addBrowser = useCallback(
+    ({ point, url, select = true }) => {
+      const browser = createBrowserNode(point);
+      if (url) {
+        const tab = newBrowserTab(url);
+        browser.data = { ...browser.data, tabs: [tab], activeTabId: tab.id };
+      }
+      browser.selected = select;
+      setNodes((nds) => [...nds.map((n) => (select && n.selected ? { ...n, selected: false } : n)), browser]);
+      return browser.id;
+    },
+    [setNodes],
   );
 
   // Lien entre deux cases selon linkRule (Navigateur, Test visuel, Note, Terminal ou type par défaut). Un post-it
@@ -124,7 +140,7 @@ export default function useBoardOps({ setNodes, setEdges }) {
   );
 
   return useMemo(
-    () => ({ addTerminal, addAnnotation, addLink, updateLink, swapLink, removeLink, removeElements, setRole }),
-    [addTerminal, addAnnotation, addLink, updateLink, swapLink, removeLink, removeElements, setRole],
+    () => ({ addTerminal, addAnnotation, addBrowser, addLink, updateLink, swapLink, removeLink, removeElements, setRole }),
+    [addTerminal, addAnnotation, addBrowser, addLink, updateLink, swapLink, removeLink, removeElements, setRole],
   );
 }

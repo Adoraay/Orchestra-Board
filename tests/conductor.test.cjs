@@ -48,6 +48,15 @@ function setup(t, { tileTools = true, maxAgents = 6, running = ['lead'] } = {}) 
         conductor.setWorkspace(workspace);
         return { id };
       }
+      case 'addCard': {
+        const id = `card-${++notes}`;
+        const tab = { id: 'tab', url: op.url ?? 'about:blank', title: '' };
+        board.nodes.push(op.kind === 'browser'
+          ? { id, type: 'interactiveBrowser', data: { tabs: [tab], activeTabId: 'tab', newTabUrl: 'about:blank' } }
+          : { id, type: 'visualTest', data: { url: op.url ?? '', steps: [] } });
+        conductor.setWorkspace(workspace);
+        return { id };
+      }
       case 'addLink': {
         const id = `xy-edge__${op.source}-${op.target}`;
         board.edges.push({ id, source: op.source, target: op.target, data: { enabled: true, maxTurns: 3, prompt: '', ...op.data } });
@@ -592,4 +601,49 @@ test('create_board opens a new board that receives the next actions; preview boa
   assert.ok(boardOf('board-5').nodes.some((node) => node.data.label === 'Worker C'));
   base.discard('conductor-main');
   assert.deepEqual(deleted, ['board-4'], 'boards of an approved plan stay');
+});
+
+test('create_card adds a browser or a visual test that agents can be linked to, also in preview', async (t) => {
+  const s = setup(t);
+  const browser = await s.call('create_card', { type: 'browser', url: 'http://localhost:3000/', near: 'Lead' });
+  assert.equal(browser.isError, false, browser.text);
+  assert.deepEqual(s.ops.at(-1), { type: 'addCard', kind: 'browser', url: 'http://localhost:3000/', near: 'lead' });
+  const link = await s.call('create_link', { from: 'Lead', to: 'card-1' });
+  assert.equal(link.isError, false, link.text);
+  assert.equal(s.board().edges.at(-1).data.mode, 'browser');
+  assert.equal(s.board().edges.at(-1).target, 'card-1');
+  const view = JSON.parse((await s.call('read_board', {})).text);
+  assert.deepEqual(view.cards, [{ id: 'card-1', type: 'browser', name: 'conductor.card.browser ', url: 'http://localhost:3000/' }]);
+
+  assert.equal((await s.call('create_card', { type: 'visual_test' })).isError, false);
+  assert.equal((await s.call('create_link', { from: 'card-2', to: 'Lead' })).isError, false, 'the link always goes from the agent to the card');
+  assert.equal(s.board().edges.at(-1).data.mode, 'visual');
+  assert.equal(s.board().edges.at(-1).source, 'lead');
+
+  assert.equal((await s.call('create_card', { type: 'panel' })).isError, true);
+  assert.equal((await s.call('create_card', { type: 'browser', url: 'file:///C:/secret.txt' })).isError, true);
+  assert.equal((await s.call('create_card', { type: 'browser', url: 'https://user:pass@example.com/' })).isError, true);
+
+  // Aperçu : la case et son lien attendent la validation, puis sont créés avec les vrais ids.
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  const call = (name, args) => s.conductor.callTool('conductor-main', name, args);
+  assert.match((await call('create_card', { type: 'browser' })).text, /pending-1/);
+  assert.equal((await call('create_link', { from: 'Lead', to: 'pending-1' })).isError, false);
+  assert.deepEqual(s.conductor.pendingOf('conductor-main').map((p) => p.type), ['create_card', 'create_link']);
+  const results = await s.conductor.commit('conductor-main');
+  assert.ok(results.every((r) => !r.isError), JSON.stringify(results));
+  assert.equal(s.board().edges.at(-1).target, 'card-3');
+  assert.equal(s.board().edges.at(-1).data.mode, 'browser');
+});
+
+test('the preview shows a proposed browser card with its real size', async () => {
+  const { previewLayout } = await esm('autoPlace.js');
+  const nodes = [{ id: 'lead', position: { x: 0, y: 0 }, style: { width: 640, height: 400 } }];
+  const pending = [{ type: 'create_card', tempId: 'pending-1', kind: 'browser', name: 'Interactive Browser', url: 'http://localhost:3000/', near: 'lead' }];
+  const sizes = { origin: { x: 0, y: 0 }, agentSize: { width: 640, height: 400 }, noteSize: { width: 270, height: 180 }, cardSizes: { browser: { width: 800, height: 540 } } };
+  const [ghost] = previewLayout(nodes, [], pending, sizes).ghosts;
+  assert.equal(ghost.kind, 'browser');
+  assert.deepEqual(ghost.size, { width: 800, height: 540 });
+  assert.equal(ghost.data.url, 'http://localhost:3000/');
+  assert.ok(ghost.position.y >= 400, 'placed below its lead');
 });

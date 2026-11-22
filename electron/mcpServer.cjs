@@ -146,13 +146,13 @@ const TOOLS = [
   {
     name: 'orchestra_browser_get_state',
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    description: 'Lists live tabs on Interactive Browser cards you can reach through a Browser link. Returns tab IDs, routes, titles, loading and history state, and console error types and locations. The user opens the site in the browser first.',
+    description: 'Lists live tabs on Interactive Browser cards you can reach through a Browser link. Returns tab IDs, routes, titles, loading and history state, and console error types and locations. An empty tab has the URL about:blank.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'orchestra_browser_navigate',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    description: 'Starts navigation within the current origin of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    description: 'Opens a full http(s) URL in an empty linked Interactive Browser tab, or navigates within the origin already open in that tab (another site is refused). Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
     inputSchema: {
       type: 'object',
       properties: { tabId: { type: 'string' }, url: { type: 'string', maxLength: 4096 } },
@@ -199,6 +199,7 @@ const CONDUCTOR_TOOLS = [
     annotations: READ,
     description:
       'Returns the current Orchestra board as JSON: agents and terminals (id, name, type, status, folder, branch, role), sticky notes, ' +
+      'tool cards (browser and visual test, with their address), ' +
       'links (from, to, mode, instruction, turns), pending changes waiting for the user\'s approval, and the last exchanges of the log. ' +
       'Call it first, and again before changing something you did not create.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -234,7 +235,8 @@ const CONDUCTOR_TOOLS = [
       'Links two tiles. Between agents: mode "delegate" lets the source agent talk to the target itself with its own tools ' +
       '(list_agents, send_to_agent, wait_for_replies) and get its reply back; mode "relay" sends the source\'s final answer to the target ' +
       'automatically each time the source finishes, with the instruction ({response} is replaced by that answer). ' +
-      'An agent linked to a terminal can run commands in it; an agent linked to a sticky note can read and rewrite it.',
+      'An agent linked to a terminal can run commands in it; an agent linked to a sticky note can read and rewrite it; ' +
+      'an agent linked to a browser or visual test card (create_card) can use it.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -371,6 +373,25 @@ CONDUCTOR_TOOLS.push({
   inputSchema: {
     type: 'object',
     properties: { name: { type: 'string', description: 'Short board name (40 characters max), e.g. "API". Default: "Board N".' } },
+    additionalProperties: false,
+  },
+});
+CONDUCTOR_TOOLS.push({
+  name: 'create_card',
+  annotations: ADD,
+  description:
+    'Adds a tool card to the board. "browser": an Interactive Browser where a linked agent can open a site in an empty tab, ' +
+    'then read its state (titles, routes, console errors), reload it and navigate within that site; useful for a QA or frontend agent ' +
+    'checking a web app. "visual_test": a Visual Test that checks a web page in Google Chrome when the user runs it; a linked agent reads ' +
+    'its latest result. Then link an agent to the card with create_link (from the agent to the card).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      type: { type: 'string', enum: ['browser', 'visual_test'] },
+      url: { type: 'string', description: 'Optional full http(s) address: the page opened in the browser, or the page checked by the visual test (e.g. "http://localhost:3000/").' },
+      near: NEAR,
+    },
+    required: ['type'],
     additionalProperties: false,
   },
 });

@@ -36,7 +36,7 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
     await evaluate("document.querySelector('.react-flow__pane').dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 570, clientY: 375 }))");
     await until("!!document.querySelector('.visual-test-node')");
     await set('.visual-test-node input[type=url]', url);
-    await click('.visual-test-node fieldset > button');
+    // Une nouvelle case a déjà une étape d'exemple : elle devient le clic.
     await set('.visual-test-step select', 'click');
     await set('.visual-test-step input', 'role:button:Start test');
     await click('.visual-test-node fieldset > button');

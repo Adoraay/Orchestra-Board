@@ -138,6 +138,31 @@ test('preference cookie writes are bound to the current host and preserve attrib
   assert.equal(writes.length, 2);
 });
 
+test('MCP opens any http(s) site in an empty tab, then keeps the agent on that origin', () => {
+  const { controller, host } = fixture();
+  let url = 'about:blank';
+  const guest = Object.assign(new EventEmitter(), {
+    id: 1, setWindowOpenHandler() {}, getURL: () => url, getTitle: () => '', isLoading: () => false, isDestroyed: () => false,
+    navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+    reload() {}, async loadURL(target) { this.target = target; },
+  });
+  host.emit('did-attach-webview', {}, guest);
+  assert.equal(controller.register(host, 1, 'board', 'browser', 'tab'), true);
+  const agent = { id: 'qa', type: 'terminal', position: { x: 0, y: 0 }, data: { agentId: 'claude-code' } };
+  const edge = { id: 'link', source: 'qa', target: 'browser', data: { mode: 'browser' } };
+  const workspace = { boards: [{ id: 'board', ...sanitizeContent({ nodes: [agent, createBrowserNode({ x: 0, y: 0 }, 'browser')], edges: [edge] }) }] };
+  const call = (name, args) => controller.callTool(workspace, 'qa', name, { tabId: 'browser:tab', ...args });
+
+  assert.equal(call('orchestra_browser_reload').isError, true);
+  assert.equal(call('orchestra_browser_navigate', { url: 'file:///C:/secret.txt' }).isError, true);
+  assert.equal(call('orchestra_browser_navigate', { url: 'http://localhost:3000/' }).isError, false);
+  assert.equal(guest.target, 'http://localhost:3000/');
+  guest.emit('did-stop-loading');
+  url = 'http://localhost:3000/';
+  assert.equal(call('orchestra_browser_navigate', { url: 'https://example.com/' }).isError, true);
+  assert.equal(call('orchestra_browser_navigate', { url: 'http://localhost:3000/login' }).isError, false);
+});
+
 test('MCP controls linked live tabs on their current origin and returns bounded console diagnostics', async () => {
   const { controller, host } = fixture();
   const url = 'https://fixture.test/start?key=private#hash';

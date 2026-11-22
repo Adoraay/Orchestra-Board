@@ -11,7 +11,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { Minimize2 } from 'lucide-react';
-import { BROWSER_DRAG_TYPE, browserDropPosition, createBrowserNode } from '../electron/browserModel.mjs';
+import { BROWSER_DRAG_TYPE, BROWSER_SIZE, browserDropPosition } from '../electron/browserModel.mjs';
 import AgentDock from './components/AgentDock.jsx';
 import AgentLogo from './components/AgentLogo.jsx';
 import AgentsBar from './components/AgentsBar.jsx';
@@ -66,7 +66,7 @@ import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useAppShortcuts from './hooks/useAppShortcuts.js';
 import useBoards from './hooks/useBoards.js';
-import useBoardOps, { NODE_SIZE, NOTE_SIZE } from './hooks/useBoardOps.js';
+import useBoardOps, { NODE_SIZE, NOTE_SIZE, VISUAL_TEST_SIZE } from './hooks/useBoardOps.js';
 import useConductorSession from './hooks/useConductorSession.js';
 import { previewLayout } from './lib/autoPlace.js';
 import { PLAN_ORIGIN, useConductorOps, useConductorRouter } from './hooks/useConductorBridge.js';
@@ -577,7 +577,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   // Un plan peut viser plusieurs tableaux (create_board) : chacun ne montre que ses propres fantômes.
   const boardPending = useMemo(() => conductorSession.pending.filter((item) => !item.boardId || item.boardId === boardId), [conductorSession.pending, boardId]);
   const preview = useMemo(
-    () => (boardPending.length && !conductorRunning ? previewLayout(nodes, edges, boardPending, { origin: PLAN_ORIGIN, agentSize: NODE_SIZE, noteSize: NOTE_SIZE }) : null),
+    () => (boardPending.length && !conductorRunning ? previewLayout(nodes, edges, boardPending, { origin: PLAN_ORIGIN, agentSize: NODE_SIZE, noteSize: NOTE_SIZE, cardSizes: { browser: BROWSER_SIZE, visual: VISUAL_TEST_SIZE } }) : null),
     [boardPending, conductorRunning, nodes, edges],
   );
   const shownNodes = useMemo(() => {
@@ -831,10 +831,9 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   // « Lancer un agent ici » (clic droit dans l'explorateur) : nouvelle case au centre de la vue.
   useGridGlow(boardRef, glow && Boolean(GRID_VARIANTS[grid]), settings.appearance.glowSize);
   const addBrowser = useCallback((center) => {
-    const browser = createBrowserNode(center);
-    setNodes((all) => [...all.map((node) => node.selected ? { ...node, selected: false } : node), browser]);
+    ops.addBrowser({ point: center });
     setTool('select');
-  }, [setNodes]);
+  }, [ops]);
 
   const openBrowser = useCallback(() => {
     const browsers = nodesRef.current.filter((node) => node.type === 'interactiveBrowser');

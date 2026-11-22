@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { arrangeShape, autoPlace, besideGroup, placeAgent } from '../lib/autoPlace.js';
 import { EMPTY_BOARD } from '../lib/workspace.js';
-import { NODE_SIZE, NOTE_SIZE } from './useBoardOps.js';
+import { NODE_SIZE, NOTE_SIZE, VISUAL_TEST_SIZE } from './useBoardOps.js';
+import { BROWSER_SIZE } from '../../electron/browserModel.mjs';
 
 const COMMIT_WAIT = 300; // ms : un changement sans effet sur la map (lien en double…) ne bloque pas la réponse
 const DRAW_DURATION = 1200; // ms : un lien créé se trace (classe edge-draw, jamais sauvegardée)
@@ -99,6 +100,15 @@ export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, 
       }
       case 'addSticky': {
         const id = o.addAnnotation({ type: 'note', point: place(NOTE_SIZE), text: op.text, label: op.label, autoEdit: false, select: false });
+        latest.current.reveal([id, op.near], id);
+        return { id };
+      }
+      case 'addCard': {
+        const browser = op.kind === 'browser';
+        const point = place(browser ? BROWSER_SIZE : VISUAL_TEST_SIZE);
+        const id = browser
+          ? o.addBrowser({ point, url: op.url, select: false })
+          : o.addAnnotation({ type: 'visualTest', point, url: op.url, autoEdit: false, select: false });
         latest.current.reveal([id, op.near], id);
         return { id };
       }

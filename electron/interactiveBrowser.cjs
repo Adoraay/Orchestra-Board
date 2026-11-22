@@ -166,8 +166,11 @@ function createInteractiveBrowser() {
     if (!entry) return error('unknownTab');
     const { guest } = entry;
     if (entry.agentNavigation || guest.isLoading()) return error('busy');
-    const origin = originOf(guest.getURL());
-    if (!origin || (name === NAVIGATE && originOf(args?.url) !== origin)) return error('origin');
+    // Onglet vide : l'agent peut y ouvrir un site http(s). Ensuite, il reste dans l'origine de la page affichée.
+    const current = originOf(guest.getURL());
+    const origin = name === NAVIGATE ? originOf(args?.url) : current;
+    if (!origin) return error(current ? 'origin' : 'blank');
+    if (current && origin !== current) return error('origin');
     const navigation = { origin };
     entry.agentNavigation = navigation;
     if (name === RELOAD) guest.reload();

@@ -1525,8 +1525,6 @@ kbd {
 /* Mode Lien : la page (webview) ne doit pas capter le clic qui choisit la case. */
 .tool-link .interactive-browser-node { cursor: pointer; }
 .tool-link .interactive-browser-node * { pointer-events: none; }
-.tool-link .interactive-browser-node { cursor: pointer; }
-.tool-link .interactive-browser-node * { pointer-events: none; }
 .interactive-browser-header, .browser-tab-strip, .browser-navigation {
   display: flex;
   align-items: center;

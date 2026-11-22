@@ -11,7 +11,7 @@ const { t } = require('./i18n.cjs');
 // d'orchestre n'a jamais ces outils.
 // Aperçu : les actions sont gardées en attente avec des ids temporaires (pending-N), utilisables par les outils
 // suivants et visibles dans read_board ; commit() les applique dans l'ordre en remplaçant ces ids.
-const TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output', 'arrange', 'create_board'];
+const TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output', 'arrange', 'create_board', 'create_card'];
 const TYPES = { claude: 'claude-code', codex: 'codex', antigravity: 'antigravity', terminal: 'shell' };
 const TYPE_NAMES = Object.fromEntries(Object.entries(TYPES).map(([type, agentId]) => [agentId, type]));
 const LINK_MODES = ['relay', 'delegate'];
@@ -27,6 +27,10 @@ const SHORT = 300; // caractères gardés par texte dans read_board
 const START_DELAY = 1500; // ms après SessionStart : l'invite du CLI finit de s'afficher avant le collage
 const START_TIMEOUT = 90000;
 const MAX_NEW_BOARDS = 3; // tableaux que le chef d'orchestre peut créer par message de l'utilisateur
+const MAX_URL = 2048;
+// Cases outils : Navigateur interactif et Test visuel (type de l'outil create_card -> type de case et genre).
+const CARD_TYPES = { browser: { nodeType: 'interactiveBrowser', kind: 'browser' }, visual_test: { nodeType: 'visualTest', kind: 'visual' } };
+const TILE_KINDS = ['agent', 'terminal', 'sticky', 'browser', 'visual']; // tout ce qui peut être relié
 
 let deps = {
   requestOp: async () => ({ error: 'unavailable' }), // (boardId, op) -> { id } | { error }, appliqué par l'interface
@@ -72,9 +76,10 @@ const findNode = (id) => {
   return null;
 };
 const fromConductor = (node) => created.has(node.id) || node.data.createdBy === 'conductor';
-const kindOf = (node) => (node.type === 'note' ? 'sticky' : node.type === 'terminal' ? (node.data.agentId === 'shell' ? 'terminal' : 'agent') : null);
+const CARD_KINDS = { interactiveBrowser: 'browser', visualTest: 'visual' };
+const kindOf = (node) => (node.type === 'note' ? 'sticky' : node.type === 'terminal' ? (node.data.agentId === 'shell' ? 'terminal' : 'agent') : CARD_KINDS[node.type] ?? null);
 const labelOf = (node) =>
-  node.data.label || (node.type === 'note' ? t('note.defaultName') : agentOf(node.data.agentId)?.name ?? node.data.agentId);
+  node.data.label || (node.type === 'note' ? t('note.defaultName') : CARD_KINDS[node.type] ? t(`conductor.card.${CARD_KINDS[node.type]}`) : agentOf(node.data.agentId)?.name ?? node.data.agentId);
 
 // Nom d'une case (journal) ou du chef d'orchestre lui-même.
 function nameOf(id) {
@@ -160,8 +165,8 @@ function resolve(ctx, ref, kinds) {
 function resolveLink(ctx, { link, from, to }) {
   const edges = [...ctx.board.edges, ...ctx.session.pending.filter((p) => p.type === 'create_link').map((p) => ({ id: p.tempId, source: p.source, target: p.target, data: p.data, pending: true }))];
   if (link) return edges.find((e) => e.id === String(link).trim()) ?? null;
-  const a = resolve(ctx, from, ['agent', 'terminal', 'sticky']);
-  const b = resolve(ctx, to, ['agent', 'terminal', 'sticky']);
+  const a = resolve(ctx, from, TILE_KINDS);
+  const b = resolve(ctx, to, TILE_KINDS);
   if (!a || !b) return null;
   return edges.find((e) => (e.source === a.id && e.target === b.id) || (e.source === b.id && e.target === a.id)) ?? null;
 }
@@ -174,7 +179,7 @@ function nextName(ctx, base) {
   return `${base} ${n}`;
 }
 const cleanName = (value) => (typeof value === 'string' && value.trim() && value.trim().length <= MAX_NAME && !/[\r\n]/.test(value) ? value.trim() : null);
-const linkEnds = (ctx, edge) => [edge.source, edge.target].map((id) => resolve(ctx, id, ['agent', 'terminal', 'sticky'])?.name ?? '?');
+const linkEnds = (ctx, edge) => [edge.source, edge.target].map((id) => resolve(ctx, id, TILE_KINDS)?.name ?? '?');
 
 function conductorAgents(ctx) {
   const onBoard = ctx.board.nodes.filter((n) => kindOf(n) === 'agent' && fromConductor(n)).length;
@@ -222,6 +227,10 @@ function readBoard(ctx) {
     conductor_agents: { used: conductorAgents(ctx), max: deps.settings().maxAgents },
     agents: nodes.filter((n) => kindOf(n) === 'agent').map(agent),
     terminals: nodes.filter((n) => kindOf(n) === 'terminal').map(agent),
+    cards: nodes.filter((n) => ['browser', 'visual'].includes(kindOf(n))).map((n) => ({
+      id: n.id, type: kindOf(n) === 'browser' ? 'browser' : 'visual_test', name: labelOf(n),
+      ...(cardUrl(n) && { url: cardUrl(n) }), ...(pendingIds.has(n.id) && { pending: true }),
+    })),
     stickies: nodes.filter((n) => kindOf(n) === 'sticky').map((n) => ({ id: n.id, name: labelOf(n), text: short(n.data.text ?? ''), ...(pendingIds.has(n.id) && { pending: true }) })),
     links: edges.map((e) => ({
       id: e.id, from: names.get(e.source) ?? e.source, to: names.get(e.target) ?? e.target, from_id: e.source, to_id: e.target,
@@ -234,6 +243,13 @@ function readBoard(ctx) {
     })),
   };
   return result(JSON.stringify(view));
+}
+
+// Adresse d'une case outil, sans requête ni fragment : l'onglet actif d'un navigateur, l'URL d'un test visuel.
+function cardUrl(node) {
+  const raw = node.type === 'interactiveBrowser' ? node.data.tabs?.find((tab) => tab.id === node.data.activeTabId)?.url : node.data.url;
+  const url = typeof raw === 'string' ? URL.parse(raw) : null;
+  return url && ['http:', 'https:'].includes(url.protocol) ? `${url.origin}${url.pathname}` : null;
 }
 
 function readAgentOutput(ctx, { agent, lines } = {}) {
@@ -272,9 +288,9 @@ function planAgent(ctx, args = {}) {
 }
 
 function planLink(ctx, args = {}) {
-  const a = resolve(ctx, args.from, ['agent', 'terminal', 'sticky']);
+  const a = resolve(ctx, args.from, TILE_KINDS);
   if (!a) return { error: fail('conductor.notFound', { ref: args.from }) };
-  const b = resolve(ctx, args.to, ['agent', 'terminal', 'sticky']);
+  const b = resolve(ctx, args.to, TILE_KINDS);
   if (!b) return { error: fail('conductor.notFound', { ref: args.to }) };
   if (args.mode !== undefined && !LINK_MODES.includes(args.mode)) return { error: fail('conductor.badMode') };
   const rule = linkRule(a.node, b.node, args.mode ?? 'delegate', hasHooks);
@@ -312,9 +328,25 @@ function planSticky(ctx, args = {}) {
   return { action: { type: 'create_sticky', kind: 'sticky', name, text, near: near?.id ?? null } };
 }
 
+// Case Navigateur ou Test visuel ; url : page ouverte dans le navigateur, ou page vérifiée par le test.
+function planCard(ctx, args = {}) {
+  const card = Object.hasOwn(CARD_TYPES, args.type) ? CARD_TYPES[args.type] : null;
+  if (!card) return { error: fail('conductor.badCard') };
+  let url = null;
+  if (args.url !== undefined) {
+    const parsed = typeof args.url === 'string' && args.url.length <= MAX_URL ? URL.parse(args.url.trim()) : null;
+    if (!parsed || !['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return { error: fail('conductor.badUrl') };
+    url = parsed.href;
+  }
+  const near = args.near ? resolve(ctx, args.near, TILE_KINDS) : null;
+  if (args.near && !near) return { error: fail('conductor.notFound', { ref: args.near }) };
+  return { action: { type: 'create_card', kind: card.kind, nodeType: card.nodeType, name: t(`conductor.card.${card.kind}`), url, near: near?.id ?? null } };
+}
+
 function plan(ctx, name, args = {}) {
   switch (name) {
     case 'create_agent': return planAgent(ctx, args);
+    case 'create_card': return planCard(ctx, args);
     case 'create_link': return planLink(ctx, args);
     case 'create_sticky': return planSticky(ctx, args);
     case 'update_link': {
@@ -361,7 +393,7 @@ function plan(ctx, name, args = {}) {
     }
     case 'arrange': {
       if (!LAYOUTS.includes(args.layout)) return { error: fail('conductor.badLayout') };
-      const kinds = ['agent', 'terminal', 'sticky'];
+      const kinds = TILE_KINDS;
       const refs = Array.isArray(args.tiles)
         ? args.tiles
         : [...ctx.board.nodes.filter((n) => ['agent', 'terminal'].includes(kindOf(n))).map((n) => n.id), ...ctx.session.pending.filter((p) => p.type === 'create_agent').map((p) => p.tempId)];
@@ -403,11 +435,12 @@ function addProposal(ctx, action) {
     return result(t('conductor.linkRemoved', { from: '?', to: '?' }));
   }
   const what = describe(ctx, action);
-  if (['create_agent', 'create_sticky', 'create_link'].includes(action.type)) {
+  if (['create_agent', 'create_sticky', 'create_card', 'create_link'].includes(action.type)) {
     const tempId = `pending-${session.next++}`;
     const item = { ...action, tempId, summary: what };
     if (action.type === 'create_agent') item.node = { id: tempId, type: 'terminal', data: { agentId: action.agentId, label: action.name, cwd: action.cwd, role: action.role, createdBy: 'conductor' } };
     if (action.type === 'create_sticky') item.node = { id: tempId, type: 'note', data: { label: action.name, text: action.text } };
+    if (action.type === 'create_card') item.node = { id: tempId, type: action.nodeType, data: {} };
     if (action.type === 'create_link') item.name = tempId;
     session.pending.push({ ...item, boardId: ctx.board.id });
     return result(t('conductor.proposed', { what, id: tempId }));
@@ -418,10 +451,11 @@ function addProposal(ctx, action) {
 
 // Résumé d'une action proposée, à l'infinitif (« Créer l'agent… ») : ligne du plan à valider.
 function describe(ctx, action) {
-  const name = (id) => resolve(ctx, id, ['agent', 'terminal', 'sticky'])?.name ?? id;
+  const name = (id) => resolve(ctx, id, TILE_KINDS)?.name ?? id;
   switch (action.type) {
     case 'create_agent': return t(action.kind === 'agent' ? 'conductor.do.agent' : 'conductor.do.terminal', { name: action.name });
     case 'create_sticky': return t('conductor.do.sticky', { name: action.name });
+    case 'create_card': return t(`conductor.do.${action.kind}`);
     case 'create_link': return t('conductor.do.link', { from: name(action.source), to: name(action.target), mode: t(`conductor.mode.${action.data.mode}`) });
     case 'update_sticky': return t('conductor.do.stickyUpdated', { name: name(action.target) });
     case 'set_role': return t('conductor.do.role', { name: name(action.target), role: short(action.role) });
@@ -469,8 +503,14 @@ async function execute(ctx, action) {
       log(response.id, t('conductor.log.sticky', { name: action.name }));
       return { ...result(t('conductor.stickyCreated', { name: action.name, id: response.id })), id: response.id };
     }
+    case 'create_card': {
+      const response = await deps.requestOp(board.id, { type: 'addCard', kind: action.kind, url: action.url, near: action.near });
+      if (response?.error || !response?.id) return opError(response);
+      log(response.id, t(`conductor.log.${action.kind}`));
+      return { ...result(t('conductor.cardCreated', { name: action.name, id: response.id })), id: response.id };
+    }
     case 'create_link': {
-      const name = (id) => resolve(ctx, id, ['agent', 'terminal', 'sticky'])?.name ?? id;
+      const name = (id) => resolve(ctx, id, TILE_KINDS)?.name ?? id;
       const text = t('conductor.log.link', { from: name(action.source), to: name(action.target), mode: t(`conductor.mode.${action.data.mode}`) });
       const response = await deps.requestOp(board.id, { type: 'addLink', source: action.source, target: action.target, data: action.data });
       if (response?.error || !response?.id) return opError(response);

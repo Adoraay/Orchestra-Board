@@ -90,6 +90,12 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode === 'browser-link') {
+        await require('./ui-browser-link.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI browser-link: Link tool, real clicks on an agent then on the page of a browser card');
+        app.quit();
+        return;
+      }
       if (mode === 'interactive-browser') {
         await require('./ui-interactive-browser.cjs')({ win, evaluate, until, sleep, data, errors });
         console.log('PASS UI interactive-browser: Dock, live webviews, history, cookie isolation and workspace restoration');

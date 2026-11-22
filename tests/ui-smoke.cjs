@@ -9,7 +9,7 @@ fs.mkdirSync(artifacts, { recursive: true });
 const original = { version: 2, activeBoardId: 'board-1', boards: [{ id: 'board-1', name: 'Original', nodes: [{ id: 'note-1', type: 'note', position: { x: 100, y: 100 }, data: { label: 'Plan', text: 'Restored original note' } }], edges: [], strokes: [], viewport: { x: 0, y: 0, zoom: 1 } }] };
 const requested = process.argv.slice(2);
 const defaultModes = ['normal', 'corrupt', 'no-backup', 'phase2', 'phase2-fr', 'phase3', 'phase3-fr', 'changes', 'phase4', 'phase4-fr', 'onboarding', 'onboarding-fr', 'panels', 'board-ops', 'conductor', 'conductor-bar'];
-const modes = requested.length ? [...defaultModes, 'visual-test', 'interactive-browser', 'mcp-relay', 'team-presets'].filter((mode) => requested.includes(mode)) : defaultModes;
+const modes = requested.length ? [...defaultModes, 'visual-test', 'interactive-browser', 'browser-link', 'mcp-relay', 'team-presets'].filter((mode) => requested.includes(mode)) : defaultModes;
 if (!modes.length) throw new Error('Choose a mode from tests/ui-smoke.cjs');
 for (const mode of modes) {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-ui-'));
@@ -67,7 +67,10 @@ for (const mode of modes) {
     { id: 'main', name: 'Main', edges: [], strokes: [], viewport: { x: 0, y: 0, zoom: 0.4 }, nodes: [{ ...liveTerminal, id: 'lead', data: { agentId: 'shell', label: 'Lead', cwd: data } }] },
     { id: 'other', name: 'Other', edges: [], strokes: [], viewport: null, nodes: [] },
   ] };
-  fs.writeFileSync(path.join(data, 'workspace.json'), mode === 'conductor-bar' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [], edges: [] }] }) : mode === 'conductor' ? JSON.stringify(conductorBoards) : mode === 'board-ops' ? JSON.stringify(boardOps) : mode.startsWith('onboarding') || ['panels', 'visual-test', 'interactive-browser', 'team-presets'].includes(mode) ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [] }] }) : mode.startsWith('phase4') ? JSON.stringify(phase4) : mode === 'changes' ? JSON.stringify(changes) : mode.startsWith('phase3') ? JSON.stringify(phase3) : mode.startsWith('phase2') ? JSON.stringify(phase2) : mode === 'normal' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], name: 'Latest', nodes: [liveTerminal] }] }) : '{ broken');
+  const browserLink = { version: 2, activeBoardId: 'link', boards: [{ id: 'link', name: 'Link', edges: [], strokes: [], viewport: { x: 0, y: 0, zoom: 0.6 },
+    nodes: [{ ...liveTerminal, id: 'agent', data: { agentId: 'claude-code', label: 'Agent', cwd: data } },
+      { id: 'browser', type: 'interactiveBrowser', position: { x: 800, y: 100 }, style: { width: 800, height: 540 }, data: { tabs: [{ id: 'tab', url: 'about:blank', title: '' }], activeTabId: 'tab', newTabUrl: 'about:blank' } }] }] };
+  fs.writeFileSync(path.join(data, 'workspace.json'), mode === 'browser-link' ? JSON.stringify(browserLink) : mode === 'conductor-bar' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [], edges: [] }] }) : mode === 'conductor' ? JSON.stringify(conductorBoards) : mode === 'board-ops' ? JSON.stringify(boardOps) : mode.startsWith('onboarding') || ['panels', 'visual-test', 'interactive-browser', 'team-presets'].includes(mode) ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], nodes: [] }] }) : mode.startsWith('phase4') ? JSON.stringify(phase4) : mode === 'changes' ? JSON.stringify(changes) : mode.startsWith('phase3') ? JSON.stringify(phase3) : mode.startsWith('phase2') ? JSON.stringify(phase2) : mode === 'normal' ? JSON.stringify({ ...original, boards: [{ ...original.boards[0], name: 'Latest', nodes: [liveTerminal] }] }) : '{ broken');
   if (mode === 'mcp-relay') {
     const edges = [{
       id: 'terminal-relay', source: 'smoke-terminal', target: 'role-agent',
