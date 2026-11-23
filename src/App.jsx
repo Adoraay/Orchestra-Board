@@ -570,7 +570,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
     setTimeout(() => frameNodes(revealed.current.map(({ id }) => id)), 120);
     setTimeout(() => setAppearing([]), 700);
   }, [conductorRunning, frameNodes]);
-  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, setEdges, reveal });
+  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, setEdges, reveal, history });
 
   // Aperçu : ses propositions en fantômes, ajoutées à l'affichage seulement (jamais à l'état du tableau : ni
   // sauvegardées, ni dans Ctrl+Z), montrées une fois le plan fini ; les cases à retirer en pointillés rouges.
@@ -621,6 +621,20 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
     [nodes, agentById, t],
   );
 
+  const terminalsOf = (list) => list
+    .filter((n) => n.type === 'terminal')
+    .map((n) => ({ id: n.id, name: n.data.label || agentById(n.data.agentId).name, agent: agentById(n.data.agentId), status: running[n.id]?.status }));
+
+  // Ctrl+Z sur une validation du chef d'orchestre : ses agents sont retirés ; confirmation si l'un travaille.
+  const [undoRequest, setUndoRequest] = useState(null);
+  const undo = () => {
+    const ids = new Set(history.undoTerminals());
+    const terminals = terminalsOf(nodes.filter((n) => ids.has(n.id)));
+    if (!terminals.some((term) => ['working', 'waiting'].includes(term.status))) return history.undo();
+    setUndoRequest({ terminals, nodeIds: [], edgeIds: [] });
+  };
+  const cancelUndo = useCallback(() => setUndoRequest(null), []);
+
   // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
   // only : un seul élément, depuis son menu du clic droit (la sélection n'est alors pas touchée).
   const [deleteRequest, setDeleteRequest] = useState(null);
@@ -628,9 +642,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
     const chosen = only ? [only] : nodes.filter((n) => n.selected);
     const chosenEdges = only ? [] : selectedEdges;
     const stroke = only ? null : selectedStroke;
-    const terminals = chosen
-      .filter((n) => n.type === 'terminal')
-      .map((n) => ({ id: n.id, name: n.data.label || agentById(n.data.agentId).name, agent: agentById(n.data.agentId), status: running[n.id]?.status }));
+    const terminals = terminalsOf(chosen);
     const selection = {
       terminals,
       links: chosenEdges.length,
@@ -659,7 +671,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
   useBoardShortcuts({
     onTool: setTool,
     onFitView: () => fitView({ duration: 400, padding: 0.15, maxZoom: 1 }),
-    onUndo: history.undo,
+    onUndo: undo,
     onRedo: history.redo,
     onEscape: () => {
       if (linkSource) return setLinkSource(null); // premier Échap : annule la source
@@ -1018,6 +1030,7 @@ function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, 
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
         {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} mcp={nodeMenu.mcp} onAction={onNodeAction} onClose={closeNodeMenu} />}
         {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
+        {undoRequest && <DeleteDialog selection={undoRequest} onCancel={cancelUndo} onConfirm={() => { setUndoRequest(null); history.undo(); }} />}
         {maximizedNode && (
           <section className="terminal-max" aria-label={maximizedName}>
             <header className="terminal-max-header">

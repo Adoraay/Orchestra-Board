@@ -17,9 +17,10 @@ const { t } = require('./i18n.cjs');
 //   config MCP d'Orchestra ; ses permissions n'autorisent que les outils d'Orchestra et refusent commandes, web et
 //   sous-agents. Ses outils de fichiers restent (le mode plan les retient) : limite signalée dans les paramètres.
 // Conversation gardée dans userData/conductor.json (messages et actions affichés dans la bulle).
-// Aperçu (par défaut, sauf Paramètres › mode auto) : ses changements restent en attente, montrés en fantômes sur
-// la map ; Valider les applique, Annuler les efface, un nouveau message les remplace par un nouveau plan. Le
-// chef d'orchestre l'apprend au message suivant (notes ajoutées devant le message de l'utilisateur).
+// Aperçu : ses changements restent en attente, montrés en fantômes sur la map ; Valider les applique (tout ou rien),
+// Annuler les efface, un nouveau message les remplace par un nouveau plan. Le chef d'orchestre l'apprend au message
+// suivant (notes ajoutées devant le message de l'utilisateur). Mode auto (Paramètres) : même aperçu, appliqué de
+// lui-même à la fin d'une exécution réussie ; une exécution qui plante n'applique rien (le plan reste à valider).
 const MAX_MESSAGE = 20000;
 const MAX_HISTORY = 300;
 const MAX_ENTRY = 8000;
@@ -53,7 +54,7 @@ The user may ask you to add an agent, change a role, or help a stuck agent: read
 - Answer in the user's language, briefly. Write roles and prompts in that language too.
 - Never remove or change tiles you did not create unless the user asks.
 - If a tool refuses (limit, folder, name), adapt or explain; never retry the same call in a loop.
-- In preview mode (read_board says "mode": "preview"), your changes are proposals the user approves or rejects: build the whole plan in one go.
+- Your changes are applied together, all or nothing: in preview mode (read_board says "mode": "preview") once the user approves them, in auto mode ("mode": "auto") as soon as you finish your answer. Build the whole plan in one go.
 `;
 
 let deps = {
@@ -208,7 +209,8 @@ function claudeLine(boardId, run, line) {
     }
     case 'result':
       run.result = message;
-      if (message.is_error || message.subtype !== 'success') {
+      run.ok = !message.is_error && message.subtype === 'success';
+      if (!run.ok) {
         addEntry(boardId, { kind: 'error', text: clip(message.result || message.errors?.join('\n') || message.subtype) });
       }
       return;
@@ -264,7 +266,8 @@ function agyLine(key, run, line) {
   if (message.event === 'result') {
     const outcome = message.result ?? {};
     run.result = outcome;
-    if (outcome.status !== 'SUCCESS') addEntry(key, { kind: 'error', text: clip(outcome.error?.message ?? outcome.response ?? outcome.status ?? 'error') });
+    run.ok = outcome.status === 'SUCCESS';
+    if (!run.ok) addEntry(key, { kind: 'error', text: clip(outcome.error?.message ?? outcome.response ?? outcome.status ?? 'error') });
     else if (!run.answered && outcome.response?.trim()) addEntry(key, { kind: 'assistant', text: clip(outcome.response.trim()) });
     publish(key);
   }
@@ -310,6 +313,7 @@ function codexLine(boardId, run, line) {
     }
     case 'turn.completed':
       run.result = message;
+      run.ok = true;
       return;
     case 'turn.failed':
     case 'error':
@@ -457,7 +461,8 @@ async function send(boardId, message, folder) {
     deps.discard(callerOf(key));
     note(key, 'The user rejected your proposed plan (nothing was applied) and asks for the changes below. Propose the whole corrected plan again.');
   }
-  deps.openSession(callerOf(key), { boardId, folder, preview: !settings.autoApply });
+  const auto = Boolean(settings.autoApply);
+  deps.openSession(callerOf(key), { boardId, folder, preview: true, auto });
   const input = [...(conv.notes ?? []).map((text) => `[Orchestra] ${text}`), message.trim()].join('\n\n');
   conv.notes = [];
   const agy = engine === 'antigravity';
@@ -465,7 +470,7 @@ async function send(boardId, message, folder) {
   const onLine = engine === 'codex' ? codexLine : agy ? agyLine : claudeLine;
 
   addEntry(key, { kind: 'user', text: clip(message.trim(), MAX_MESSAGE) });
-  const run = { child: null, live: '', stopped: false, result: null, stderr: '', tools: new Map(), answered: false };
+  const run = { child: null, live: '', stopped: false, result: null, ok: false, stderr: '', tools: new Map(), answered: false };
   runs.set(key, run);
   publish(key);
 
@@ -493,12 +498,20 @@ async function send(boardId, message, folder) {
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => { run.stderr = (run.stderr + chunk).slice(-MAX_STDERR); });
   child.on('error', (error) => { run.stderr = (run.stderr + error.message).slice(-MAX_STDERR); });
-  child.on('close', (code) => {
+  // Mode auto : le plan s'applique avant la fin de l'exécution (ses cases apparaissent ensemble, déjà disposées).
+  child.on('close', async (code) => {
     if (buffer.trim()) onLine(key, run, buffer.trim());
-    runs.delete(key);
     if (run.stopped) addEntry(key, { kind: 'info', text: t('conductorSession.stopped') });
     else if (!run.result) addEntry(key, { kind: 'error', text: t('conductorSession.exited', { code: code ?? '?', detail: clip(run.stderr.trim(), 1000) }) });
-    publish(key);
+    try {
+      if (auto && deps.pendingOf(callerOf(key)).length) {
+        if (run.ok && !run.stopped) await applyPlan(key, true);
+        else addEntry(key, { kind: 'info', text: t('conductorSession.autoInterrupted') });
+      }
+    } finally {
+      runs.delete(key);
+      publish(key);
+    }
   });
   child.stdin.on('error', () => {});
   child.stdin.end(agy ? '' : input);
@@ -511,19 +524,30 @@ function note(boardId, text) {
   save();
 }
 
-// Valider l'aperçu : les actions s'appliquent dans l'ordre (conductor.commit), le résultat est noté.
+// Plan appliqué (conductor.commit, tout ou rien) : résultat dans la conversation et note pour le chef d'orchestre.
+// Non appliqué : rien n'a changé et le plan reste à valider. auto : appliqué sans validation (mode auto).
+async function applyPlan(key, auto = false) {
+  const { applied, results } = await deps.commit(callerOf(key));
+  const failed = results.filter((r) => r.isError);
+  const detail = failed.map((r) => `${r.summary} (${r.text})`).join('; ');
+  if (!applied) {
+    addEntry(key, { kind: 'error', text: clip(t('conductorSession.notApplied', { detail }), 1000) });
+    note(key, `Your plan could not be applied, so nothing was changed: ${detail}. It still waits for the user's approval.`);
+    return;
+  }
+  if (!auto || failed.length) addEntry(key, { kind: 'info', text: t('conductorSession.applied', { ok: results.length - failed.length, total: results.length }) });
+  for (const r of failed) addEntry(key, { kind: 'error', text: clip(`${r.summary} : ${r.text}`, 1000) });
+  if (auto) { if (failed.length) note(key, `Your plan was applied, except: ${detail}.`); }
+  else note(key, failed.length ? `The user approved your plan. Applied, except: ${detail}.` : 'The user approved your plan: everything was applied.');
+}
+
+// Valider l'aperçu.
 async function approve(boardId) {
   if (typeof boardId !== 'string' || !ID.test(boardId)) return { error: t('conductorSession.noBoard') };
   const key = keyOf(boardId);
   if (runs.has(key)) return { error: t('conductorSession.busy') };
   if (!deps.pendingOf(callerOf(key)).length) return { error: t('conductorSession.nothingPending') };
-  const results = await deps.commit(callerOf(key));
-  const failed = results.filter((r) => r.isError);
-  addEntry(key, { kind: 'info', text: t('conductorSession.applied', { ok: results.length - failed.length, total: results.length }) });
-  for (const r of failed) addEntry(key, { kind: 'error', text: clip(`${r.summary} : ${r.text}`, 1000) });
-  note(key, failed.length
-    ? `The user approved your plan. Applied, except: ${failed.map((r) => `${r.summary} (${r.text})`).join('; ')}.`
-    : 'The user approved your plan: everything was applied.');
+  await applyPlan(key);
   publish(key);
   return { ok: true };
 }

@@ -105,6 +105,35 @@ module.exports = async ({ evaluate, until, sleep, data, errors }) => {
   await until("[...document.querySelectorAll('.react-flow__node-note')].some((n) => n.textContent.includes('Other board plan'))");
   assert.equal(saved().activeBoardId, 'other');
   assert.ok(saved().boards.find((b) => b.id === 'other').nodes.some((n) => n.data.text === 'Other board plan'));
+  // Validation d'un aperçu : une seule étape Ctrl+Z, qui retire aussi les cases créées et ferme leurs terminaux.
+  conductor.openSession('conductor-other', { boardId: 'other', folder: data, preview: true });
+  for (const [name, args] of [
+    ['create_agent', { type: 'terminal', name: 'Batch A' }],
+    ['create_agent', { type: 'terminal', name: 'Batch B', near: 'Batch A' }],
+    ['create_link', { from: 'Batch A', to: 'Batch B' }],
+    ['create_sticky', { text: 'Batch plan', name: 'Batch note' }],
+  ]) assert.equal((await tool('conductor-other', name, args)).isError, false, name);
+  const { applied } = await conductor.commit('conductor-other');
+  assert.equal(applied, true);
+  const batchIds = saved().boards.find((b) => b.id === 'other').nodes.filter((n) => /^Batch [AB]$/.test(n.data.label)).map((n) => n.id);
+  assert.equal(batchIds.length, 2);
+  for (const batchId of batchIds) for (let i = 0; i < 100 && !status.info(batchId); i++) await sleep(100);
+  await sleep(600); // au-delà du délai de l'historique : l'étape suivante serait séparée
+  await evaluate("document.activeElement?.blur()");
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true }))");
+  // Un terminal qui vient de démarrer travaille (sortie récente) : confirmation, comme pour Suppr.
+  await sleep(300);
+  if (await evaluate("!!document.querySelector('.dialog .danger-fill')")) {
+    assert.ok(await evaluate("document.querySelector('.dialog').textContent.includes('Batch A')"), 'the dialog lists the agents to stop');
+    await evaluate("document.querySelector('.dialog .danger-fill').click()");
+  }
+  await until("![...document.querySelectorAll('.react-flow__node')].some((n) => /Batch (A|B|plan)/.test(n.textContent))");
+  await until("[...document.querySelectorAll('.react-flow__node-note')].some((n) => n.textContent.includes('Other board plan'))");
+  for (const batchId of batchIds) {
+    for (let i = 0; i < 50 && status.info(batchId); i++) await sleep(100);
+    assert.equal(status.info(batchId), null, 'the terminals of the undone plan are closed');
+  }
+
   conductor.closeSession('conductor-other');
   assert.equal((await tool('conductor-other', 'read_board')).isError, true);
 

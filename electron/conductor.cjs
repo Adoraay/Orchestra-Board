@@ -10,7 +10,8 @@ const { t } = require('./i18n.cjs');
 // Paramètres › Général › « outils du chef d'orchestre » est coché (test). Une case créée par le chef
 // d'orchestre n'a jamais ces outils.
 // Aperçu : les actions sont gardées en attente avec des ids temporaires (pending-N), utilisables par les outils
-// suivants et visibles dans read_board ; commit() les applique dans l'ordre en remplaçant ces ids.
+// suivants et visibles dans read_board ; commit() les applique dans l'ordre en remplaçant ces ids, tout ou rien.
+// Le mode auto passe par le même aperçu : la session l'applique d'elle-même à la fin d'une exécution réussie.
 const TOOLS = ['read_board', 'create_agent', 'create_link', 'update_link', 'remove_link', 'create_sticky', 'update_sticky', 'set_role', 'send_to', 'remove_agent', 'read_agent_output', 'arrange', 'create_board', 'create_card'];
 const TYPES = { claude: 'claude-code', codex: 'codex', antigravity: 'antigravity', terminal: 'shell' };
 const TYPE_NAMES = Object.fromEntries(Object.entries(TYPES).map(([type, agentId]) => [agentId, type]));
@@ -48,7 +49,7 @@ let deps = {
   onBoardCreated: () => {}, // (appelant, tableau) : la conversation suit dans le nouveau tableau
 };
 let boards = [];
-const sessions = new Map(); // appelant -> { boardId, folder, preview, pending, next }
+const sessions = new Map(); // appelant -> { boardId, folder, preview, auto, pending, next }
 const created = new Set(); // cases créées par le chef d'orchestre, connues avant même leur sauvegarde
 const starting = new Map(); // case -> { text, from, timer } : prompt initial envoyé à son SessionStart
 
@@ -122,12 +123,12 @@ function tileTools(id) {
 }
 
 // Session du chef d'orchestre (étape 2) : tableau, dossier de travail, aperçu ou non.
-function openSession(id, { boardId, folder, preview }) {
+function openSession(id, { boardId, folder, preview, auto }) {
   const previous = sessions.get(id);
   // runStickies : post-it créés depuis le dernier message de l'utilisateur (rangés avec les agents par arrange) ;
   // newBoards : tableaux créés pendant ce message ; planBoards : tableaux créés pour un aperçu pas encore validé.
   sessions.set(id, {
-    boardId, folder, preview: Boolean(preview), pending: previous?.boardId === boardId ? previous.pending : [], next: previous?.next ?? 1,
+    boardId, folder, preview: Boolean(preview), auto: Boolean(auto), pending: previous?.boardId === boardId ? previous.pending : [], next: previous?.next ?? 1,
     runStickies: [], newBoards: 0, planBoards: previous?.planBoards ?? [],
   });
 }
@@ -223,7 +224,7 @@ function readBoard(ctx) {
     board_id: board.id,
     boards: boards.map((b) => ({ id: b.id, name: b.name })),
     folder: session.folder,
-    mode: session.preview ? 'preview' : 'direct',
+    mode: session.preview ? (session.auto ? 'auto' : 'preview') : 'direct',
     conductor_agents: { used: conductorAgents(ctx), max: deps.settings().maxAgents },
     agents: nodes.filter((n) => kindOf(n) === 'agent').map(agent),
     terminals: nodes.filter((n) => kindOf(n) === 'terminal').map(agent),
@@ -443,10 +444,10 @@ function addProposal(ctx, action) {
     if (action.type === 'create_card') item.node = { id: tempId, type: action.nodeType, data: {} };
     if (action.type === 'create_link') item.name = tempId;
     session.pending.push({ ...item, boardId: ctx.board.id });
-    return result(t('conductor.proposed', { what, id: tempId }));
+    return result(t(session.auto ? 'conductor.planned' : 'conductor.proposed', { what, id: tempId }));
   }
   session.pending.push({ ...action, summary: what, boardId: ctx.board.id });
-  return result(t('conductor.proposedChange', { what }));
+  return result(t(session.auto ? 'conductor.plannedChange' : 'conductor.proposedChange', { what }));
 }
 
 // Résumé d'une action proposée, à l'infinitif (« Créer l'agent… ») : ligne du plan à valider.
@@ -478,9 +479,10 @@ async function execute(ctx, action) {
   const log = (to, text) => deps.log({ kind: 'conductor', from: caller, to, text });
   switch (action.type) {
     case 'create_agent': {
-      let branch = null;
-      let worktree = null;
-      if (action.branch) {
+      // Validation d'un aperçu : worktree déjà créé avant toute application (preflight).
+      let branch = action.worktree ? action.branch : null;
+      let worktree = action.worktree ?? null;
+      if (action.branch && !worktree) {
         const tree = await deps.ensureWorktree(action.cwd, action.branch, { create: true });
         if (tree.error) return fail('conductor.opFailed', { reason: tree.error });
         ({ path: worktree, branch } = tree);
@@ -614,9 +616,7 @@ function onExit(id) {
 // Les actions sur la map passent l'une après l'autre (une création doit être sauvegardée avant le lien suivant).
 let chain = Promise.resolve();
 function callTool(caller, name, args = {}) {
-  const run = chain.then(() => runTool(caller, name, args));
-  chain = run.catch(() => {});
-  return run.then(({ text, isError }) => ({ text, isError }));
+  return serial(() => runTool(caller, name, args)).then(({ text, isError }) => ({ text, isError }));
 }
 
 async function runTool(caller, name, args) {
@@ -653,33 +653,128 @@ async function createBoard(ctx, args = {}) {
   return result(t('conductor.boardCreated', { name: boardName, id: response.id }));
 }
 
-// Aperçu validé : actions appliquées dans l'ordre, ids temporaires remplacés par les vrais. Renvoie les résultats.
+// Une action à la fois sur la map, dans l'ordre d'arrivée (outils et validations).
+function serial(fn) {
+  const run = chain.then(fn);
+  chain = run.catch(() => {});
+  return run;
+}
+
+// Actions qu'on ne peut pas défaire (message envoyé, agent arrêté) : appliquées en dernier, quand tout le reste est posé.
+const FINAL = ['send_to', 'remove_agent'];
+const isTemp = (id) => typeof id === 'string' && id.startsWith('pending-');
+
+// Avant toute application : worktrees créés, agents à retirer libres, destinataires lancés. Renvoie le premier échec.
+async function preflight(session, items, trees) {
+  for (const item of items) {
+    const fails = (key, vars) => ({ summary: item.summary, text: t(key, vars) });
+    if (!boards.some((b) => b.id === (item.boardId ?? session.boardId))) return fails('conductor.noBoard');
+    if (item.type === 'create_agent' && item.branch) {
+      const tree = await deps.ensureWorktree(item.cwd, item.branch, { create: true });
+      if (tree?.error || !tree?.path) return fails('conductor.opFailed', { reason: tree?.error ?? '?' });
+      trees.set(item, { worktree: tree.path, branch: tree.branch });
+    }
+    if (item.type === 'remove_agent' && !isTemp(item.target) && ['working', 'waiting'].includes(deps.info(item.target)?.status)) {
+      return fails('conductor.busy', { name: nameOf(item.target) ?? item.target });
+    }
+    if (item.type === 'send_to' && !isTemp(item.target) && !deps.info(item.target) && !created.has(item.target)) {
+      return fails('conductor.notRunning', { name: nameOf(item.target) ?? item.target });
+    }
+  }
+  return null;
+}
+
+// Opération qui défait une action (retour arrière d'une validation) : valeurs lues sur le tableau avant de l'appliquer.
+function undoOf(board, action) {
+  const edge = board.edges.find((e) => e.id === action.target);
+  const node = board.nodes.find((n) => n.id === action.target);
+  const op = (value) => () => value;
+  switch (action.type) {
+    case 'create_agent':
+    case 'create_sticky':
+    case 'create_card': return (id) => ({ type: 'removeNode', id });
+    case 'create_link': return (id) => ({ type: 'removeLink', id });
+    case 'update_link': return edge && op({ type: 'updateLink', id: edge.id, patch: Object.fromEntries(Object.keys(action.patch).map((key) => [key, edge.data[key]])) });
+    case 'remove_link': return edge && op({ type: 'addLink', source: edge.source, target: edge.target, data: { ...edge.data } });
+    case 'update_sticky': return node && op({ type: 'updateSticky', id: node.id, text: node.data.text ?? '' });
+    case 'set_role': return node && op({ type: 'setRole', id: node.id, role: node.data.role ?? '' });
+    case 'arrange': {
+      const moved = new Set([...action.targets, ...(action.companions ?? [])]);
+      return op({ type: 'setPositions', positions: board.nodes.filter((n) => moved.has(n.id) && n.position).map((n) => ({ id: n.id, position: { ...n.position } })) });
+    }
+  }
+  return null;
+}
+
+// Échec en cours de validation : tout ce qui a été posé est défait, du plus récent au plus ancien (agents arrêtés).
+// Le tableau ouvert d'abord, puis la fin de son étape Ctrl+Z (sans étape), puis les autres tableaux.
+async function rollback(caller, undo, batch) {
+  const steps = [...undo].reverse();
+  const run = async (step) => {
+    await deps.requestOp(step.boardId, step.op);
+    if (step.agent) { created.delete(step.agent); onExit(step.agent); }
+  };
+  for (const step of steps.filter((s) => s.boardId === batch)) await run(step);
+  if (batch) await deps.requestOp(batch, { type: 'endBatch', rollback: true });
+  for (const step of steps.filter((s) => s.boardId !== batch)) await run(step);
+  deps.log({ kind: 'refused', from: caller, to: null, text: t('conductor.log.rolledBack') });
+}
+
+// Aperçu validé, tout ou rien : vérifications (worktrees compris) avant de toucher la map, puis actions dans l'ordre
+// avec ids temporaires remplacés ; si l'une échoue, tout est défait et le plan reste en attente. Sur chaque tableau,
+// la validation forme une seule étape de Ctrl+Z (beginBatch / endBatch). Renvoie { applied, results }.
 async function commit(caller) {
   const session = sessions.get(caller);
-  if (!session) return [];
-  const pending = session.pending;
+  if (!session) return { applied: false, results: [] };
+  const { pending, planBoards } = session;
   session.pending = [];
   session.planBoards = [];
   notify(caller);
+  const keep = (summary, text) => {
+    session.pending = pending;
+    session.planBoards = planBoards;
+    notify(caller);
+    return { applied: false, results: [{ summary, text, isError: true }] };
+  };
+
+  const trees = new Map();
+  const blocked = await serial(() => preflight(session, pending, trees));
+  if (blocked) return keep(blocked.summary, blocked.text);
+
   const ids = new Map();
   const map = (id) => (id && ids.has(id) ? ids.get(id) : id);
+  const undo = [];
   const results = [];
-  for (const item of pending) {
-    const run = chain.then(async () => {
+  let batch = null;
+  const ordered = [...pending.filter((p) => !FINAL.includes(p.type)), ...pending.filter((p) => FINAL.includes(p.type))];
+  for (const item of ordered) {
+    const outcome = await serial(async () => {
       const board = boards.find((b) => b.id === (item.boardId ?? session.boardId));
       if (!board) return fail('conductor.noBoard');
       const { tempId, summary, node, boardId, ...action } = item;
+      Object.assign(action, trees.get(item));
       for (const key of ['source', 'target', 'near', 'top']) if (key in action) action[key] = map(action[key]);
-      for (const key of ['targets', 'companions']) if (action[key]) action[key] = action[key].map(map).filter((id) => !id.startsWith('pending-'));
-      if ([action.source, action.target, action.near].some((id) => id?.startsWith('pending-'))) return fail('conductor.notFound', { ref: summary });
-      return execute({ caller, board, session }, action);
+      for (const key of ['targets', 'companions']) if (action[key]) action[key] = action[key].map(map).filter((id) => !isTemp(id));
+      if ([action.source, action.target, action.near].some(isTemp)) return fail('conductor.notFound', { ref: summary });
+      if (action.type !== 'send_to' && batch !== board.id) {
+        if (batch) await deps.requestOp(batch, { type: 'endBatch' });
+        batch = board.id;
+        await deps.requestOp(batch, { type: 'beginBatch' });
+      }
+      const reverse = undoOf(board, action);
+      const done = await execute({ caller, board, session }, action);
+      if (!done.isError && reverse) undo.push({ boardId: board.id, op: reverse(done.id), agent: action.type === 'create_agent' ? done.id : null });
+      return done;
     });
-    chain = run.catch(() => {});
-    const outcome = await run;
+    if (outcome.isError && !FINAL.includes(item.type)) {
+      await serial(() => rollback(caller, undo, batch));
+      return keep(item.summary, outcome.text);
+    }
     if (item.tempId && outcome.id) ids.set(item.tempId, outcome.id);
     results.push({ summary: item.summary, text: outcome.text, isError: outcome.isError });
   }
-  return results;
+  if (batch) await serial(() => deps.requestOp(batch, { type: 'endBatch' }));
+  return { applied: true, results };
 }
 
 function discard(caller) {

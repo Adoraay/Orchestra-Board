@@ -6,6 +6,7 @@ import { BROWSER_SIZE } from '../../electron/browserModel.mjs';
 
 const COMMIT_WAIT = 300; // ms : un changement sans effet sur la map (lien en double…) ne bloque pas la réponse
 const DRAW_DURATION = 1200; // ms : un lien créé se trace (classe edge-draw, jamais sauvegardée)
+const BATCH_OPS = ['beginBatch', 'endBatch']; // historique seulement : rien à dessiner ni à sauvegarder
 // Map vide : les cases du chef d'orchestre partent de ce point (le même pour l'aperçu et la validation).
 export const PLAN_ORIGIN = { x: 0, y: 0 };
 
@@ -35,6 +36,8 @@ export function useConductorRouter(boards) {
         }
         if (!list.some((b) => b.id === request.boardId)) return window.conductor.done(request.reqId, { error: 'board' });
         if (slot.current?.boardId === request.boardId) return slot.current.apply(request);
+        // Fin d'étape Ctrl+Z d'un tableau qui n'est plus ouvert : son historique est déjà parti, rien à rouvrir.
+        if (request.op?.type === 'endBatch') return window.conductor.done(request.reqId, {});
         waiting.current.push(request);
         if (activeId !== request.boardId) setActiveId(request.boardId);
       }),
@@ -59,7 +62,8 @@ export function useConductorRouter(boards) {
 // puis répond à Node une fois la map rendue et sauvegardée (le changement suivant voit le précédent).
 // À appeler après l'effet qui remonte le contenu du tableau (onChange) : la sauvegarde lit ce contenu.
 // reveal(ids, created) : la caméra montre les cases créées (et leur voisine) ; created = la case nouvelle.
-export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, setNodes, setEdges, reveal }) {
+// history : une validation du chef d'orchestre forme une seule étape de Ctrl+Z (beginBatch / endBatch).
+export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, setNodes, setEdges, reveal, history }) {
   const waiters = useRef([]);
   useEffect(() => {
     const ready = waiters.current;
@@ -71,8 +75,9 @@ export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, 
     setTimeout(resolve, COMMIT_WAIT);
   });
 
-  const latest = useRef({ ops, edges, getNodes, setNodes, setEdges, reveal });
-  latest.current = { ops, edges, getNodes, setNodes, setEdges, reveal };
+  const latest = useRef({ ops, edges, getNodes, setNodes, setEdges, reveal, history });
+  latest.current = { ops, edges, getNodes, setNodes, setEdges, reveal, history };
+  const batchCreated = useRef(null); // agents créés pendant l'étape Ctrl+Z en cours
   // Agents placés sous chaque case (near) pendant cette session de la map : leur rangée reste centrée sous elle.
   const children = useRef(new Map());
 
@@ -95,6 +100,7 @@ export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, 
         const center = { x: position.x + NODE_SIZE.width / 2, y: position.y + NODE_SIZE.height / 2 };
         const id = o.addTerminal({ id: op.id, agentId: op.agentId, cwd: op.cwd, center, data });
         if (op.near) children.current.set(op.near, [...siblings, id]);
+        batchCreated.current?.push(id);
         latest.current.reveal([id, op.near], id);
         return { id };
       }
@@ -145,6 +151,20 @@ export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, 
       case 'setRole':
         await o.setRole(op.id, op.role);
         return {};
+      // Retour arrière d'une validation : positions d'avant un « arrange ».
+      case 'setPositions': {
+        const positions = new Map((op.positions ?? []).map((p) => [p.id, p.position]));
+        set((nds) => nds.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id) } : n)));
+        return {};
+      }
+      case 'beginBatch':
+        latest.current.history.beginBatch();
+        batchCreated.current = [];
+        return {};
+      case 'endBatch':
+        latest.current.history.endBatch({ rollback: Boolean(op.rollback), created: batchCreated.current ?? [] });
+        batchCreated.current = null;
+        return {};
     }
     return { error: 'unknown' };
   };
@@ -155,7 +175,7 @@ export function useConductorOps({ boardId, bridge, ops, nodes, edges, getNodes, 
       let response;
       try {
         response = await run(request.op);
-        if (!response.error) {
+        if (!response.error && !BATCH_OPS.includes(request.op.type)) {
           await rendered();
           await bridge.flushSave();
         }

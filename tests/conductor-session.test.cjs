@@ -57,15 +57,26 @@ function setup(t) {
     toolUrl: (id) => `http://127.0.0.1:9/tool/${id}?t=x`,
     mcpServerPath: () => path.join(dir, 'mcpServer.cjs'),
     tools: ['read_board', 'create_agent'],
-    openSession: (id, options) => sessions.push({ id, ...options }),
+    // pending.next : plan que le chef d'orchestre « propose » pendant l'exécution qui s'ouvre.
+    openSession: (id, options) => {
+      sessions.push({ id, ...options });
+      if (pending.next) { pending.list = pending.next; pending.next = null; }
+    },
     closeSession: (id) => sessions.push({ id, closed: true }),
     boardExists: (id) => id === 'main',
     emit: (boardId, event) => events.push({ boardId, ...event }),
     pendingOf: () => pending.list,
-    commit: async () => { const done = pending.list.map((p) => ({ summary: p.summary, text: p.fail ? 'refused' : 'ok', isError: Boolean(p.fail) })); pending.list = []; return done; },
+    // pending.blocked : validation refusée en entier (rien appliqué, le plan reste) ; commits : exécution en cours ou non.
+    commit: async () => {
+      pending.commits.push(session.get('main').running);
+      if (pending.blocked) return { applied: false, results: [{ summary: pending.list[0].summary, text: pending.blocked, isError: true }] };
+      const results = pending.list.map((p) => ({ summary: p.summary, text: p.fail ? 'refused' : 'ok', isError: Boolean(p.fail) }));
+      pending.list = [];
+      return { applied: true, results };
+    },
     discard: () => { pending.list = []; },
   };
-  const pending = { list: [] };
+  const pending = { list: [], next: null, blocked: null, commits: [] };
   const settings = {};
   deps.settings = () => settings;
   const create = () => {
@@ -103,7 +114,7 @@ test('a message runs claude -p with only the conductor tools, streams its text a
   assert.equal(mcp.env.ORCHESTRA_TOOLSET, 'conductor');
   assert.equal(mcp.env.ORCHESTRA_URL, 'http://127.0.0.1:9/tool/conductor-main?t=x');
   assert.match(fs.readFileSync(args[args.indexOf('--append-system-prompt-file') + 1], 'utf8'), /You are the conductor of Orchestra/);
-  assert.deepEqual(s.sessions[0], { id: 'conductor-main', boardId: 'main', folder: s.folder, preview: true }, 'preview by default');
+  assert.deepEqual(s.sessions[0], { id: 'conductor-main', boardId: 'main', folder: s.folder, preview: true, auto: false }, 'preview by default');
 
   const { history } = s.session.get('main');
   assert.deepEqual(history.map((e) => e.kind), ['user', 'assistant']);
@@ -216,11 +227,6 @@ test('preview: approve, cancel and correction are applied and told to the conduc
   await s.idle();
   assert.equal(reply(), 'Fait : Plain');
 
-  // Mode auto : pas d'aperçu.
-  s.settings.autoApply = true;
-  await s.session.send('main', 'Auto', s.folder);
-  await s.idle();
-  assert.equal(s.sessions.filter((e) => !e.closed).at(-1).preview, false);
   // Valider pendant une exécution : refusé.
   s.pending.list = [{ summary: 'E' }];
   await s.session.send('main', 'SLOW', s.folder);
@@ -337,7 +343,7 @@ test('a board created by the conductor shares the conversation of the board it w
   const args = s.calls().at(-1);
   const first = s.calls()[0];
   assert.equal(args[args.indexOf('--resume') + 1], first[first.indexOf('--session-id') + 1]);
-  assert.deepEqual(s.sessions.at(-1), { id: 'conductor-main', boardId: 'board-new', folder: s.folder, preview: true });
+  assert.deepEqual(s.sessions.at(-1), { id: 'conductor-main', boardId: 'board-new', folder: s.folder, preview: true, auto: false });
   assert.equal(s.session.get('main').history.at(-1).text, 'Fait : Ici');
 
   // Tableau d'origine supprimé : la conversation reste tant que le nouveau existe.
@@ -409,4 +415,60 @@ test('Antigravity events become tool lines and replies', async () => {
   assert.equal(history[1].tool, 'write_file', 'other Antigravity tools stay visible');
   assert.equal(history[2].text, 'Done **now**');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('approval that cannot be applied changes nothing, keeps the plan and tells the conductor', async (t) => {
+  const s = setup(t);
+  s.pending.list = [{ summary: 'Agent A' }, { summary: 'Link A → B' }];
+  s.pending.blocked = 'worktree failed';
+  assert.deepEqual(await s.session.approve('main'), { ok: true });
+  assert.match(s.session.get('main').history.at(-1).text, /conductorSession.notApplied Agent A \(worktree failed\)/);
+  assert.equal(s.session.get('main').pending.length, 2, 'the plan still waits for approval');
+  s.pending.blocked = null;
+  s.pending.list = [];
+  await s.session.send('main', 'Next', s.folder);
+  await s.idle();
+  assert.match(s.session.get('main').history.at(-1).text, /could not be applied, so nothing was changed: Agent A \(worktree failed\)/);
+});
+
+test('auto mode goes through the preview and applies the plan at the end of a successful run only', async (t) => {
+  const s = setup(t);
+  s.settings.autoApply = true;
+  const kinds = () => s.session.get('main').history.map((e) => e.kind);
+
+  // Exécution réussie : plan appliqué avant la fin de l'exécution (encart de construction), sans ligne « appliqué ».
+  s.pending.next = [{ summary: 'Agent A' }, { summary: 'Agent B' }];
+  await s.session.send('main', 'Auto', s.folder);
+  await s.idle();
+  assert.deepEqual(s.sessions.at(-1), { id: 'conductor-main', boardId: 'main', folder: s.folder, preview: true, auto: true });
+  assert.deepEqual(s.pending.commits, [true], 'applied while the run is still shown as running');
+  assert.deepEqual(s.pending.list, []);
+  assert.deepEqual(kinds().slice(-2), ['user', 'assistant']);
+
+  // Exécution qui plante : rien n'est appliqué, le plan reste à valider.
+  s.pending.next = [{ summary: 'Agent C' }];
+  await s.session.send('main', 'FAIL', s.folder);
+  await s.idle();
+  assert.deepEqual(s.pending.commits, [true]);
+  assert.equal(s.session.get('main').pending.length, 1);
+  assert.match(s.session.get('main').history.at(-1).text, /conductorSession.autoInterrupted/);
+  assert.deepEqual(await s.session.approve('main'), { ok: true });
+  assert.equal(s.pending.commits.length, 2, 'the user can still approve it');
+
+  // Arrêtée par l'utilisateur : pareil.
+  s.pending.next = [{ summary: 'Agent D' }];
+  await s.session.send('main', 'SLOW', s.folder);
+  await new Promise((r) => setTimeout(r, 300));
+  s.session.stop('main');
+  await s.idle();
+  assert.equal(s.pending.commits.length, 2);
+  assert.match(s.session.get('main').history.at(-1).text, /conductorSession.autoInterrupted/);
+
+  // Échecs d'un plan appliqué en mode auto : affichés et notés pour le chef d'orchestre.
+  s.pending.list = [];
+  s.pending.next = [{ summary: 'Agent E' }, { summary: 'Send to Lead', fail: true }];
+  await s.session.send('main', 'Auto again', s.folder);
+  await s.idle();
+  assert.match(s.session.get('main').history.at(-2).text, /conductorSession.applied 1 2/);
+  assert.match(s.session.get('main').history.at(-1).text, /Send to Lead : refused/);
 });

@@ -26,16 +26,19 @@ function setup(t, { tileTools = true, maxAgents = 6, running = ['lead'] } = {}) 
   t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
   const timers = clock();
   const conductor = load('conductor.cjs', { './i18n.cjs': i18n }, timers);
-  const workspace = { boards: [{ id: 'main', name: 'Main', nodes: [{ id: 'lead', type: 'terminal', data: { agentId: 'claude-code', label: 'Lead', cwd: folder } }], edges: [] }] };
+  const workspace = { boards: [{ id: 'main', name: 'Main', nodes: [{ id: 'lead', type: 'terminal', position: { x: 0, y: 0 }, data: { agentId: 'claude-code', label: 'Lead', cwd: folder } }], edges: [] }] };
   const board = workspace.boards[0];
   const ops = [];
   const enqueued = [];
   const logs = [];
   const settings = { tileTools, maxAgents };
   const live = new Set(running);
+  const statuses = new Map(); // statut d'un agent lancé (idle par défaut)
+  const fault = { op: null }; // type d'opération que la fausse interface refuse
   let notes = 0;
   const requestOp = async (boardId, op) => {
     ops.push(op);
+    if (op.type === fault.op) return { error: 'boom' };
     if (boardId !== 'main') return { error: 'board' };
     const node = (id) => board.nodes.find((n) => n.id === id);
     switch (op.type) {
@@ -71,6 +74,8 @@ function setup(t, { tileTools = true, maxAgents = 6, running = ['lead'] } = {}) 
         break;
       case 'updateSticky': node(op.id).data.text = op.text; break;
       case 'setRole': node(op.id).data.role = op.role; break;
+      case 'arrange': for (const id of op.ids) if (node(id)) node(id).position = { x: 500, y: 500 }; break;
+      case 'setPositions': for (const p of op.positions) node(p.id).position = p.position; break;
     }
     conductor.setWorkspace(workspace);
     return { id: op.id ?? null };
@@ -79,18 +84,18 @@ function setup(t, { tileTools = true, maxAgents = 6, running = ['lead'] } = {}) 
     requestOp,
     settings: () => settings,
     agents: () => AGENTS,
-    info: (id) => (live.has(id) ? { status: 'idle' } : null),
+    info: (id) => (live.has(id) ? { status: statuses.get(id) ?? 'idle' } : null),
     enqueue: (target, item) => enqueued.push({ target, item }),
     buffer: (id) => (id === 'lead' ? Array.from({ length: 200 }, (_, i) => `\x1b[32mline ${i}\x1b[0m`).join('\r\n') : ''),
     clean: (text) => text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\r\n/g, '\n'),
-    ensureWorktree: async (cwd, branch, options) => (options?.create ? { path: path.join(cwd, '..', 'wt', branch), branch } : { error: 'no' }),
+    ensureWorktree: async (cwd, branch, options) => (options?.create && !branch.includes('broken') ? { path: path.join(cwd, '..', 'wt', branch), branch } : { error: 'no' }),
     isRepo: async () => ({ root: folder }),
     logEntries: () => logs.map((entry, i) => ({ ...entry, at: 1000 * i, boardId: 'main' })),
     log: (entry) => logs.push(entry),
   });
   conductor.setWorkspace(workspace);
   const call = (name, args, caller = 'lead') => conductor.callTool(caller, name, args);
-  return { conductor, workspace, board: () => workspace.boards[0], ops, enqueued, logs, settings, live, timers, folder, call };
+  return { conductor, workspace, board: () => workspace.boards[0], ops, enqueued, logs, settings, live, statuses, fault, timers, folder, call };
 }
 
 test('Node link rules match the ones used by the map (src/lib/boardOps.js)', async () => {
@@ -292,7 +297,7 @@ test('preview keeps actions pending with temporary ids, then commit applies them
   assert.equal(s.conductor.pendingOf('conductor-main').some((p) => p.tempId === shellId || p.target === shellId || p.source === shellId), false);
   assert.equal(s.conductor.pendingOf('conductor-main').length, 7);
 
-  const results = await s.conductor.commit('conductor-main');
+  const { results } = await s.conductor.commit('conductor-main');
   assert.ok(results.every((r) => !r.isError), JSON.stringify(results));
   const board = s.board();
   const backend = board.nodes.find((n) => n.data.label === 'Backend');
@@ -558,6 +563,7 @@ test('create_board opens a new board that receives the next actions; preview boa
         base.setWorkspace(workspace);
         return {};
       }
+      if (['beginBatch', 'endBatch'].includes(op.type)) return {};
       const board = boardOf(boardId);
       if (!board) return { error: 'board' };
       if (op.type === 'addAgent') board.nodes.push({ id: op.id, type: 'terminal', data: { agentId: op.agentId, label: op.label, cwd: op.cwd, createdBy: 'conductor' } });
@@ -630,7 +636,7 @@ test('create_card adds a browser or a visual test that agents can be linked to, 
   assert.match((await call('create_card', { type: 'browser' })).text, /pending-1/);
   assert.equal((await call('create_link', { from: 'Lead', to: 'pending-1' })).isError, false);
   assert.deepEqual(s.conductor.pendingOf('conductor-main').map((p) => p.type), ['create_card', 'create_link']);
-  const results = await s.conductor.commit('conductor-main');
+  const { results } = await s.conductor.commit('conductor-main');
   assert.ok(results.every((r) => !r.isError), JSON.stringify(results));
   assert.equal(s.board().edges.at(-1).target, 'card-3');
   assert.equal(s.board().edges.at(-1).data.mode, 'browser');
@@ -646,4 +652,117 @@ test('the preview shows a proposed browser card with its real size', async () =>
   assert.deepEqual(ghost.size, { width: 800, height: 540 });
   assert.equal(ghost.data.url, 'http://localhost:3000/');
   assert.ok(ghost.position.y >= 400, 'placed below its lead');
+});
+
+// Aperçu d'un petit orchestre : deux agents (dont un en worktree), un lien, un post-it, un rôle, une disposition et
+// un message pour Lead (envoyé en dernier).
+async function plan(s, { branch = 'maestro/api' } = {}) {
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  const call = (name, args) => s.conductor.callTool('conductor-main', name, args);
+  for (const [name, args] of [
+    ['send_to', { agent: 'Lead', message: 'Coordinate API and Tests' }],
+    ['create_agent', { type: 'claude', name: 'API', prompt: 'Build it', worktree_branch: branch }],
+    ['create_agent', { type: 'codex', name: 'Tests', near: 'API' }],
+    ['create_link', { from: 'API', to: 'Tests', mode: 'relay', instruction: 'Test: {response}' }],
+    ['set_role', { agent: 'Lead', role: 'Lead the team' }],
+    ['arrange', { layout: 'pyramid', top: 'Lead', tiles: ['Lead', 'API', 'Tests'] }],
+    ['create_sticky', { text: '- [ ] API', name: 'Plan' }],
+  ]) {
+    const result = await call(name, args);
+    assert.equal(result.isError, false, name + ': ' + result.text);
+  }
+  return s.conductor.pendingOf('conductor-main').length;
+}
+const untouched = (s) => {
+  const board = s.board();
+  assert.deepEqual(board.nodes.map((n) => n.id), ['lead'], 'no tile left from the plan');
+  assert.deepEqual(board.edges, []);
+  assert.equal(board.nodes[0].data.role || undefined, undefined);
+  assert.deepEqual(board.nodes[0].position, { x: 0, y: 0 });
+  assert.equal(s.enqueued.length, 0, 'no message sent');
+};
+
+test('approval checks worktrees first: if one cannot be created, nothing touches the map and the plan stays', async (t) => {
+  const s = setup(t);
+  const count = await plan(s, { branch: 'maestro/broken' });
+  const { applied, results } = await s.conductor.commit('conductor-main');
+  assert.equal(applied, false);
+  assert.match(results[0].summary, /API/);
+  assert.match(results[0].text, /conductor.opFailed no/);
+  assert.deepEqual(s.ops, [], 'the map is never asked anything');
+  untouched(s);
+  assert.equal(s.conductor.pendingOf('conductor-main').length, count, 'the plan still waits for approval');
+});
+
+test('approval is all or nothing: a failure halfway undoes what was applied, agents included', async (t) => {
+  const s = setup(t);
+  const count = await plan(s);
+  s.fault.op = 'addSticky'; // dernière action réversible : tout le reste est déjà posé
+  const { applied, results } = await s.conductor.commit('conductor-main');
+  assert.equal(applied, false);
+  assert.match(results[0].text, /conductor.opFailed boom/);
+  untouched(s);
+  const types = s.ops.map((op) => op.type);
+  assert.equal(types[0], 'beginBatch');
+  const created = s.ops.filter((op) => op.type === 'addAgent').map((op) => op.id);
+  assert.equal(created.length, 2);
+  // Défait du plus récent au plus ancien, puis fin d'étape Ctrl+Z sans étape.
+  assert.deepEqual(types.slice(types.indexOf('addSticky') + 1), ['setPositions', 'setRole', 'removeLink', 'removeNode', 'removeNode', 'endBatch']);
+  assert.deepEqual(s.ops.filter((op) => op.type === 'removeNode').map((op) => op.id), [...created].reverse());
+  assert.equal(s.ops.at(-1).rollback, true);
+  assert.equal(s.conductor.isCreated(created[0]), false, 'removed agents are forgotten');
+  // Le prompt prévu pour l'agent retiré ne part jamais.
+  s.live.add(created[0]);
+  s.conductor.onHook(created[0], { hook_event_name: 'SessionStart' });
+  s.timers.tick(2000);
+  assert.equal(s.enqueued.length, 0);
+  assert.ok(s.logs.some((e) => e.kind === 'refused' && /conductor.log.rolledBack/.test(e.text)));
+  assert.equal(s.conductor.pendingOf('conductor-main').length, count, 'the plan still waits for approval');
+
+  // Nouvelle validation, sans panne : tout est appliqué en une seule étape Ctrl+Z, le message part en dernier.
+  s.fault.op = null;
+  s.ops.length = 0;
+  const second = await s.conductor.commit('conductor-main');
+  assert.equal(second.applied, true, JSON.stringify(second.results));
+  assert.ok(second.results.every((r) => !r.isError));
+  assert.equal(s.ops[0].type, 'beginBatch');
+  assert.deepEqual(s.ops.at(-1), { type: 'endBatch' });
+  assert.equal(s.ops.filter((op) => op.type === 'beginBatch').length, 1);
+  assert.equal(s.enqueued.at(-1).item.text, 'Coordinate API and Tests');
+  assert.equal(s.board().nodes.length, 4);
+  assert.equal(s.board().nodes.find((n) => n.data.label === 'API').data.worktree, path.join(s.folder, '..', 'wt', 'maestro/api'));
+  assert.deepEqual(s.conductor.pendingOf('conductor-main'), []);
+});
+
+test('a busy agent to remove, or a message to a stopped agent, blocks approval before anything is applied', async (t) => {
+  const s = setup(t);
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  const call = (name, args) => s.conductor.callTool('conductor-main', name, args);
+  await call('create_sticky', { text: 'Notes', name: 'Notes' });
+  await call('remove_agent', { agent: 'Lead' });
+  s.statuses.set('lead', 'working');
+  const busy = await s.conductor.commit('conductor-main');
+  assert.equal(busy.applied, false);
+  assert.match(busy.results[0].text, /conductor.busy Lead/);
+  assert.deepEqual(s.ops, []);
+
+  s.conductor.discard('conductor-main');
+  s.statuses.delete('lead');
+  await call('create_sticky', { text: 'Notes', name: 'Notes' });
+  await call('send_to', { agent: 'Lead', message: 'Hello' });
+  s.live.delete('lead');
+  const stopped = await s.conductor.commit('conductor-main');
+  assert.equal(stopped.applied, false);
+  assert.match(stopped.results[0].text, /conductor.notRunning Lead/);
+  assert.deepEqual(s.ops, []);
+});
+
+test('auto mode builds through the preview: read_board says auto and tools answer that the plan is applied at the end', async (t) => {
+  const s = setup(t);
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true, auto: true });
+  const call = (name, args) => s.conductor.callTool('conductor-main', name, args);
+  assert.equal(JSON.parse((await call('read_board', {})).text).mode, 'auto');
+  assert.match((await call('create_agent', { type: 'claude', name: 'API' })).text, /^conductor.planned .*pending-1/);
+  assert.match((await call('set_role', { agent: 'Lead', role: 'Lead' })).text, /^conductor.plannedChange/);
+  assert.deepEqual(s.ops, [], 'nothing applied before the end of the run');
 });
