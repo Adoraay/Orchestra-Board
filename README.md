@@ -4,7 +4,8 @@
 
 <p align="center">
   <b>A big canvas where you drop AI coding agents, each in its own real terminal,<br>and wire them together so they hand work to each other.</b><br>
-  <sub>Claude Code · Codex · Gemini CLI · Aider · and any CLI you add &nbsp;·&nbsp; <a href="README.fr.md">🇫🇷 Lire en français</a></sub>
+  <sub>Claude Code · Codex · Antigravity · Aider · and any CLI you add</sub><br>
+  <sub>🌐 <a href="https://adoraay.github.io/Orchestra-Board/"><b>Website</b></a> &nbsp;·&nbsp; <a href="README.fr.md">🇫🇷 Lire en français</a></sub>
 </p>
 
 <p align="center">
@@ -15,7 +16,7 @@
 
 <p align="center">
   <a href="#-download"><img src="docs/images/readme/nav-download.svg" height="36" alt="Download"></a>
-  <a href="#-whats-new-in-013"><img src="docs/images/readme/nav-new.svg" height="36" alt="What's new"></a>
+  <a href="#-whats-new-in-014"><img src="docs/images/readme/nav-new.svg" height="36" alt="What's new"></a>
   <a href="#-demos"><img src="docs/images/readme/nav-demos.svg" height="36" alt="Demos"></a>
   <a href="#-features"><img src="docs/images/readme/nav-features.svg" height="36" alt="Features"></a>
   <a href="#-tutorial"><img src="docs/images/readme/nav-tutorial.svg" height="36" alt="Tutorial"></a>
@@ -71,10 +72,44 @@ You already run Claude Code or Codex in a terminal. Orchestra puts as many of th
 - A **Lead** agent can **delegate** tasks to other agents and collect their answers by itself.
 - A **Frontend** agent can **relay** its finished work to a **Reviewer** automatically.
 - An agent can **drive a terminal you can see** (`npm run dev`, tests, builds) instead of running hidden commands.
+- Or just **describe the team you want** (`Ctrl+Shift+O`): the **Conductor** builds the agents, roles and links for you, shows the plan first, and keeps directing them.
 
 <p align="center"><img src="docs/images/readme/divider-2.svg" width="800" alt=""></p>
 
-## <img src="docs/images/readme/icon-sparkles.svg" width="28" height="28" align="top" alt=""> What's new in 0.1.3
+## <img src="docs/images/readme/icon-sparkles.svg" width="28" height="28" align="top" alt=""> What's new in 0.1.4
+
+<table>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="docs/images/readme/icon-sparkles.svg" width="44" height="44" alt=""><br>
+      <b>The Conductor</b><br>
+      <sub>Describe what you want in one sentence. It creates the agents, their roles, links and sticky notes, shows the plan as faded tiles for you to approve, then keeps directing your orchestra.</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="docs/images/readme/icon-team.svg" width="44" height="44" alt=""><br>
+      <b>Antigravity, fully integrated</b><br>
+      <sub><code>agy</code> works like Claude Code and Codex: status, role, links, session resume, model choice and permissions in the notch. It replaces Gemini CLI.</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="docs/images/readme/icon-map.svg" width="44" height="44" alt=""><br>
+      <b>Browser and Visual Test cards</b><br>
+      <sub>A real browser on the map that a linked agent can read and reload, and a card that checks a page in Chrome with a screenshot and its errors.</sub>
+    </td>
+  </tr>
+</table>
+
+**Agents and links**
+- **Extra MCP servers** per board or per tile (Linear, Chrome DevTools, agent-browser, agent-desktop or your own), in **Settings › MCP**.
+- **Sticky notes linked to a Markdown file** such as `TODO.md`: tick tasks on the map, the file follows.
+- **Relay from a terminal**: a Terminal tile can send its command output to an agent.
+- Browser and Visual Test tools only appear to agents linked to such a card.
+
+**Boards**
+- **Richer team templates**: MCP servers kept per tile, project backlog sync, and two new recipes (*Project maintenance*, *Enterprise squad*).
+- **Usage and Log on the map**: drag their tab onto a board to keep them visible.
+
+<details>
+<summary><b>What was new in 0.1.3</b></summary>
 
 <table>
   <tr>
@@ -109,6 +144,8 @@ You already run Claude Code or Codex in a terminal. Orchestra puts as many of th
 - **History** tab in Tasks: every message sent through a link, with its reply and the files changed since the task started.
 - **Diagnostics** in Settings: where each agent's command was found, its version and its Orchestra hooks.
 - A new **first-launch setup**: language, theme, terminal font, grid, glow and dock agents, then the guided tour.
+
+</details>
 
 <sub>Full history: <a href="../../releases">releases</a></sub>
 
@@ -186,6 +223,11 @@ You already run Claude Code or Codex in a terminal. Orchestra puts as many of th
     <td valign="top"><img src="docs/images/readme/icon-status.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Status &amp; notifications</b><br><sub>Working, waiting or done, with a glow, a sound and a system notification.</sub></td>
     <td valign="top"><img src="docs/images/readme/icon-themes.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Themes</b><br><sub>Standard, Light, ChatGPT, Gemini, VS Code, GitHub, Dracula, Nord, your accent color. English and French.</sub></td>
   </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/readme/icon-sparkles.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Conductor</b><br><sub>Builds and directs your agents from one sentence, with a preview to approve.</sub></td>
+    <td valign="top"><img src="docs/images/readme/icon-map.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Browser &amp; Visual Test</b><br><sub>A live browser and automatic page checks on the map, readable by linked agents.</sub></td>
+    <td valign="top"><img src="docs/images/readme/icon-build.svg" width="36" height="36" align="left" alt="">&nbsp;<b>MCP servers</b><br><sub>Extra servers for a whole board or a single tile, without touching your CLI settings.</sub></td>
+  </tr>
 </table>
 
 <p align="center"><img src="docs/images/readme/divider-1.svg" width="800" alt=""></p>
@@ -218,7 +260,7 @@ You already run Claude Code or Codex in a terminal. Orchestra puts as many of th
 </table>
 
 > [!IMPORTANT]
-> You need the agent CLIs you want to use, installed and logged in: [`claude`](https://docs.anthropic.com/en/docs/claude-code) and/or [`codex`](https://github.com/openai/codex) must work in a normal terminal.
+> You need the agent CLIs you want to use, installed and logged in: [`claude`](https://docs.anthropic.com/en/docs/claude-code), [`codex`](https://github.com/openai/codex) and/or `agy` (Antigravity) must work in a normal terminal.
 
 > [!NOTE]
 > The app isn't code-signed yet. On Windows, SmartScreen may say *“Windows protected your PC”*: click **More info → Run anyway**. On macOS, use right-click → **Open** the first time.
@@ -298,6 +340,16 @@ When a tile works in a Git repository, a tab above it opens the **Changes** wind
 
 Claude Code and Codex resume the exact session saved for each tile. If a saved session is missing, Orchestra asks you to start a new conversation instead of resuming another tile's. **Settings › General › Board backups** keeps up to 10 previous workspaces; if `workspace.json` is unreadable at startup, choose a backup or a new board.
 
+### 9. Let the Conductor build it
+
+Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> (or click the bar on top of the map) and describe what you want, for example *“Build a small API and its tests with two agents, and write the plan in a sticky note.”*
+
+1. The Conductor reads the board, then prepares its plan: agents (Claude Code, Codex, Antigravity or terminals), roles and first prompts, links, sticky notes, browser or visual test cards, laid out in a row, a grid or a pyramid.
+2. The plan appears as **faded tiles and links**. Click **Approve** to create everything at once, or **Cancel**. Any message you send meanwhile (*“add a tester”*) changes the plan instead of starting over.
+3. Keep talking to it in the same conversation: add an agent, change a link, send a message to an agent, read its screen, or *“make a new board with…”*. **New conversation** starts over.
+
+Agents work in the active folder, in another folder you name, or on their own Git branch so several coders can work in parallel. One <kbd>Ctrl</kbd>+<kbd>Z</kbd> removes a whole applied plan. In **Settings › General** you choose its engine (Claude Code, recommended; Codex; Antigravity) and model, the number of agents it may create per board (6 by default), and an **Auto mode** that applies plans without waiting for you.
+
 <p align="center"><img src="docs/images/readme/divider-1.svg" width="800" alt=""></p>
 
 ## <img src="docs/images/readme/icon-recipes.svg" width="28" height="28" align="top" alt=""> Recipes
@@ -307,6 +359,8 @@ Claude Code and Codex resume the exact session saved for each tile. If a saved s
 **Dev + reviewer.** Link a *Frontend* agent to a *Reviewer* with a **Relay** and the instruction *“Review this change and list any bug: {response}”*. Give the reviewer the role *“You never edit files.”* Every time the frontend agent finishes, the reviewer checks its work.
 
 **An agent that runs your dev server.** Link an agent to a **Terminal** tile, then ask: *“Start the dev server in the linked terminal and tell me when it's ready.”* You see the command run; the agent reads the output and can stop it with Ctrl+C.
+
+**A whole team in one sentence.** Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> and write *“Make 3 agents in a pyramid: a lead above a backend and a frontend, and write the plan in a sticky note.”* Check the faded plan, approve it, and the team appears already laid out, with its roles, links and first prompts.
 
 **A prepared sequence.** Open **Tasks**, create a task with a step for your developer and a step for your reviewer with *Attach the previous response*, then click **Run**. See the [sequence guide](docs/task-sequences.md).
 
@@ -349,6 +403,7 @@ Claude Code and Codex resume the exact session saved for each tile. If a saved s
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> / <kbd>A</kbd> / <kbd>U</kbd> / <kbd>J</kbd> | Files / active agents / usage / log |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> | Find a tile on every board |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> | Enlarge or restore the selected terminal |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> | Open the Conductor |
 
 </td>
     <td width="50%" valign="top">
@@ -357,7 +412,7 @@ Claude Code and Codex resume the exact session saved for each tile. If a saved s
 
 | | |
 |---|---|
-| <kbd>V</kbd> <kbd>P</kbd> <kbd>N</kbd> <kbd>T</kbd> <kbd>L</kbd> | Select, pen, sticky note, text, link |
+| <kbd>V</kbd> <kbd>P</kbd> <kbd>N</kbd> <kbd>T</kbd> <kbd>L</kbd> <kbd>R</kbd> | Select, pen, sticky note, text, link, visual test |
 | <kbd>F</kbd> | Fit everything in view |
 | <kbd>Del</kbd> | Delete the selection (with confirmation) |
 | <kbd>F2</kbd> | Rename the selected tile |
@@ -396,6 +451,12 @@ In a terminal, <kbd>Ctrl</kbd>+<kbd>C</kbd> copies when text is selected (otherw
       <sub><code>~/.claude.json</code>: marks a folder as trusted before launching Claude Code (can be turned off). <code>~/.codex/orchestra.config.toml</code> and Orchestra's entries in <code>~/.codex/hooks.json</code>, inactive outside Orchestra.</sub>
     </td>
   </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <b>🎼 A Conductor that only touches the board</b><br>
+      <sub>It runs your own CLI, with your account, and never edits your files. With Claude Code (recommended), it can only use the board tools. Codex runs read-only, and Antigravity in plan mode inside an empty private folder, with commands, the web and sub-agents blocked. Nothing is created before you approve its plan, unless you turn on Auto mode.</sub>
+    </td>
+  </tr>
 </table>
 
 App data (settings, boards, tasks, templates) lives in `%APPDATA%\Orchestra` (macOS: `~/Library/Application Support/Orchestra`). The exchange log and the blockers inbox stay in memory only.
@@ -413,13 +474,19 @@ That's Orchestra's status hooks (working / done). Choose **Trust all and continu
 <details>
 <summary><b>Which agents can use links?</b></summary>
 
-Claude Code, Codex, and Antigravity can relay, delegate, drive a terminal, and use linked notes. Task sequences are available for Claude Code and Codex. Other CLIs such as Aider and Gemini CLI can use terminal output as the source of a Relay and receive relayed messages.
+Claude Code, Codex, and Antigravity can relay, delegate, drive a terminal, and use linked notes. Task sequences are available for Claude Code and Codex. Other CLIs such as Aider can use terminal output as the source of a Relay and receive relayed messages. Gemini CLI is no longer supported: use Antigravity instead.
 </details>
 
 <details>
 <summary><b>Can I add another CLI?</b></summary>
 
-Yes: **Settings › Agents**. Pick a known agent (Google Antigravity, Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) or add your own command, logo and color. *Test* checks that the command exists, and **Settings › Diagnostics** shows where it was found.
+Yes: **Settings › Agents**. Pick a known agent (Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) or add your own command, logo and color. *Test* checks that the command exists, and **Settings › Diagnostics** shows where it was found.
+</details>
+
+<details>
+<summary><b>Does the Conductor need an API key?</b></summary>
+
+No. It runs the Claude Code, Codex or Antigravity CLI you already use, logged in with your own account, in a hidden session. Each board keeps its own conversation with it.
 </details>
 
 <details>
@@ -504,6 +571,8 @@ electron/            Node side: windows, terminals, files, local server, MCP
   linkRelay.cjs      Relay links
   delegation.cjs     Delegation links (list_agents, send_to_agent, wait_for_replies)
   terminalLink.cjs   Terminal links (run_in_terminal, read_terminal, interrupt_terminal)
+  conductor.cjs      Conductor tools: checks, preview and board operations
+  conductorSession.cjs  the Conductor's hidden Claude Code / Codex / Antigravity session
   activityLog.cjs    exchange log (memory only)
   agentStatus.cjs    tile status and permission requests
   claudeHooks.cjs    per-tile Claude Code settings and MCP config

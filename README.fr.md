@@ -4,7 +4,8 @@
 
 <p align="center">
   <b>Une grande map où tu poses des agents IA de code, chacun dans son vrai terminal,<br>et où tu les relies pour qu'ils se passent le travail.</b><br>
-  <sub>Claude Code · Codex · Gemini CLI · Aider · et toute CLI que tu ajoutes &nbsp;·&nbsp; <a href="README.md">🇬🇧 Read in English</a></sub>
+  <sub>Claude Code · Codex · Antigravity · Aider · et toute CLI que tu ajoutes</sub><br>
+  <sub>🌐 <a href="https://adoraay.github.io/Orchestra-Board/"><b>Site web</b></a> &nbsp;·&nbsp; <a href="README.md">🇬🇧 Read in English</a></sub>
 </p>
 
 <p align="center">
@@ -15,7 +16,7 @@
 
 <p align="center">
   <a href="#-télécharger"><img src="docs/images/readme/nav-download-fr.svg" height="36" alt="Télécharger"></a>
-  <a href="#-nouveautés-de-la-013"><img src="docs/images/readme/nav-new-fr.svg" height="36" alt="Nouveautés"></a>
+  <a href="#-nouveautés-de-la-014"><img src="docs/images/readme/nav-new-fr.svg" height="36" alt="Nouveautés"></a>
   <a href="#-démos"><img src="docs/images/readme/nav-demos-fr.svg" height="36" alt="Démos"></a>
   <a href="#-fonctionnalités"><img src="docs/images/readme/nav-features-fr.svg" height="36" alt="Fonctions"></a>
   <a href="#-tutoriel"><img src="docs/images/readme/nav-tutorial-fr.svg" height="36" alt="Tutoriel"></a>
@@ -71,10 +72,44 @@ Tu utilises déjà Claude Code ou Codex dans un terminal. Orchestra en met autan
 - Un agent **chef** peut **déléguer** des tâches à d'autres agents et récupérer leurs réponses lui-même.
 - Un agent **Frontend** peut **transmettre** automatiquement son travail fini à un **relecteur**.
 - Un agent peut **piloter un terminal que tu vois** (`npm run dev`, tests, build) au lieu de lancer des commandes cachées.
+- Ou décris simplement **l'équipe que tu veux** (`Ctrl+Maj+O`) : le **chef d'orchestre** crée les agents, leurs rôles et leurs liens, te montre d'abord le plan, puis continue à les diriger.
 
 <p align="center"><img src="docs/images/readme/divider-2.svg" width="800" alt=""></p>
 
-## <img src="docs/images/readme/icon-sparkles.svg" width="28" height="28" align="top" alt=""> Nouveautés de la 0.1.3
+## <img src="docs/images/readme/icon-sparkles.svg" width="28" height="28" align="top" alt=""> Nouveautés de la 0.1.4
+
+<table>
+  <tr>
+    <td width="33%" align="center" valign="top">
+      <img src="docs/images/readme/icon-sparkles.svg" width="44" height="44" alt=""><br>
+      <b>Le chef d'orchestre</b><br>
+      <sub>Décris ce que tu veux en une phrase. Il crée les agents, leurs rôles, leurs liens et des post-it, te montre le plan en cases estompées à valider, puis continue à diriger ton orchestre.</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="docs/images/readme/icon-team.svg" width="44" height="44" alt=""><br>
+      <b>Antigravity, intégré</b><br>
+      <sub><code>agy</code> marche comme Claude Code et Codex : statut, rôle, liens, reprise de session, choix du modèle et permissions dans l'encoche. Il remplace Gemini CLI.</sub>
+    </td>
+    <td width="33%" align="center" valign="top">
+      <img src="docs/images/readme/icon-map.svg" width="44" height="44" alt=""><br>
+      <b>Cases Navigateur et Test visuel</b><br>
+      <sub>Un vrai navigateur sur la map, qu'un agent relié peut lire et recharger, et une case qui vérifie une page dans Chrome, avec une capture et ses erreurs.</sub>
+    </td>
+  </tr>
+</table>
+
+**Agents et liens**
+- **Serveurs MCP en plus** pour tout un tableau ou une seule case (Linear, Chrome DevTools, agent-browser, agent-desktop ou les tiens), dans **Paramètres › MCP**.
+- **Post-it reliés à un fichier Markdown** comme `TODO.md` : coche les tâches sur la map, le fichier suit.
+- **Transmission depuis un terminal** : une case Terminal peut envoyer la sortie de sa commande à un agent.
+- Les outils du navigateur et du test visuel n'apparaissent qu'aux agents reliés à une de ces cases.
+
+**Tableaux**
+- **Modèles d'équipes enrichis** : serveurs MCP gardés par case, synchronisation du backlog du projet et deux nouvelles recettes (*Maintenance de projet*, *Équipe projet complète*).
+- **Utilisation et Journal sur la map** : glisse leur languette sur un tableau pour les garder visibles.
+
+<details>
+<summary><b>Nouveautés de la 0.1.3</b></summary>
 
 <table>
   <tr>
@@ -109,6 +144,8 @@ Tu utilises déjà Claude Code ou Codex dans un terminal. Orchestra en met autan
 - Onglet **Historique** dans Tâches : chaque message envoyé par un lien, avec sa réponse et les fichiers modifiés depuis le début de la tâche.
 - **Diagnostic** dans les paramètres : où la commande de chaque agent a été trouvée, sa version et ses hooks Orchestra.
 - Une nouvelle **personnalisation au premier lancement** : langue, thème, police des terminaux, grille, lueur et agents du dock, puis la visite guidée.
+
+</details>
 
 <sub>Historique complet : <a href="../../releases">versions</a></sub>
 
@@ -186,6 +223,11 @@ Tu utilises déjà Claude Code ou Codex dans un terminal. Orchestra en met autan
     <td valign="top"><img src="docs/images/readme/icon-status.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Statuts et notifications</b><br><sub>Travaille, attend ou a fini, avec une lueur, un son et une notification du système.</sub></td>
     <td valign="top"><img src="docs/images/readme/icon-themes.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Thèmes</b><br><sub>Standard, Clair, ChatGPT, Gemini, VS Code, GitHub, Dracula, Nord, ta couleur d'accent. Anglais et français.</sub></td>
   </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/readme/icon-sparkles.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Chef d'orchestre</b><br><sub>Crée et dirige tes agents à partir d'une phrase, avec un aperçu à valider.</sub></td>
+    <td valign="top"><img src="docs/images/readme/icon-map.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Navigateur et Test visuel</b><br><sub>Un navigateur en direct et des vérifications de pages sur la map, lisibles par les agents reliés.</sub></td>
+    <td valign="top"><img src="docs/images/readme/icon-build.svg" width="36" height="36" align="left" alt="">&nbsp;<b>Serveurs MCP</b><br><sub>Des serveurs en plus pour tout un tableau ou une seule case, sans toucher aux réglages de tes CLI.</sub></td>
+  </tr>
 </table>
 
 <p align="center"><img src="docs/images/readme/divider-1.svg" width="800" alt=""></p>
@@ -218,7 +260,7 @@ Tu utilises déjà Claude Code ou Codex dans un terminal. Orchestra en met autan
 </table>
 
 > [!IMPORTANT]
-> Il te faut les CLI d'agents que tu veux utiliser, installées et connectées : [`claude`](https://docs.anthropic.com/en/docs/claude-code) et/ou [`codex`](https://github.com/openai/codex) doivent marcher dans un terminal normal.
+> Il te faut les CLI d'agents que tu veux utiliser, installées et connectées : [`claude`](https://docs.anthropic.com/en/docs/claude-code), [`codex`](https://github.com/openai/codex) et/ou `agy` (Antigravity) doivent marcher dans un terminal normal.
 
 > [!NOTE]
 > L'app n'est pas encore signée. Sous Windows, SmartScreen peut afficher « Windows a protégé votre ordinateur » : clique sur **Informations complémentaires → Exécuter quand même**. Sous macOS, fais clic droit → **Ouvrir** la première fois.
@@ -300,6 +342,16 @@ Quand une case travaille dans un dépôt Git, une encoche au-dessus d'elle ouvre
 
 Claude Code et Codex reprennent la session exacte sauvegardée pour chaque case. Si une session est introuvable, Orchestra propose une nouvelle discussion au lieu de reprendre celle d'une autre case. **Paramètres › Général › Sauvegardes des tableaux** garde jusqu'à 10 anciens workspaces ; si `workspace.json` est illisible au démarrage, choisis une sauvegarde ou un nouveau tableau.
 
+### 9. Laisse le chef d'orchestre construire
+
+Appuie sur <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>O</kbd> (ou clique sur la barre en haut de la map) et décris ce que tu veux, par exemple *« Fais une petite API et ses tests avec deux agents, et note le plan dans un post-it. »*
+
+1. Le chef d'orchestre lit le tableau, puis prépare son plan : agents (Claude Code, Codex, Antigravity ou terminaux), rôles et premiers prompts, liens, post-it, cases Navigateur ou Test visuel, disposés en ligne, en grille ou en pyramide.
+2. Le plan apparaît en **cases et liens estompés**. Clique sur **Valider** pour tout créer d'un coup, ou sur **Annuler**. Un message envoyé entre-temps (*« ajoute un testeur »*) modifie le plan au lieu de tout recommencer.
+3. Continue à lui parler dans la même conversation : ajouter un agent, changer un lien, écrire à un agent, lire son écran, ou *« fais un nouveau tableau avec… »*. **Nouvelle conversation** repart de zéro.
+
+Les agents travaillent dans le dossier actif, dans un autre dossier que tu indiques, ou sur leur propre branche Git pour que plusieurs développeurs avancent en parallèle. Un seul <kbd>Ctrl</kbd>+<kbd>Z</kbd> retire tout un plan appliqué. Dans **Paramètres › Général**, tu choisis son moteur (Claude Code, recommandé ; Codex ; Antigravity) et son modèle, le nombre d'agents qu'il peut créer par tableau (6 par défaut), et un **Mode auto** qui applique les plans sans attendre ta validation.
+
 <p align="center"><img src="docs/images/readme/divider-1.svg" width="800" alt=""></p>
 
 ## <img src="docs/images/readme/icon-recipes.svg" width="28" height="28" align="top" alt=""> Recettes
@@ -309,6 +361,8 @@ Claude Code et Codex reprennent la session exacte sauvegardée pour chaque case.
 **Dev + relecteur.** Relie un agent *Frontend* à un *Relecteur* par une **Transmission** avec la consigne *« Relis ce changement et liste les bugs : {response} »*. Donne au relecteur le rôle *« Tu ne modifies jamais de fichier. »* Chaque fois que l'agent frontend a fini, le relecteur vérifie son travail.
 
 **Un agent qui lance ton serveur de dev.** Relie un agent à une case **Terminal**, puis demande : *« Lance le serveur de dev dans le terminal relié et dis-moi quand il est prêt. »* Tu vois la commande tourner ; l'agent lit la sortie et peut l'arrêter avec Ctrl+C.
+
+**Toute une équipe en une phrase.** Appuie sur <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>O</kbd> et écris *« Fais 3 agents en pyramide : un chef au-dessus d'un backend et d'un frontend, et note le plan dans un post-it. »* Regarde le plan estompé, valide-le, et l'équipe apparaît déjà disposée, avec ses rôles, ses liens et ses premiers prompts.
 
 **Une séquence préparée.** Ouvre **Tâches**, crée une tâche avec une étape pour ton développeur et une étape pour ton relecteur avec *Joindre la réponse précédente*, puis clique sur **Lancer**. Voir le [guide des séquences](docs/task-sequences.md).
 
@@ -351,6 +405,7 @@ Claude Code et Codex reprennent la session exacte sauvegardée pour chaque case.
 | <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>E</kbd> / <kbd>A</kbd> / <kbd>U</kbd> / <kbd>J</kbd> | Fichiers / agents actifs / utilisation / journal |
 | <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>F</kbd> | Trouver une case sur tous les tableaux |
 | <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>M</kbd> | Agrandir ou rétablir le terminal choisi |
+| <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>O</kbd> | Ouvrir le chef d'orchestre |
 
 </td>
     <td width="50%" valign="top">
@@ -359,7 +414,7 @@ Claude Code et Codex reprennent la session exacte sauvegardée pour chaque case.
 
 | | |
 |---|---|
-| <kbd>V</kbd> <kbd>P</kbd> <kbd>N</kbd> <kbd>T</kbd> <kbd>L</kbd> | Sélection, stylo, post-it, texte, lien |
+| <kbd>V</kbd> <kbd>P</kbd> <kbd>N</kbd> <kbd>T</kbd> <kbd>L</kbd> <kbd>R</kbd> | Sélection, stylo, post-it, texte, lien, test visuel |
 | <kbd>F</kbd> | Tout afficher |
 | <kbd>Suppr</kbd> | Supprimer la sélection (avec confirmation) |
 | <kbd>F2</kbd> | Renommer la case choisie |
@@ -398,6 +453,12 @@ Dans un terminal, <kbd>Ctrl</kbd>+<kbd>C</kbd> copie quand du texte est sélecti
       <sub><code>~/.claude.json</code> : marque un dossier comme accepté avant d'y lancer Claude Code (désactivable). <code>~/.codex/orchestra.config.toml</code> et les entrées d'Orchestra dans <code>~/.codex/hooks.json</code>, inactifs hors d'Orchestra.</sub>
     </td>
   </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <b>🎼 Un chef d'orchestre qui ne touche qu'au tableau</b><br>
+      <sub>Il utilise ta propre CLI, avec ton compte, et ne modifie jamais tes fichiers. Avec Claude Code (recommandé), il n'a accès qu'aux outils du tableau. Codex tourne en lecture seule, et Antigravity en mode plan dans un dossier privé vide, sans commandes, sans web ni sous-agents. Rien n'est créé avant que tu valides son plan, sauf en Mode auto.</sub>
+    </td>
+  </tr>
 </table>
 
 Les données de l'app (paramètres, tableaux, tâches, modèles) sont dans `%APPDATA%\Orchestra` (macOS : `~/Library/Application Support/Orchestra`). Le journal des échanges et la boîte des blocages restent en mémoire uniquement.
@@ -415,13 +476,19 @@ Ce sont les hooks de statut d'Orchestra (travaille / a fini). Choisis **Trust al
 <details>
 <summary><b>Quels agents peuvent utiliser les liens ?</b></summary>
 
-Claude Code et Codex peuvent transmettre, déléguer, piloter un terminal, utiliser les post-it reliés et suivre des séquences de tâches. Les autres CLI (Aider, Gemini CLI, les tiennes…) marchent dans une case et peuvent *recevoir* des messages transmis ; leur intégration ne comprend pas les hooks ni les outils d'orchestration d'Orchestra.
+Claude Code, Codex et Antigravity peuvent transmettre, déléguer, piloter un terminal et utiliser les post-it reliés ; Claude Code et Codex suivent aussi des séquences de tâches. Gemini CLI n'est plus pris en charge : utilise Antigravity. Les autres CLI (Aider, les tiennes…) marchent dans une case et peuvent *recevoir* des messages transmis ; leur intégration ne comprend pas les hooks ni les outils d'orchestration d'Orchestra.
 </details>
 
 <details>
 <summary><b>Puis-je ajouter une autre CLI ?</b></summary>
 
-Oui : **Paramètres › Agents**. Choisis un agent connu (Google Antigravity, Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) ou ajoute ta propre commande, ton logo et ta couleur. *Tester* vérifie que la commande existe, et **Paramètres › Diagnostic** montre où elle a été trouvée.
+Oui : **Paramètres › Agents**. Choisis un agent connu (Aider, Qwen Code, OpenCode, GitHub Copilot CLI, Cursor CLI, Goose, Amp, Kimi CLI…) ou ajoute ta propre commande, ton logo et ta couleur. *Tester* vérifie que la commande existe, et **Paramètres › Diagnostic** montre où elle a été trouvée.
+</details>
+
+<details>
+<summary><b>Le chef d'orchestre a-t-il besoin d'une clé API ?</b></summary>
+
+Non. Il lance la CLI Claude Code, Codex ou Antigravity que tu utilises déjà, connectée avec ton compte, dans une session cachée. Chaque tableau garde sa propre conversation avec lui.
 </details>
 
 <details>
@@ -472,6 +539,8 @@ electron/            côté Node : fenêtres, terminaux, fichiers, serveur local
   linkRelay.cjs      liens Transmission
   delegation.cjs     liens Délégation (list_agents, send_to_agent, wait_for_replies)
   terminalLink.cjs   liens Terminal (run_in_terminal, read_terminal, interrupt_terminal)
+  conductor.cjs      outils du chef d'orchestre : vérifications, aperçu et opérations du tableau
+  conductorSession.cjs  la session cachée du chef d'orchestre (Claude Code, Codex ou Antigravity)
   activityLog.cjs    journal des échanges (en mémoire)
   agentStatus.cjs    statut des cases et demandes de permission
   claudeHooks.cjs    réglages et config MCP de chaque case Claude Code
