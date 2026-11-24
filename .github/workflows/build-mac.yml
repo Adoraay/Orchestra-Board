@@ -9,7 +9,7 @@ on:
 
 jobs:
   mac:
-    runs-on: macos-14
+    runs-on: macos-15 # macos-14 n'est plus proposé par GitHub
     steps:
       - uses: actions/checkout@v4
 
