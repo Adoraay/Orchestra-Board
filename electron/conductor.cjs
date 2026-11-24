@@ -1,7 +1,9 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { t } = require('./i18n.cjs');
+const { checkName } = require('./fileNames.cjs');
 
 // Chef d'orchestre (PLAN.md §3.25) : outils MCP qui construisent et dirigent un tableau (cases, liens, post-it,
 // rôles, messages). Node valide tout ici, puis l'interface applique chaque changement avec les mêmes
@@ -128,7 +130,7 @@ function openSession(id, { boardId, folder, preview, auto }) {
   // runStickies : post-it créés depuis le dernier message de l'utilisateur (rangés avec les agents par arrange) ;
   // newBoards : tableaux créés pendant ce message ; planBoards : tableaux créés pour un aperçu pas encore validé.
   sessions.set(id, {
-    boardId, folder, preview: Boolean(preview), auto: Boolean(auto), pending: previous?.boardId === boardId ? previous.pending : [], next: previous?.next ?? 1,
+    boardId, folder, preview: Boolean(preview), auto: Boolean(auto), pending: previous?.pending ?? [], next: previous?.next ?? 1,
     runStickies: [], newBoards: 0, planBoards: previous?.planBoards ?? [],
   });
 }
@@ -187,14 +189,20 @@ function conductorAgents(ctx) {
   return onBoard + ctx.session.pending.filter((p) => p.type === 'create_agent' && p.kind === 'agent').length;
 }
 
-// Dossier demandé : le dossier de travail ou un sous-dossier existant (jamais créé).
+// Dossier d'un agent : le dossier de travail par défaut, ou celui demandé (chemin absolu, ~, ou relatif au dossier
+// de travail). Dossier existant, ou nouveau dossier (create) dans un dossier existant, créé seulement à la validation.
+// Renvoie { cwd, create } ou null.
+const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 function folderOf(ctx, folder) {
   const base = ctx.session.folder;
-  if (!base) return null;
-  const target = folder ? path.resolve(base, String(folder)) : base;
-  const relative = path.relative(base, target);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
-  try { return fs.statSync(target).isDirectory() ? target : null; } catch { return null; }
+  let raw = typeof folder === 'string' ? folder.trim() : '';
+  if (!raw) return base && isDir(base) ? { cwd: base, create: false } : null;
+  if (/^~([\\/]|$)/.test(raw)) raw = path.join(os.homedir(), raw.slice(1));
+  if (!path.isAbsolute(raw) && !base) return null;
+  const target = path.resolve(base ?? '', raw);
+  if (isDir(target)) return { cwd: target, create: false };
+  if (fs.existsSync(target) || path.dirname(target) === target || checkName(path.basename(target), t).error) return null;
+  return isDir(path.dirname(target)) ? { cwd: target, create: true } : null;
 }
 
 // ——— Lecture du tableau ———
@@ -280,12 +288,14 @@ function planAgent(ctx, args = {}) {
   if (prompt.length > MAX_TEXT) return { error: fail('conductor.tooLong', { field: 'prompt', max: MAX_TEXT }) };
   const max = deps.settings().maxAgents;
   if (kind === 'agent' && conductorAgents(ctx) >= max) return { error: fail('conductor.limit', { max }) };
-  const cwd = folderOf(ctx, args.folder);
-  if (!cwd) return { error: fail('conductor.badFolder', { folder: ctx.session.folder ?? '?' }) };
+  const place = folderOf(ctx, args.folder);
+  if (!place) return { error: fail('conductor.badFolder', { ref: args.folder ?? '', folder: ctx.session.folder ?? '?' }) };
+  const { cwd, create: newFolder } = place;
   const branch = typeof args.worktree_branch === 'string' && args.worktree_branch.trim() ? args.worktree_branch.trim() : null;
   const near = args.near ? resolve(ctx, args.near, ['agent', 'terminal', 'sticky']) : null;
   if (args.near && !near) return { error: fail('conductor.notFound', { ref: args.near }) };
-  return { action: { type: 'create_agent', kind, name, agentId, cwd, role, prompt, branch, near: near?.id ?? null } };
+  if (branch && newFolder) return { error: fail('conductor.newFolderBranch') };
+  return { action: { type: 'create_agent', kind, name, agentId, cwd, newFolder, role, prompt, branch, near: near?.id ?? null } };
 }
 
 function planLink(ctx, args = {}) {
@@ -454,7 +464,12 @@ function addProposal(ctx, action) {
 function describe(ctx, action) {
   const name = (id) => resolve(ctx, id, TILE_KINDS)?.name ?? id;
   switch (action.type) {
-    case 'create_agent': return t(action.kind === 'agent' ? 'conductor.do.agent' : 'conductor.do.terminal', { name: action.name });
+    case 'create_agent': {
+      const kind = action.kind === 'agent' ? 'agent' : 'terminal';
+      if (action.cwd === ctx.session.folder) return t(`conductor.do.${kind}`, { name: action.name });
+      const folder = action.newFolder ? t('conductor.folderNew', { folder: action.cwd }) : action.cwd;
+      return t(`conductor.do.${kind}In`, { name: action.name, folder });
+    }
     case 'create_sticky': return t('conductor.do.sticky', { name: action.name });
     case 'create_card': return t(`conductor.do.${action.kind}`);
     case 'create_link': return t('conductor.do.link', { from: name(action.source), to: name(action.target), mode: t(`conductor.mode.${action.data.mode}`) });
@@ -479,6 +494,9 @@ async function execute(ctx, action) {
   const log = (to, text) => deps.log({ kind: 'conductor', from: caller, to, text });
   switch (action.type) {
     case 'create_agent': {
+      if (action.newFolder) {
+        try { makeFolder(action.cwd); } catch (error) { return fail('conductor.opFailed', { reason: error.message }); }
+      }
       // Validation d'un aperçu : worktree déjà créé avant toute application (preflight).
       let branch = action.worktree ? action.branch : null;
       let worktree = action.worktree ?? null;
@@ -664,11 +682,24 @@ function serial(fn) {
 const FINAL = ['send_to', 'remove_agent'];
 const isTemp = (id) => typeof id === 'string' && id.startsWith('pending-');
 
-// Avant toute application : worktrees créés, agents à retirer libres, destinataires lancés. Renvoie le premier échec.
-async function preflight(session, items, trees) {
+// Nouveau dossier d'un agent (son parent existe déjà) ; renvoie true s'il vient d'être créé.
+function makeFolder(dir) {
+  if (isDir(dir)) return false;
+  fs.mkdirSync(dir);
+  return true;
+}
+// Plan non appliqué : les dossiers qu'il avait créés disparaissent s'ils sont restés vides.
+const removeFolders = (dirs) => { for (const dir of [...dirs].reverse()) try { fs.rmdirSync(dir); } catch {} };
+
+// Avant toute application : dossiers et worktrees créés, agents à retirer libres, destinataires lancés.
+// Renvoie le premier échec ; dirs reçoit les dossiers créés.
+async function preflight(session, items, trees, dirs) {
   for (const item of items) {
     const fails = (key, vars) => ({ summary: item.summary, text: t(key, vars) });
     if (!boards.some((b) => b.id === (item.boardId ?? session.boardId))) return fails('conductor.noBoard');
+    if (item.type === 'create_agent' && item.newFolder) {
+      try { if (makeFolder(item.cwd)) dirs.push(item.cwd); } catch (error) { return fails('conductor.opFailed', { reason: error.message }); }
+    }
     if (item.type === 'create_agent' && item.branch) {
       const tree = await deps.ensureWorktree(item.cwd, item.branch, { create: true });
       if (tree?.error || !tree?.path) return fails('conductor.opFailed', { reason: tree?.error ?? '?' });
@@ -738,8 +769,12 @@ async function commit(caller) {
   };
 
   const trees = new Map();
-  const blocked = await serial(() => preflight(session, pending, trees));
-  if (blocked) return keep(blocked.summary, blocked.text);
+  const dirs = [];
+  const blocked = await serial(() => preflight(session, pending, trees, dirs));
+  if (blocked) {
+    removeFolders(dirs);
+    return keep(blocked.summary, blocked.text);
+  }
 
   const ids = new Map();
   const map = (id) => (id && ids.has(id) ? ids.get(id) : id);
@@ -768,6 +803,7 @@ async function commit(caller) {
     });
     if (outcome.isError && !FINAL.includes(item.type)) {
       await serial(() => rollback(caller, undo, batch));
+      removeFolders(dirs);
       return keep(item.summary, outcome.text);
     }
     if (item.tempId && outcome.id) ids.set(item.tempId, outcome.id);

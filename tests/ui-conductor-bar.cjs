@@ -59,11 +59,12 @@ module.exports = async ({ win, evaluate, until, sleep, data, errors }) => {
   assert.ok(ghostTops.every((top) => top > barBottom), `ghosts hidden behind the bar: ${ghostTops} <= ${barBottom}`);
   fs.writeFileSync(path.join(data, 'conductor-preview.png'), (await win.webContents.capturePage(undefined, { stayHidden: true })).toPNG());
 
-  // Correction en une phrase : l'ancien plan disparaît, un nouveau est proposé.
+  // Changement en une phrase : le plan reste en attente et le chef d'orchestre le modifie (ses mêmes cases sont
+  // refusées, leurs noms sont déjà pris dans le plan : rien en double).
   await type('BUILD it again');
   await enter();
   await until("!document.querySelector('.conductor-plan')");
-  await until("[...document.querySelectorAll('.conductor-msg.assistant')].some((m) => m.textContent.includes('rejected your proposed plan'))");
+  await until("[...document.querySelectorAll('.conductor-msg.assistant')].some((m) => m.textContent.includes('plan is still pending'))");
   await until(settled);
   await until("document.querySelectorAll('.react-flow__node-ghost').length === 2");
 

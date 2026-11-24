@@ -220,7 +220,7 @@ const CONDUCTOR_TOOLS = [
         name: { type: 'string', description: 'Short unique tile name (40 characters max), e.g. "Backend". Other agents address it by this name.' },
         role: { type: 'string', description: 'Role of the agent (2,000 characters max). Agents only, not terminals.' },
         prompt: { type: 'string', description: 'First message sent to the agent. Agents only, not terminals.' },
-        folder: { type: 'string', description: 'Existing subfolder of the working folder (relative path). Default: the working folder.' },
+        folder: { type: 'string', description: 'Folder the agent runs in: an absolute path, ~, or a path relative to the working folder. A missing folder is created when the plan is applied, if its parent exists (not with worktree_branch). Default: the working folder.' },
         worktree_branch: { type: 'string', description: 'Run the agent in a Git worktree of this branch, created from HEAD if it does not exist (e.g. "maestro/backend"). The folder must be in a Git repository.' },
         near: NEAR,
       },

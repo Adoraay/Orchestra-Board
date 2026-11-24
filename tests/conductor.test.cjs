@@ -185,8 +185,11 @@ test('validation: names, types, folders, limit and roles', async (t) => {
   assert.equal((await s.call('create_agent', { type: 'gemini' })).isError, true);
   assert.equal((await s.call('create_agent', { type: 'claude', name: 'Lead' })).isError, true, 'name taken');
   assert.equal((await s.call('create_agent', { type: 'claude', name: 'x'.repeat(41) })).isError, true);
-  assert.equal((await s.call('create_agent', { type: 'claude', folder: '..' })).isError, true, 'outside the working folder');
-  assert.equal((await s.call('create_agent', { type: 'claude', folder: 'missing' })).isError, true, 'no folder creation');
+  assert.equal((await s.call('create_agent', { type: 'claude', folder: 'missing/deeper' })).isError, true, 'a new folder needs an existing parent');
+  assert.equal((await s.call('create_agent', { type: 'claude', folder: 'bad|name' })).isError, true, 'Windows folder names');
+  fs.writeFileSync(path.join(s.folder, 'file.txt'), '');
+  assert.equal((await s.call('create_agent', { type: 'claude', folder: 'file.txt' })).isError, true, 'a file is not a folder');
+  assert.equal((await s.call('create_agent', { type: 'claude', folder: 'fresh', worktree_branch: 'x' })).isError, true, 'no worktree in a new folder');
   assert.equal((await s.call('create_agent', { type: 'terminal', prompt: 'npm test' })).isError, true, 'a terminal takes no prompt');
   assert.equal((await s.call('create_agent', { type: 'claude', near: 'nobody' })).isError, true);
   assert.equal(s.ops.length, 0, 'nothing reaches the map when validation fails');
@@ -765,4 +768,40 @@ test('auto mode builds through the preview: read_board says auto and tools answe
   assert.match((await call('create_agent', { type: 'claude', name: 'API' })).text, /^conductor.planned .*pending-1/);
   assert.match((await call('set_role', { agent: 'Lead', role: 'Lead' })).text, /^conductor.plannedChange/);
   assert.deepEqual(s.ops, [], 'nothing applied before the end of the run');
+});
+
+test('agents can run in any folder asked for; new folders are created on approval and removed if the plan fails', async (t) => {
+  const s = setup(t);
+  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'orchestra-elsewhere-'));
+  t.after(() => fs.rmSync(elsewhere, { recursive: true, force: true }));
+  s.conductor.openSession('conductor-main', { boardId: 'main', folder: s.folder, preview: true });
+  const call = (name, args) => s.conductor.callTool('conductor-main', name, args);
+  for (const [name, folder] of [['Here', undefined], ['Api', 'api'], ['Far', elsewhere], ['Front', path.join(elsewhere, 'front')], ['Docs', 'docs']]) {
+    const result = await call('create_agent', { type: 'terminal', name, folder });
+    assert.equal(result.isError, false, result.text);
+  }
+  const home = await call('create_agent', { type: 'terminal', name: 'Home', folder: '~' });
+  assert.equal(home.isError, false, home.text);
+  const pending = s.conductor.pendingOf('conductor-main');
+  assert.deepEqual(pending.map((p) => p.cwd), [s.folder, path.join(s.folder, 'api'), elsewhere, path.join(elsewhere, 'front'), path.join(s.folder, 'docs'), os.homedir()]);
+  assert.equal(pending[0].summary, 'conductor.do.terminal Here', 'the working folder is not repeated');
+  assert.match(pending[1].summary, /terminalIn Api .*api$/);
+  assert.match(pending[3].summary, /terminalIn Front conductor.folderNew .*front/);
+  assert.equal(fs.existsSync(path.join(elsewhere, 'front')), false, 'nothing is created before approval');
+
+  // Échec : les dossiers créés pour le plan disparaissent.
+  s.fault.op = 'addAgent';
+  assert.equal((await s.conductor.commit('conductor-main')).applied, false);
+  assert.equal(fs.existsSync(path.join(elsewhere, 'front')), false);
+  assert.equal(fs.existsSync(path.join(s.folder, 'docs')), false);
+  // Validation : chaque case dans son dossier, les nouveaux créés.
+  s.fault.op = null;
+  assert.equal((await s.conductor.commit('conductor-main')).applied, true);
+  assert.deepEqual(s.ops.filter((op) => op.type === 'addAgent').slice(-6).map((op) => op.cwd), pending.map((p) => p.cwd));
+  assert.ok(fs.statSync(path.join(elsewhere, 'front')).isDirectory());
+  assert.ok(fs.statSync(path.join(s.folder, 'docs')).isDirectory());
+
+  // Case de test (mode direct) : le nouveau dossier est créé avec la case.
+  assert.equal((await s.call('create_agent', { type: 'terminal', name: 'Direct', folder: 'direct' })).isError, false);
+  assert.ok(fs.statSync(path.join(s.folder, 'direct')).isDirectory());
 });

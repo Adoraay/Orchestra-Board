@@ -18,7 +18,7 @@ const { t } = require('./i18n.cjs');
 //   sous-agents. Ses outils de fichiers restent (le mode plan les retient) : limite signalée dans les paramètres.
 // Conversation gardée dans userData/conductor.json (messages et actions affichés dans la bulle).
 // Aperçu : ses changements restent en attente, montrés en fantômes sur la map ; Valider les applique (tout ou rien),
-// Annuler les efface, un nouveau message les remplace par un nouveau plan. Le chef d'orchestre l'apprend au message
+// Annuler les efface, un nouveau message demande au chef d'orchestre de modifier ce plan (il n'est pas effacé). Le chef d'orchestre l'apprend au message
 // suivant (notes ajoutées devant le message de l'utilisateur). Mode auto (Paramètres) : même aperçu, appliqué de
 // lui-même à la fin d'une exécution réussie ; une exécution qui plante n'applique rien (le plan reste à valider).
 const MAX_MESSAGE = 20000;
@@ -54,6 +54,7 @@ The user may ask you to add an agent, change a role, or help a stuck agent: read
 - Answer in the user's language, briefly. Write roles and prompts in that language too.
 - Never remove or change tiles you did not create unless the user asks.
 - If a tool refuses (limit, folder, name), adapt or explain; never retry the same call in a loop.
+- If the user names folders, put each agent in its folder: an absolute path, ~, or a path relative to the working folder. A folder that does not exist yet is created when the plan is applied, if its parent exists.
 - Your changes are applied together, all or nothing: in preview mode (read_board says "mode": "preview") once the user approves them, in auto mode ("mode": "auto") as soon as you finish your answer. Build the whole plan in one go.
 `;
 
@@ -456,10 +457,9 @@ async function send(boardId, message, folder) {
     Object.assign(conv, freshSession(engine));
     if (conv.history.length) addEntry(key, { kind: 'info', text: t('conductorSession.engineChanged', { engine: t(`conductorSession.engine.${engine}`) }) });
   }
-  // Un message pendant un aperçu = une correction : l'ancien plan est effacé, un nouveau est proposé.
+  // Un message pendant un aperçu = un changement du plan, qui reste en attente : le chef d'orchestre le modifie.
   if (deps.pendingOf(callerOf(key)).length) {
-    deps.discard(callerOf(key));
-    note(key, 'The user rejected your proposed plan (nothing was applied) and asks for the changes below. Propose the whole corrected plan again.');
+    note(key, 'Your plan is still pending, not applied yet (read_board lists it). If the message below asks for changes, amend this plan with your tools (add, update or remove items, arrange again if needed) instead of rebuilding it, and keep what still fits.');
   }
   const auto = Boolean(settings.autoApply);
   deps.openSession(callerOf(key), { boardId, folder, preview: true, auto });

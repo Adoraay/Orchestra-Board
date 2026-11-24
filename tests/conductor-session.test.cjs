@@ -216,12 +216,13 @@ test('preview: approve, cancel and correction are applied and told to the conduc
   await s.idle();
   assert.match(reply(), /cancelled your proposed plan: nothing was applied\.\n\nOther$/);
 
-  // Un message pendant l'aperçu = une correction : plan effacé, nouveau plan demandé.
+  // Un message pendant l'aperçu = un changement : le plan reste en attente, le chef d'orchestre le modifie.
   s.pending.list = [{ summary: 'Agent D' }];
-  await s.session.send('main', 'Use Codex instead', s.folder);
-  assert.deepEqual(s.pending.list, []);
+  await s.session.send('main', 'Add one more agent', s.folder);
+  assert.deepEqual(s.pending.list, [{ summary: 'Agent D' }], 'the plan is not cancelled');
   await s.idle();
-  assert.match(reply(), /rejected your proposed plan .*\n\nUse Codex instead$/);
+  assert.match(reply(), /plan is still pending, not applied yet .*amend this plan .*\n\nAdd one more agent$/);
+  s.pending.list = [];
   // La note ne sert qu'une fois.
   await s.session.send('main', 'Plain', s.folder);
   await s.idle();

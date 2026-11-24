@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const { dialog, ipcMain, shell } = require('electron');
 const { t } = require('./i18n.cjs');
+const { checkName: checkFileName } = require('./fileNames.cjs');
 
 // Noms masqués par défaut dans l'Explorateur Windows (en plus des fichiers commençant par « . »).
 const HIDDEN_NAMES = new Set(['desktop.ini', 'thumbs.db', 'appdata', 'system volume information']);
@@ -63,7 +64,6 @@ async function listDir(dirPath) {
 
 // --- Gestion des dossiers et fichiers depuis l'explorateur (PLAN.md §3.14) ---
 
-const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 const MAX_COUNT = 5000; // au-delà, le résumé avant suppression dit « plus de 5 000 »
 
 let getUsedFolders = () => []; // [{ path, name }] : dossiers des cases de la map
@@ -75,17 +75,7 @@ const isInside = (child, parent) => {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 };
 
-// Nom de fichier ou de dossier valide sous Windows.
-function checkName(name) {
-  if (typeof name !== 'string') return { error: t('fs.nameInvalid') };
-  const clean = name.trim();
-  if (!clean || clean === '.' || clean === '..') return { error: t('fs.nameEmpty') };
-  if (clean.length > 255) return { error: t('fs.nameTooLong') };
-  if (/[<>:"/\\|?*\x00-\x1f]/.test(clean)) return { error: t('fs.nameChars') };
-  if (/[. ]$/.test(clean)) return { error: t('fs.nameEnd') };
-  if (RESERVED.test(clean)) return { error: t('fs.nameReserved', { name: clean }) };
-  return { name: clean };
-}
+const checkName = (name) => checkFileName(name, t);
 
 async function exists(fullPath) {
   try {
