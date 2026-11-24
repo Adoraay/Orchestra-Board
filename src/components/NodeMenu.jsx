@@ -1,18 +1,21 @@
 import { useRef } from 'react';
-import { Copy, Crosshair, Link2, Pencil, Trash2, Type } from 'lucide-react';
+import { Copy, Crosshair, Link2, Pencil, Plug, Trash2, Type } from 'lucide-react';
 import useFloatingMenu from '../hooks/useFloatingMenu.js';
 import useT from '../hooks/useT.js';
 
 // Actions proposées selon le type d'élément : une case (clic droit sur sa barre de titre), un post-it, un texte.
 const ACTIONS = {
-  terminal: ['rename', 'duplicate', 'focus', 'link', 'delete'],
+  terminal: ['rename', 'duplicate', 'focus', 'link', 'mcp', 'delete'],
   note: ['rename', 'edit', 'duplicate', 'focus', 'link', 'delete'],
   text: ['edit', 'duplicate', 'focus', 'delete'],
+  panel: ['duplicate', 'focus', 'delete'],
+  visualTest: ['duplicate', 'focus', 'delete'],
+  interactiveBrowser: ['duplicate', 'focus', 'link', 'delete'],
 };
-const ICONS = { rename: Pencil, edit: Type, duplicate: Copy, focus: Crosshair, link: Link2, delete: Trash2 };
+const ICONS = { rename: Pencil, edit: Type, duplicate: Copy, focus: Crosshair, link: Link2, mcp: Plug, delete: Trash2 };
 
 // Menu du clic droit sur un élément de la map.
-export default function NodeMenu({ x, y, type, onAction, onClose }) {
+export default function NodeMenu({ x, y, type, mcp, onAction, onClose }) {
   const t = useT();
   const ref = useRef(null);
   const position = useFloatingMenu(ref, x, y, onClose);
@@ -20,7 +23,7 @@ export default function NodeMenu({ x, y, type, onAction, onClose }) {
 
   return (
     <div ref={ref} className="context-menu" role="menu" style={position} onContextMenu={(e) => e.preventDefault()}>
-      {ACTIONS[type].map((action) => {
+      {ACTIONS[type].filter((action) => action !== 'mcp' || mcp).map((action) => {
         const Icon = ICONS[action];
         return (
           <div key={action} className="menu-group">

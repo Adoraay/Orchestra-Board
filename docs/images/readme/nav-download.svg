@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="121" height="36" viewBox="0 0 121 36">
+  <rect x="1" y="1" width="119" height="34" rx="17" fill="#1f1e1d" stroke="#4a4844" stroke-width="1.5"/>
+  <g transform="translate(14 10) scale(0.6666666666666666)" fill="none" stroke="#d97757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></g>
+  <text x="38" y="23" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#ece9e2">Download</text>
+</svg>

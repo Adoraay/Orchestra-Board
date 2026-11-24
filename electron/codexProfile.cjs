@@ -1,6 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { createHash } = require('node:crypto');
 const { mcpServerPath } = require('./claudeHooks.cjs');
 const { hookBase, toolUrl } = require('./hookServer.cjs');
 
@@ -17,7 +18,7 @@ const EVENTS = ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'PermissionRe
 const MARKER = 'ORCHESTRA_HOOK_URL'; // reconnaît les hooks d'Orchestra dans hooks.json
 
 const codexHome = () => process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
-const profilePath = () => path.join(codexHome(), `${PROFILE}.config.toml`);
+const profilePath = (name) => path.join(codexHome(), `${name}.config.toml`);
 const hooksPath = () => path.join(codexHome(), 'hooks.json');
 
 // Codex lance la commande d'un hook sans shell, après l'avoir découpée comme un shell : cmd (ou sh) lit
@@ -49,13 +50,43 @@ function profileContent() {
   ].join('\n') + '\n';
 }
 
-function ensureProfile() {
-  const current = fs.existsSync(profilePath()) ? fs.readFileSync(profilePath(), 'utf8') : '';
+function ensureProfile(name = PROFILE, servers = {}) {
+  const file = profilePath(name);
+  const current = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   const kept = current.search(/^\[hooks/m); // approbations des hooks écrites par Codex
-  const next = profileContent() + (kept >= 0 ? `\n${current.slice(kept)}` : '');
+  const extra = Object.entries(servers).map(([id, server]) => {
+    const settings = server.type === 'http'
+      ? [`url = ${toml(server.url)}`]
+      : [`command = ${toml(server.command)}`, `args = ${toml(server.args)}`];
+    return `\n[mcp_servers.${toml(id)}]\n${settings.join('\n')}\n`;
+  }).join('');
+  const next = profileContent() + extra + (kept >= 0 ? `\n${current.slice(kept)}` : '');
   if (current === next) return;
   fs.mkdirSync(codexHome(), { recursive: true });
-  fs.writeFileSync(profilePath(), next);
+  fs.writeFileSync(file, next);
+}
+
+const cardProfile = (id) => `${PROFILE}-card-${createHash('sha256').update(id).digest('hex').slice(0, 24)}`;
+const CARD_PROFILE_FILE = new RegExp(`^${PROFILE}-card-[0-9a-f]{24}\\.config\\.toml$`);
+
+function profileFor(id, servers) {
+  if (!Object.keys(servers).length) return PROFILE;
+  const name = cardProfile(id);
+  ensureProfile(name, servers);
+  return name;
+}
+
+// Profils des cases qui n'existent plus : supprimés au démarrage. Ceux des cases restantes gardent
+// l'approbation des hooks enregistrée par Codex.
+function pruneCardProfiles(cardIds) {
+  const keep = new Set(cardIds.map((id) => `${cardProfile(id)}.config.toml`));
+  let files;
+  try { files = fs.readdirSync(codexHome()); } catch { return; }
+  for (const file of files) {
+    if (!CARD_PROFILE_FILE.test(file) || keep.has(file)) continue;
+    try { fs.rmSync(path.join(codexHome(), file), { force: true }); }
+    catch (error) { console.warn('Codex profile cleanup failed:', error.code); }
+  }
 }
 
 const isOurs = (handler) => typeof handler?.command === 'string' && handler.command.includes(MARKER);
@@ -109,4 +140,4 @@ function ensure() {
 // Variables d'environnement du terminal d'une case Codex.
 const env = (id) => ({ ORCHESTRA_HOOK_URL: hookBase(id), ORCHESTRA_URL: toolUrl(id) });
 
-module.exports = { PROFILE, ensure, env };
+module.exports = { PROFILE, ensure, env, profileFor, pruneCardProfiles };

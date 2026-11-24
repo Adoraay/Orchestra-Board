@@ -19,6 +19,7 @@ export const SHORTCUT_GROUPS = [
       { keys: [MOD_KEY, 'Shift', 'J'], label: 'shortcut.toggleLog' },
       { keys: [MOD_KEY, 'Shift', 'F'], label: 'shortcut.search' },
       { keys: [MOD_KEY, 'Shift', 'M'], label: 'shortcut.maximize' },
+      { keys: [MOD_KEY, 'Shift', 'O'], label: 'shortcut.conductor' },
     ],
   },
   {
@@ -29,6 +30,7 @@ export const SHORTCUT_GROUPS = [
       { keys: ['N'], label: 'tool.note' },
       { keys: ['T'], label: 'tool.text' },
       { keys: ['L'], label: 'tool.link' },
+      { keys: ['R'], label: 'tool.visualTest' },
       { keys: ['F'], label: 'shortcut.fitView' },
       { keys: ['Esc'], label: 'shortcut.escape' },
       { keys: ['Del'], label: 'shortcut.delete' },

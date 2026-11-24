@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('workspace', {
     return () => ipcRenderer.removeListener('workspace:saveError', listener);
   },
   set: (workspace) => ipcRenderer.invoke('workspace:set', workspace, workspaceGeneration),
+  setPreset: (workspace, mcp, backlog) => ipcRenderer.invoke('workspace:setPreset', workspace, workspaceGeneration, mcp, backlog),
   saveSync: (workspace) => ipcRenderer.sendSync('workspace:saveSync', workspace, workspaceGeneration),
 });
 
@@ -91,9 +92,9 @@ contextBridge.exposeInMainWorld('git', {
 
 contextBridge.exposeInMainWorld('teams', {
   list: () => ipcRenderer.invoke('teams:list'),
-  save: (name, board) => ipcRenderer.invoke('teams:save', name, board),
+  save: (name, board, boardId) => ipcRenderer.invoke('teams:save', name, board, boardId),
   remove: (id) => ipcRenderer.invoke('teams:remove', id),
-  create: (id, cwd, replacements) => ipcRenderer.invoke('teams:create', id, cwd, replacements),
+  create: (id, cwd, replacements, testUrl, cardAgents) => ipcRenderer.invoke('teams:create', id, cwd, replacements, testUrl, cardAgents),
 });
 
 contextBridge.exposeInMainWorld('blockers', {
@@ -144,6 +145,11 @@ contextBridge.exposeInMainWorld('relay', {
   },
 });
 
+contextBridge.exposeInMainWorld('mcpSettings', {
+  get: (boardId, cardId) => ipcRenderer.invoke('mcp:get', boardId, cardId),
+  save: (boardId, cardId, change) => ipcRenderer.invoke('mcp:save', boardId, cardId, change),
+});
+
 // Diagnostic des intégrations : commande trouvée, version, dernier hook de chaque case lancée.
 contextBridge.exposeInMainWorld('diagnostics', {
   agents: () => ipcRenderer.invoke('diag:agents'),
@@ -152,10 +158,62 @@ contextBridge.exposeInMainWorld('diagnostics', {
 
 // Post-it réécrit par un agent relié (lien Note).
 contextBridge.exposeInMainWorld('notes', {
+  getFile: (id) => ipcRenderer.invoke('note:file:get', id),
+  linkFile: (id) => ipcRenderer.invoke('note:file:link', id),
+  unlinkFile: (id) => ipcRenderer.invoke('note:file:unlink', id),
+  toggleFileTask: (id, line, revision) => ipcRenderer.invoke('note:file:toggle', id, line, revision),
+  onFileChange: (cb) => {
+    const listener = (_e, id, state) => cb(id, state);
+    ipcRenderer.on('note:file:change', listener);
+    return () => ipcRenderer.removeListener('note:file:change', listener);
+  },
   onWrite: (cb) => {
     const listener = (_e, id, text) => cb(id, text);
     ipcRenderer.on('note:write', listener);
     return () => ipcRenderer.removeListener('note:write', listener);
+  },
+});
+
+// Chef d'orchestre (PLAN.md §3.25) : changement de la map demandé par Node, et réponse une fois appliqué.
+contextBridge.exposeInMainWorld('conductor', {
+  onOp: (cb) => {
+    const listener = (_e, request) => cb(request);
+    ipcRenderer.on('conductor:op', listener);
+    return () => ipcRenderer.removeListener('conductor:op', listener);
+  },
+  done: (reqId, response) => ipcRenderer.send('conductor:done', reqId, response),
+});
+
+// Conversation avec le chef d'orchestre (bulle), une par tableau.
+contextBridge.exposeInMainWorld('conductorSession', {
+  get: (boardId) => ipcRenderer.invoke('conductorSession:get', boardId),
+  send: (boardId, message, folder) => ipcRenderer.invoke('conductorSession:send', boardId, message, folder),
+  reset: (boardId) => ipcRenderer.invoke('conductorSession:reset', boardId),
+  approve: (boardId) => ipcRenderer.invoke('conductorSession:approve', boardId),
+  cancel: (boardId) => ipcRenderer.invoke('conductorSession:cancel', boardId),
+  stop: (boardId) => ipcRenderer.send('conductorSession:stop', boardId),
+  onEvent: (cb) => {
+    const listener = (_e, boardId, event) => cb(boardId, event);
+    ipcRenderer.on('conductorSession:event', listener);
+    return () => ipcRenderer.removeListener('conductorSession:event', listener);
+  },
+});
+
+contextBridge.exposeInMainWorld('interactiveBrowser', {
+  register: (guestId, boardId, browserId, tabId) => ipcRenderer.invoke('browser:register', guestId, boardId, browserId, tabId),
+  cookies: (guestId, url) => ipcRenderer.invoke('browser:cookies', guestId, url),
+  removeCookies: (guestId, url) => ipcRenderer.invoke('browser:removeCookies', guestId, url),
+  savePreferenceCookie: (guestId, url, preference) => ipcRenderer.invoke('browser:savePreferenceCookie', guestId, url, preference),
+});
+
+contextBridge.exposeInMainWorld('visualTests', {
+  start: (id, data) => ipcRenderer.invoke('visualTest:start', id, data),
+  isRunning: (id) => ipcRenderer.invoke('visualTest:isRunning', id),
+  cancel: (id) => ipcRenderer.send('visualTest:cancel', id),
+  onFinished: (cb) => {
+    const listener = (_event, id, result) => cb(id, result);
+    ipcRenderer.on('visualTest:finished', listener);
+    return () => ipcRenderer.removeListener('visualTest:finished', listener);
   },
 });
 

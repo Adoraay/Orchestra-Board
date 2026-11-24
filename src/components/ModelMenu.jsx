@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 import useT from '../hooks/useT.js';
 
+const MIN_VISIBLE = 240; // px : hauteur gardée visible quand l'agent est en bas du dock
+
 // Menu du bouton à côté d'un agent du dock : modèle des prochaines cases de cet agent.
 // « Par défaut » = pas de --model, l'agent garde celui de sa configuration. Échap ou clic ailleurs le ferment.
 export default function ModelMenu({ agent, anchor, current, onChoose, onClose }) {
@@ -42,7 +44,8 @@ export default function ModelMenu({ agent, anchor, current, onChoose, onClose })
   );
 
   return (
-    <div ref={ref} className="context-menu model-menu" role="menu" style={{ left: rect.right + 8, top: rect.top - 4 }}>
+    // Longue liste (Antigravity : plus de 20 modèles) : le menu reste dans la fenêtre et défile.
+    <div ref={ref} className="context-menu model-menu" role="menu" style={{ left: rect.right + 8, top: Math.max(8, Math.min(rect.top - 4, window.innerHeight - MIN_VISIBLE)), maxHeight: window.innerHeight - Math.max(8, Math.min(rect.top - 4, window.innerHeight - MIN_VISIBLE)) - 8 }}>
       <div className="menu-title">{t('model.title', { agent: agent.name })}</div>
       {item(null, t('model.default'))}
       {models?.length > 0 && <div className="menu-separator" />}

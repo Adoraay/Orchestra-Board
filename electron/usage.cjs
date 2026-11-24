@@ -11,7 +11,6 @@ const { t } = require('./i18n.cjs');
 // - Claude Code range le résultat de /usage dans ~/.claude.json (cachedUsageUtilization) et le
 //   rafraîchit tant qu'une session tourne. Trop ancien : on lance un Claude invisible qui tape /usage.
 // - Codex écrit ses limites (rate_limits) dans chaque session, à chaque réponse.
-// - Gemini CLI n'en garde aucune trace.
 const FRESH_FOR = 2 * 60 * 1000; // ms : en dessous, pas besoin de relancer /usage
 const PROBE_TIMEOUT = 30 * 1000;
 const CODEX_FILES_TO_SCAN = 30;
@@ -89,7 +88,6 @@ function windowLabel(minutes) {
 const READERS = {
   'claude-code': () => ({ ...readClaude(), refreshable: true }),
   codex: () => ({ ...readCodex(), note: t('usage.codexNote') }),
-  gemini: () => ({ unavailable: t('usage.geminiUnavailable') }),
 };
 
 // Ce qu'affiche /usage, lu à l'écran si le cache n'est pas réécrit (codes de couleur et de curseur retirés).

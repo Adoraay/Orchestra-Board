@@ -6,12 +6,12 @@ import {
   Controls,
   MiniMap,
   ReactFlowProvider,
-  addEdge,
   useEdgesState,
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
 import { Minimize2 } from 'lucide-react';
+import { BROWSER_DRAG_TYPE, BROWSER_SIZE, browserDropPosition } from '../electron/browserModel.mjs';
 import AgentDock from './components/AgentDock.jsx';
 import AgentLogo from './components/AgentLogo.jsx';
 import AgentsBar from './components/AgentsBar.jsx';
@@ -26,6 +26,9 @@ import LogPanel from './components/LogPanel.jsx';
 import MiniMapNode from './components/MiniMapNode.jsx';
 import NodeMenu from './components/NodeMenu.jsx';
 import NoteNode from './components/NoteNode.jsx';
+import PanelNode from './components/PanelNode.jsx';
+import InteractiveBrowserNode from './components/InteractiveBrowserNode.jsx';
+import VisualTestNode from './components/VisualTestNode.jsx';
 import QuitDialog from './components/QuitDialog.jsx';
 import ResumeDialog from './components/ResumeDialog.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
@@ -39,6 +42,10 @@ import Toast from './components/Toast.jsx';
 import WorkspaceRecovery from './components/WorkspaceRecovery.jsx';
 import TeamTemplates from './components/TeamTemplates.jsx';
 import BlockersInbox from './components/BlockersInbox.jsx';
+import ConductorBar from './components/ConductorBar.jsx';
+import ConductorComposing from './components/ConductorComposing.jsx';
+import GhostEdge from './components/GhostEdge.jsx';
+import GhostNode from './components/GhostNode.jsx';
 import TopBar from './components/TopBar.jsx';
 import TileSearch from './components/TileSearch.jsx';
 import TaskSequencesDialog from './components/TaskSequencesDialog.jsx';
@@ -60,24 +67,19 @@ import usePenDrawing from './hooks/usePenDrawing.js';
 import useAgentNotifications from './hooks/useAgentNotifications.js';
 import useAppShortcuts from './hooks/useAppShortcuts.js';
 import useBoards from './hooks/useBoards.js';
+import useBoardOps, { NODE_SIZE, NOTE_SIZE, VISUAL_TEST_SIZE } from './hooks/useBoardOps.js';
+import useConductorSession from './hooks/useConductorSession.js';
+import { previewLayout } from './lib/autoPlace.js';
+import { PLAN_ORIGIN, useConductorOps, useConductorRouter } from './hooks/useConductorBridge.js';
 import useT from './hooks/useT.js';
-import { DEFAULT_LINK } from './lib/links.js';
+import { numberedName } from './lib/boardOps.js';
+import { PANELS, draggedPanel } from './lib/panels.js';
 
-const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode };
+const nodeTypes = { terminal: TerminalNode, note: NoteNode, text: TextNode, panel: PanelNode, visualTest: VisualTestNode, interactiveBrowser: InteractiveBrowserNode, ghost: GhostNode };
 const DUPLICATE_OFFSET = 40; // px : une copie apparaît en décalé de l'original
-const NOTE_SIZE = { width: 270, height: 180 }; // plus large que haut : les lignes écrites par un agent restent lisibles
-const edgeTypes = { floating: FloatingEdge };
-const BOARD_HINTS = ['pen', 'note', 'text', 'link']; // outils avec un bandeau d'aide (board.hint.<outil>)
-const NODE_SIZE = { width: 640, height: 400 };
+const edgeTypes = { floating: FloatingEdge, ghost: GhostEdge };
+const BOARD_HINTS = ['pen', 'note', 'text', 'link', 'visualTest']; // outils avec un bandeau d'aide (board.hint.<outil>)
 const GRID_VARIANTS = { dots: BackgroundVariant.Dots, lines: BackgroundVariant.Lines };
-
-// Nom par défaut d'une nouvelle case : « Claude Code 1 », « Claude Code 2 »… (plus petit numéro libre du tableau).
-function numberedName(agentName, nodes) {
-  const used = new Set(nodes.map((n) => n.data?.label));
-  let n = 1;
-  while (used.has(`${agentName} ${n}`)) n++;
-  return `${agentName} ${n}`;
-}
 
 // Les tableaux sauvegardés sont chargés avant l'affichage : chaque map part de son état sauvegardé
 // (et pas d'une étape que Ctrl+Z pourrait annuler).
@@ -103,7 +105,8 @@ export default function App() {
 function Workspace({ saved }) {
   const boards = useBoards(saved);
   const { activeId, content, updateContent } = boards;
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const conductor = useConductorRouter(boards);
+  const [settingsOpen, setSettingsOpen] = useState(null);
   const [teamsOpen, setTeamsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -116,7 +119,7 @@ function Workspace({ saved }) {
     window.blockers.get().then((entries) => { if (!disposed && !changed) setBlockers(entries); });
     return () => { disposed = true; off(); };
   }, []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const closeSettings = useCallback(() => setSettingsOpen(null), []);
   const onBoardChange = useCallback((state) => updateContent(activeId, state), [activeId, updateContent]);
   // Post-it d'un autre tableau réécrit par un agent (lien Note) ; le tableau ouvert s'en charge lui-même.
   useEffect(
@@ -129,6 +132,14 @@ function Workspace({ saved }) {
       }),
     [content, activeId, updateContent],
   );
+  useEffect(() => window.visualTests.onFinished((id, lastResult) => {
+    if (!lastResult) return;
+    for (const [boardId, state] of Object.entries(content)) {
+      if (boardId === activeId || !state.nodes.some((node) => node.id === id && node.type === 'visualTest')) continue;
+      const nodes = state.nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, lastResult } } : node);
+      updateContent(boardId, { ...state, nodes });
+    }
+  }), [content, activeId, updateContent]);
   const { boardsWithNews, running, focusRequest, focusAgent, clearFocus } = useAgentNotifications(boards);
   const { settings, agentById, updateSettings } = useSettings();
   // Panneaux épinglés (PLAN.md §7, 3.4) : rouverts au lancement ; Journal prioritaire sur Utilisation (même bord).
@@ -147,7 +158,11 @@ function Workspace({ saved }) {
     setUsageOpen(false);
     setLogOpen((o) => !o);
   }, []);
+  // Panneau posé sur la map : son tiroir n'a plus besoin de rester ouvert.
+  const closePanelDrawer = useCallback((panel) => (panel === 'usage' ? setUsageOpen(false) : setLogOpen(false)), []);
   const [explorerOpen, setExplorerOpen] = useState(true);
+  const [conductorOpen, setConductorOpen] = useState(false);
+  const toggleConductor = useCallback(() => setConductorOpen((o) => !o), []);
   const [renameRequest, setRenameRequest] = useState(null); // tableau créé au clavier : on propose de le nommer
   const [launchRequest, setLaunchRequest] = useState(null); // « Lancer un agent ici » dans l'explorateur
   const clearLaunch = useCallback(() => setLaunchRequest(null), []);
@@ -159,16 +174,16 @@ function Workspace({ saved }) {
     updateSettings('general', { tutorialDone: true });
   }, [updateSettings]);
   const startTutorial = useCallback(() => {
-    setSettingsOpen(false);
+    setSettingsOpen(null);
     setTutorial('tour');
   }, []);
   const startSetup = useCallback(() => {
-    setSettingsOpen(false);
+    setSettingsOpen(null);
     setTutorial('setup');
   }, []);
 
   useAppShortcuts({
-    toggleSettings: () => setSettingsOpen((o) => !o),
+    toggleSettings: () => setSettingsOpen((open) => open ? null : {}),
     cycleBoard: (step) => {
       const list = boards.boards;
       const index = list.findIndex((b) => b.id === activeId);
@@ -185,6 +200,7 @@ function Workspace({ saved }) {
     toggleUsage,
     toggleLog,
     toggleSearch: () => setSearchOpen((o) => !o),
+    toggleConductor,
   });
 
   // Démarrage : une seule question pour reprendre (ou non) les conversations de tous les agents restaurés.
@@ -245,7 +261,7 @@ function Workspace({ saved }) {
         boards={boards}
         boardsWithNews={boardsWithNews}
         renameRequest={renameRequest}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => setSettingsOpen({})}
         onOpenTeams={() => setTeamsOpen(true)}
         onOpenInbox={() => setInboxOpen(true)}
         onOpenSearch={() => setSearchOpen(true)}
@@ -257,6 +273,10 @@ function Workspace({ saved }) {
         {/* Un ReactFlowProvider par tableau : changer d'onglet repart d'un état React Flow neuf. */}
         <ReactFlowProvider key={activeId}>
           <Board
+            boardId={activeId}
+            conductor={conductor}
+            conductorOpen={conductorOpen}
+            onToggleConductor={toggleConductor}
             initial={content[activeId]}
             onChange={onBoardChange}
             focusRequest={focusRequest}
@@ -266,6 +286,10 @@ function Workspace({ saved }) {
             running={running}
             launchRequest={launchRequest}
             onLaunchDone={clearLaunch}
+            boardList={boards.boards}
+            focusAgent={focusAgent}
+            onPanelPlaced={closePanelDrawer}
+            onOpenMcp={(cardId) => setSettingsOpen({ cardId })}
           />
         </ReactFlowProvider>
         <ExplorerPanel
@@ -274,9 +298,19 @@ function Workspace({ saved }) {
           onLaunchAgent={(agentId, cwd) => setLaunchRequest({ agentId, cwd, at: Date.now() })}
         />
       </div>
-      {settingsOpen && <SettingsModal onClose={closeSettings} onStartTutorial={startTutorial} onStartSetup={startSetup} />}
+      {settingsOpen && (
+        <SettingsModal
+          onClose={closeSettings}
+          onStartTutorial={startTutorial}
+          onStartSetup={startSetup}
+          boardId={activeId}
+          boardName={boards.boards.find((board) => board.id === activeId)?.name}
+          nodes={content[activeId].nodes}
+          mcpCardId={settingsOpen.cardId}
+        />
+      )}
       {tasksOpen && <TaskSequencesDialog boards={boards.boards} content={content} onFocus={(id) => { setTasksOpen(false); focusAgent(id); }} onClose={() => setTasksOpen(false)} />}
-      {teamsOpen && <TeamTemplates board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
+      {teamsOpen && <TeamTemplates boardId={activeId} board={content[activeId]} getBoard={() => content[activeId]} boardName={boards.boards.find((b) => b.id === activeId)?.name || ''} onCreate={boards.addBoard} onClose={() => setTeamsOpen(false)} />}
       {searchOpen && (
         <TileSearch boards={boards.boards} content={content} activeId={activeId} onFocus={focusAgent} onClose={() => setSearchOpen(false)} />
       )}
@@ -302,13 +336,14 @@ function Workspace({ saved }) {
 }
 
 // Un tableau : dock des agents et map. Remonté à chaque changement d'onglet.
-function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone }) {
+function Board({ boardId, conductor, conductorOpen, onToggleConductor, initial, onChange, focusRequest, onFocusDone, overlays, resumeChoice, running, launchRequest, onLaunchDone, boardList, focusAgent, onPanelPlaced, onOpenMcp }) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges);
   const [viewport, setViewport] = useState(initial.viewport);
   const [formationRequest, setFormationRequest] = useState(null);
   const [formationPreview, setFormationPreview] = useState(null);
-  const { screenToFlowPosition, fitView, deleteElements } = useReactFlow();
+  const { screenToFlowPosition, fitView, getNodes, setViewport: moveCamera } = useReactFlow();
+  const ops = useBoardOps({ setNodes, setEdges });
   useEffect(() => {
     if (!formationRequest) return;
     const frame = requestAnimationFrame(() => fitView({ nodes: formationRequest.map((id) => ({ id })), duration: 200, padding: 0.25, maxZoom: 1 }));
@@ -349,8 +384,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const [maxSlot, setMaxSlot] = useState(null);
   const pendingMessages = usePendingMessages();
   const board = useMemo(
-    () => ({ tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot }),
-    [tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot],
+    () => ({ boardId, tool, linkSource, branchTarget, branchPicker, setBranchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, setMaximized, maxSlot, boardList, focusAgent, ops }),
+    [boardId, tool, linkSource, branchTarget, branchPicker, linkEvents, pendingMessages, resumeChoice, renameRequest, editRequest, maximized, maxSlot, boardList, focusAgent, ops],
   );
 
   // F2 : renommer la case terminal choisie, ou celle dont le terminal a le curseur. En capture, pour que
@@ -440,34 +475,16 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const onNodeClick = useCallback(
     (_event, node) => {
       setSelectedStroke(null);
-      if (tool !== 'link' || (node.type !== 'terminal' && node.type !== 'note')) return;
+      if (tool !== 'link' || !['terminal', 'note', 'visualTest', 'interactiveBrowser'].includes(node.type)) return;
       if (!linkSource || linkSource === node.id) {
         setLinkSource(linkSource ? null : node.id);
         return;
       }
-      const sourceNode = nodes.find((n) => n.id === linkSource);
-      // Un agent relié à un post-it : lien Note, toujours de l'agent vers le post-it. Pas de lien entre deux
-      // post-it, ni avec une case Terminal (elle n'a pas d'outils).
-      const isNote = (n) => n?.type === 'note';
-      if (isNote(sourceNode) || isNote(node)) {
-        const [agentNode, noteNode] = isNote(node) ? [sourceNode, node] : [node, sourceNode];
-        setLinkSource(null);
-        if (isNote(agentNode) || agentNode?.data.agentId === 'shell') return;
-        if (!noteNode.data.label) {
-          setNodes((nds) => nds.map((n) => (n.id === noteNode.id ? { ...n, data: { ...n.data, label: numberedName(t('note.defaultName'), nds) } } : n)));
-        }
-        setEdges((eds) => addEdge({ source: agentNode.id, target: noteNode.id, type: 'floating', data: { ...DEFAULT_LINK, mode: 'note' } }, eds));
-        return;
-      }
-      // Un agent relié à une case Terminal : lien Terminal, toujours de l'agent vers le terminal (PLAN.md §3.17).
-      const isShell = (n) => n?.data.agentId === 'shell';
-      const terminal = isShell(sourceNode) !== isShell(node);
-      const [source, target] = terminal && isShell(sourceNode) ? [node.id, linkSource] : [linkSource, node.id];
-      const mode = terminal ? 'terminal' : settings.general.linkMode;
-      setEdges((eds) => addEdge({ source, target, type: 'floating', data: { ...DEFAULT_LINK, mode } }, eds));
+      // Règles du lien (Note, Terminal ou type par défaut) dans useBoardOps, partagées avec le chef d'orchestre.
+      ops.addLink(linkSource, node.id);
       setLinkSource(null);
     },
-    [tool, linkSource, nodes, setNodes, setEdges, settings.general.linkMode, t],
+    [tool, linkSource, ops],
   );
 
   // Post-it de ce tableau réécrit par un agent (lien Note).
@@ -479,19 +496,16 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [setNodes],
   );
 
+  useEffect(() => window.visualTests.onFinished((id, lastResult) => {
+    if (!lastResult) return;
+    setNodes((nodes) => nodes.some((node) => node.id === id && node.type === 'visualTest')
+      ? nodes.map((node) => node.id === id ? { ...node, data: { ...node.data, lastResult } } : node)
+      : nodes);
+  }), [setNodes]);
+
   // Un seul lien choisi avec l'outil Sélection : son panneau de réglages s'ouvre (PLAN.md §3.5).
   const selectedEdges = edges.filter((e) => e.selected);
   const panelEdge = tool === 'select' && selectedEdges.length === 1 ? selectedEdges[0] : null;
-  const updateLink = useCallback(
-    (id, patch) =>
-      setEdges((eds) =>
-        eds.map((e) => {
-          if (e.id !== id) return e;
-          return { ...e, data: { ...DEFAULT_LINK, ...e.data, ...patch } };
-        }),
-      ),
-    [setEdges],
-  );
 
   const liveGroups = useMemo(() => cleanGroups(groups, nodes), [groups, nodes]);
   const selectedCount = nodes.filter((node) => node.selected).length;
@@ -502,6 +516,126 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     onChange({ nodes, edges, strokes, groups: liveGroups, viewport });
   }, [nodes, edges, strokes, liveGroups, viewport, onChange]);
 
+  // Changements demandés par le chef d'orchestre (après l'effet ci-dessus : sa sauvegarde lit ce contenu).
+  // Sur une map vide, ses cases partent du point (0, 0) de la map (jamais du centre de la vue, qui bouge avec la
+  // caméra : l'aperçu et la validation doivent tomber au même endroit), puis la caméra les montre.
+  const boardRef = useRef(null);
+  // Cadrage des cases du chef d'orchestre : dans la partie de la map visible sous sa bulle quand elle est ouverte.
+  const frameNodes = useCallback((ids) => {
+    const board = boardRef.current;
+    const bar = board?.querySelector('.conductor-bar');
+    if (!bar) return fitView({ nodes: ids.map((id) => ({ id })), duration: 500, padding: 0.25, maxZoom: 1 });
+    const chosen = new Set(ids);
+    const boxes = getNodes().filter((n) => chosen.has(n.id)).map((n) => ({
+      x: n.position.x, y: n.position.y, width: n.measured?.width ?? n.style?.width ?? 0, height: n.measured?.height ?? n.style?.height ?? 0,
+    }));
+    if (!boxes.length) return;
+    const left = Math.min(...boxes.map((b) => b.x));
+    const top = Math.min(...boxes.map((b) => b.y));
+    const width = Math.max(...boxes.map((b) => b.x + b.width)) - left;
+    const height = Math.max(...boxes.map((b) => b.y + b.height)) - top;
+    const area = board.getBoundingClientRect();
+    const margin = 60;
+    const y0 = bar.getBoundingClientRect().bottom - area.top + 24;
+    const w = area.width - 2 * margin;
+    const h = area.height - y0 - margin;
+    if (w <= 0 || h <= 0 || !width || !height) return;
+    const zoom = Math.max(0.1, Math.min(1, w / width, h / height));
+    moveCamera({ x: margin + (w - width * zoom) / 2 - left * zoom, y: y0 + (h - height * zoom) / 2 - top * zoom, zoom }, { duration: 500 });
+  }, [fitView, getNodes, moveCamera]);
+  // Session du chef d'orchestre de ce tableau : conversation, exécution en cours, aperçu (PLAN.md §3.25).
+  const conductorSession = useConductorSession(boardId);
+  const conductorRunning = conductorSession.running;
+  const runningRef = useRef(conductorRunning);
+  runningRef.current = conductorRunning;
+  // Pendant qu'il construit, ses nouvelles cases restent cachées derrière l'encart « Composition… » et apparaissent
+  // ensemble, déjà disposées, à la fin. Hors exécution (validation d'un aperçu, case de test), la caméra les suit.
+  const revealed = useRef([]);
+  const buildingRef = useRef([]);
+  const [building, setBuilding] = useState([]);
+  const [appearing, setAppearing] = useState([]);
+  const reveal = useCallback((ids, created) => {
+    const now = Date.now();
+    revealed.current = [...revealed.current.filter((entry) => now - entry.at < 60000), ...ids.filter(Boolean).map((id) => ({ id, at: now }))];
+    if (runningRef.current) {
+      if (created) setBuilding((buildingRef.current = [...buildingRef.current, created]));
+      return;
+    }
+    setTimeout(() => frameNodes(revealed.current.map(({ id }) => id)), 120);
+  }, [frameNodes]);
+  useEffect(() => {
+    if (conductorRunning || !buildingRef.current.length) return;
+    setAppearing(buildingRef.current);
+    buildingRef.current = [];
+    setBuilding([]);
+    setTimeout(() => frameNodes(revealed.current.map(({ id }) => id)), 120);
+    setTimeout(() => setAppearing([]), 700);
+  }, [conductorRunning, frameNodes]);
+  useConductorOps({ boardId, bridge: conductor, ops, nodes, edges, getNodes, setNodes, setEdges, reveal, history });
+
+  // Aperçu : ses propositions en fantômes, ajoutées à l'affichage seulement (jamais à l'état du tableau : ni
+  // sauvegardées, ni dans Ctrl+Z), montrées une fois le plan fini ; les cases à retirer en pointillés rouges.
+  // Un plan peut viser plusieurs tableaux (create_board) : chacun ne montre que ses propres fantômes.
+  const boardPending = useMemo(() => conductorSession.pending.filter((item) => !item.boardId || item.boardId === boardId), [conductorSession.pending, boardId]);
+  const preview = useMemo(
+    () => (boardPending.length && !conductorRunning ? previewLayout(nodes, edges, boardPending, { origin: PLAN_ORIGIN, agentSize: NODE_SIZE, noteSize: NOTE_SIZE, cardSizes: { browser: BROWSER_SIZE, visual: VISUAL_TEST_SIZE } }) : null),
+    [boardPending, conductorRunning, nodes, edges],
+  );
+  const shownNodes = useMemo(() => {
+    if (!preview && !building.length && !appearing.length) return nodes;
+    const hidden = new Set(building);
+    const fresh = new Set(appearing);
+    const shown = nodes.map((n) => {
+      const className = hidden.has(n.id) ? 'conductor-hidden' : fresh.has(n.id) ? 'conductor-appear' : preview?.removing.has(n.id) ? 'pending-removal' : null;
+      return className ? { ...n, className } : n;
+    });
+    if (!preview) return shown;
+    const ghosts = preview.ghosts.map((g) => ({
+      id: g.id, type: 'ghost', position: g.position, style: { width: g.size.width, height: g.size.height },
+      draggable: false, selectable: false, connectable: false, focusable: false, data: { kind: g.kind, ...g.data },
+    }));
+    return [...shown, ...ghosts];
+  }, [nodes, preview, building, appearing]);
+  const shownEdges = useMemo(() => {
+    const hidden = new Set(building);
+    const shown = hidden.size
+      ? edges.map((e) => (hidden.has(e.source) || hidden.has(e.target) ? { ...e, className: `${e.className ?? ''} conductor-hidden` } : e))
+      : edges;
+    if (!preview) return shown;
+    return [...shown, ...preview.links.map((l) => ({ id: `ghost-${l.id}`, source: l.source, target: l.target, type: 'ghost', selectable: false, focusable: false, data: { mode: l.mode } }))];
+  }, [edges, preview, building]);
+  // Un nouveau plan proposé : la caméra le montre, dans la partie de la map visible sous la bulle.
+  const ghostKey = preview?.ghosts.map((g) => g.id).join(',') ?? '';
+  useEffect(() => {
+    if (!ghostKey) return;
+    const timer = setTimeout(() => frameNodes(ghostKey.split(',')), 150);
+    return () => clearTimeout(timer);
+  }, [ghostKey, frameNodes]);
+  const composing = conductorRunning && (conductorSession.pending.length > 0 || building.length > 0);
+  const lastAction = composing ? conductorSession.history.filter((e) => e.kind === 'tool').at(-1) : null;
+  const tileName = useCallback(
+    (ref) => {
+      const node = ref && nodes.find((n) => n.id === ref);
+      if (!node) return ref ?? '';
+      return node.data.label || (node.type === 'note' ? t('note.defaultName') : agentById(node.data.agentId).name);
+    },
+    [nodes, agentById, t],
+  );
+
+  const terminalsOf = (list) => list
+    .filter((n) => n.type === 'terminal')
+    .map((n) => ({ id: n.id, name: n.data.label || agentById(n.data.agentId).name, agent: agentById(n.data.agentId), status: running[n.id]?.status }));
+
+  // Ctrl+Z sur une validation du chef d'orchestre : ses agents sont retirés ; confirmation si l'un travaille.
+  const [undoRequest, setUndoRequest] = useState(null);
+  const undo = () => {
+    const ids = new Set(history.undoTerminals());
+    const terminals = terminalsOf(nodes.filter((n) => ids.has(n.id)));
+    if (!terminals.some((term) => ['working', 'waiting'].includes(term.status))) return history.undo();
+    setUndoRequest({ terminals, nodeIds: [], edgeIds: [] });
+  };
+  const cancelUndo = useCallback(() => setUndoRequest(null), []);
+
   // Suppr : tout ce qui est choisi (cases terminal comprises), après confirmation.
   // only : un seul élément, depuis son menu du clic droit (la sélection n'est alors pas touchée).
   const [deleteRequest, setDeleteRequest] = useState(null);
@@ -509,25 +643,24 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     const chosen = only ? [only] : nodes.filter((n) => n.selected);
     const chosenEdges = only ? [] : selectedEdges;
     const stroke = only ? null : selectedStroke;
-    const terminals = chosen
-      .filter((n) => n.type === 'terminal')
-      .map((n) => ({ id: n.id, name: n.data.label || agentById(n.data.agentId).name, agent: agentById(n.data.agentId), status: running[n.id]?.status }));
+    const terminals = terminalsOf(chosen);
     const selection = {
       terminals,
       links: chosenEdges.length,
       notes: chosen.filter((n) => n.type === 'note').length,
       texts: chosen.filter((n) => n.type === 'text').length,
+      panels: chosen.filter((n) => n.type === 'panel').length,
+      visualTests: chosen.filter((n) => n.type === 'visualTest').length,
+      browsers: chosen.filter((n) => n.type === 'interactiveBrowser').length,
       strokes: stroke ? 1 : 0,
       nodeIds: chosen.map((n) => n.id),
       edgeIds: chosenEdges.map((e) => e.id),
       stroke,
     };
-    if (terminals.length || selection.links || selection.notes || selection.texts || selection.strokes) setDeleteRequest(selection);
+    if (selection.nodeIds.length || selection.links || selection.strokes) setDeleteRequest(selection);
   };
   const confirmDelete = () => {
-    for (const t of deleteRequest.terminals) window.pty.kill(t.id);
-    // deleteElements retire aussi les liens attachés aux cases supprimées.
-    deleteElements({ nodes: deleteRequest.nodeIds.map((id) => ({ id })), edges: deleteRequest.edgeIds.map((id) => ({ id })) });
+    ops.removeElements({ nodeIds: deleteRequest.nodeIds, edgeIds: deleteRequest.edgeIds });
     if (deleteRequest.stroke) {
       setStrokes((all) => all.filter((s) => s.id !== deleteRequest.stroke));
       setSelectedStroke(null);
@@ -539,7 +672,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   useBoardShortcuts({
     onTool: setTool,
     onFitView: () => fitView({ duration: 400, padding: 0.15, maxZoom: 1 }),
-    onUndo: history.undo,
+    onUndo: undo,
     onRedo: history.redo,
     onEscape: () => {
       if (linkSource) return setLinkSource(null); // premier Échap : annule la source
@@ -557,15 +690,15 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       if (tool !== 'select') return;
       if (node.type === 'terminal' && !event.target.closest('.terminal-header')) return;
       event.preventDefault();
-      setNodeMenu({ x: event.clientX, y: event.clientY, id: node.id, type: node.type });
+      setNodeMenu({ x: event.clientX, y: event.clientY, id: node.id, type: node.type, mcp: node.type === 'terminal' && Boolean(agentById(node.data.agentId).hooks) });
     },
-    [tool],
+    [tool, agentById],
   );
 
   // Copie décalée : une case copiée lance un nouvel agent (même agent, dossier, branche, rôle et modèle).
   const duplicate = (node) =>
     setNodes((nds) => {
-      const { label, restored, autoEdit, ...data } = node.data;
+      const { label, restored, autoEdit, lastResult, ...data } = node.data;
       if (node.type === 'terminal') data.label = numberedName(agentById(node.data.agentId).name, nds);
       if (node.type === 'note') data.label = numberedName(t('note.defaultName'), nds);
       return nds
@@ -601,51 +734,47 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       case 'link':
         pendingLinkSource.current = node.id;
         return setTool('link');
+      case 'mcp':
+        return onOpenMcp(node.id);
       case 'delete':
         return requestDelete(node);
     }
   };
 
-  // Outils Post-it et Texte : un clic sur la map pose l'élément, puis on repasse en Sélection.
+  // Outils de placement : un clic sur la map pose l'élément, puis on repasse en Sélection.
   const onPaneClick = useCallback(
     (event) => {
       setSelectedStroke(null);
       setLinkSource(null);
-      if (tool !== 'note' && tool !== 'text') return;
+      if (!['note', 'text', 'visualTest'].includes(tool)) return;
 
-      const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      const note = tool === 'note';
-      setNodes((nds) =>
-        nds
-          .map((n) => (n.selected ? { ...n, selected: false } : n))
-          .concat({
-            id: crypto.randomUUID(),
-            type: tool,
-            position: note ? { x: p.x - NOTE_SIZE.width / 2, y: p.y - NOTE_SIZE.height / 2 } : { x: p.x, y: p.y - 14 },
-            style: note ? { ...NOTE_SIZE } : undefined,
-            selected: true,
-            data: { text: '', autoEdit: true, ...(note && { label: numberedName(t('note.defaultName'), nds) }) },
-          }),
-      );
+      ops.addAnnotation({ type: tool, point: screenToFlowPosition({ x: event.clientX, y: event.clientY }) });
       setTool('select');
     },
-    [tool, screenToFlowPosition, setNodes, t],
+    [tool, screenToFlowPosition, ops],
   );
 
   // getData n'est pas lisible pendant dragover : on garde l'agent glissé ici.
   const [draggedAgentId, setDraggedAgentId] = useState(null);
   const [draggingBranch, setDraggingBranch] = useState(false);
+  const [previewPanel, setPreviewPanel] = useState(null); // languette glissée au-dessus de la map
   const [previewPos, setPreviewPos] = useState(null); // souris, relative à la map
 
   const endDrag = useCallback(() => {
     setDraggedAgentId(null);
     setDraggingBranch(false);
+    setPreviewPanel(null);
     setBranchTarget(null);
     setPreviewPos(null);
   }, []);
 
   const onDragOver = useCallback(
     (event) => {
+      if (event.dataTransfer.types.includes(BROWSER_DRAG_TYPE)) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        return;
+      }
       // « Branche » se lâche seulement sur une case terminal : elle s'allume au survol.
       if (draggingBranch) {
         event.preventDefault();
@@ -654,9 +783,13 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         setBranchTarget(target);
         return;
       }
-      if (!draggedAgentId) return;
+      // Languette glissée : pas de dépôt sur les languettes elles-mêmes (un clic un peu appuyé ne pose rien).
+      const panel = draggedPanel(event.dataTransfer);
+      const overTabs = panel && event.target.closest?.('.usage-wrap');
+      if (!draggedAgentId && !panel) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
+      event.dataTransfer.dropEffect = overTabs ? 'none' : panel ? 'copy' : 'move';
+      setPreviewPanel(overTabs ? null : panel);
       const rect = event.currentTarget.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
@@ -668,6 +801,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const onDragLeave = useCallback((event) => {
     if (event.currentTarget.contains(event.relatedTarget)) return;
     setPreviewPos(null);
+    setPreviewPanel(null);
     setBranchTarget(null);
   }, []);
 
@@ -684,29 +818,53 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
     [nodes],
   );
 
-  // Nouvelle case terminal centrée sur « center » (coordonnées de la map).
-  const addTerminal = useCallback(
-    (agentId, cwd, center) =>
+  const { addTerminal } = ops;
+
+  // Languette lâchée sur la map : case Utilisation ou Journal centrée sous la souris, déjà choisie.
+  const addPanel = useCallback(
+    (panel, center) => {
+      const { size } = PANELS[panel];
       setNodes((nds) =>
-        nds.concat({
-          id: crypto.randomUUID(),
-          type: 'terminal',
-          position: { x: center.x - NODE_SIZE.width / 2, y: center.y - NODE_SIZE.height / 2 },
-          dragHandle: '.drag-handle',
-          style: { ...NODE_SIZE },
-          data: { agentId, cwd, label: numberedName(agentById(agentId).name, nds), ...(settings.models[agentId] && { model: settings.models[agentId] }) },
-        }),
-      ),
-    [setNodes, agentById, settings.models],
+        nds
+          .map((n) => (n.selected ? { ...n, selected: false } : n))
+          .concat({
+            id: crypto.randomUUID(),
+            type: 'panel',
+            position: { x: center.x - size.width / 2, y: center.y - size.height / 2 },
+            style: { ...size },
+            selected: true,
+            data: { panel },
+          }),
+      );
+      onPanelPlaced(panel);
+    },
+    [setNodes, onPanelPlaced],
   );
 
   // « Lancer un agent ici » (clic droit dans l'explorateur) : nouvelle case au centre de la vue.
-  const boardRef = useRef(null);
   useGridGlow(boardRef, glow && Boolean(GRID_VARIANTS[grid]), settings.appearance.glowSize);
+  const addBrowser = useCallback((center) => {
+    ops.addBrowser({ point: center });
+    setTool('select');
+  }, [ops]);
+
+  const openBrowser = useCallback(() => {
+    const browsers = nodesRef.current.filter((node) => node.type === 'interactiveBrowser');
+    const browser = browsers.find((node) => node.selected) ?? browsers[0];
+    if (browser) {
+      setTool('select');
+      setNodes((all) => all.map((node) => Boolean(node.selected) === (node.id === browser.id) ? node : { ...node, selected: node.id === browser.id }));
+      const duration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 400;
+      fitView({ nodes: [{ id: browser.id }], duration, padding: 0.16, maxZoom: 1 });
+    } else if (boardRef.current) {
+      const { left, top, width, height } = boardRef.current.getBoundingClientRect();
+      addBrowser(screenToFlowPosition({ x: left + width / 2, y: top + height / 2 }));
+    }
+  }, [addBrowser, fitView, screenToFlowPosition, setNodes]);
   useEffect(() => {
     if (!launchRequest || !boardRef.current) return;
     const rect = boardRef.current.getBoundingClientRect();
-    addTerminal(launchRequest.agentId, launchRequest.cwd, screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }));
+    addTerminal({ agentId: launchRequest.agentId, cwd: launchRequest.cwd, center: screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }) });
     onLaunchDone();
   }, [launchRequest, addTerminal, screenToFlowPosition, onLaunchDone]);
 
@@ -714,10 +872,22 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
   const onDrop = useCallback(
     (event) => {
       event.preventDefault();
+      const browserCenter = browserDropPosition(event, screenToFlowPosition);
+      if (browserCenter) {
+        endDrag();
+        addBrowser(browserCenter);
+        return;
+      }
       if (draggingBranch) {
         const nodeId = branchTarget;
         endDrag();
         if (nodeId) openBranchPicker(nodeId);
+        return;
+      }
+      const panel = draggedPanel(event.dataTransfer);
+      if (panel) {
+        endDrag();
+        addPanel(panel, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
         return;
       }
       const agentId = draggedAgentId;
@@ -728,9 +898,9 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       const cwd = activeFolder ?? homeDir;
       if (!activeFolder) setToast({ id: Date.now(), text: t('board.noFolder') });
 
-      addTerminal(agentId, cwd, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+      addTerminal({ agentId, cwd, center: screenToFlowPosition({ x: event.clientX, y: event.clientY }) });
     },
-    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, activeFolder, homeDir, agentById, t],
+    [draggedAgentId, draggingBranch, branchTarget, openBranchPicker, endDrag, screenToFlowPosition, addTerminal, addPanel, addBrowser, activeFolder, homeDir, agentById, t],
   );
 
   const maximizedNode = maximized && nodes.find((n) => n.id === maximized && n.type === 'terminal');
@@ -744,6 +914,7 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
         onDragStart={setDraggedAgentId}
         onBranchDragStart={() => setDraggingBranch(true)}
         onDragEnd={endDrag}
+        onBrowserOpen={openBrowser}
       />
       <main
         ref={boardRef}
@@ -756,8 +927,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
       >
         <BoardContext.Provider value={board}>
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={shownNodes}
+            edges={shownEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
@@ -769,10 +940,11 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             onEdgeContextMenu={(event, edge) => {
               // Outil Lien : clic droit sur un lien = le supprimer (comme les traits du stylo).
               event.preventDefault();
-              if (tool === 'link') setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+              if (tool === 'link') ops.removeLink(edge.id);
             }}
             onMoveEnd={(_event, v) => setViewport(v)}
             defaultViewport={initial.viewport ?? undefined}
+            fitView={initial.fitAtStart === true}
             nodesDraggable={tool === 'select'}
             nodesConnectable={false}
             elementsSelectable={tool === 'select'}
@@ -818,6 +990,8 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
           </ReactFlow>
         </BoardContext.Provider>
         <BoardToolbar tool={tool} onChange={setTool} />
+        <ConductorBar boardId={boardId} session={conductorSession} open={conductorOpen} onToggle={onToggleConductor} nameOf={tileName} />
+        {composing && <ConductorComposing boardRef={boardRef} action={lastAction} nameOf={tileName} />}
         {tool === 'select' && selectedCount >= 2 && <LayoutToolbar
           count={selectedCount}
           groupCount={liveGroups.length}
@@ -839,20 +1013,25 @@ function Board({ initial, onChange, focusRequest, onFocusDone, overlays, resumeC
             edge={panelEdge}
             nodes={nodes}
             event={linkEvents[panelEdge.id]}
-            onChange={(patch) => updateLink(panelEdge.id, patch)}
-            onDelete={() => setEdges((eds) => eds.filter((e) => e.id !== panelEdge.id))}
-            onSwap={() =>
-              setEdges((eds) => eds.map((e) => (e.id === panelEdge.id ? { ...e, source: e.target, target: e.source } : e)))
-            }
+            onChange={(patch) => ops.updateLink(panelEdge.id, patch)}
+            onDelete={() => ops.removeLink(panelEdge.id)}
+            onSwap={() => ops.swapLink(panelEdge.id)}
             onClose={() => setEdges((eds) => eds.map((e) => (e.selected ? { ...e, selected: false } : e)))}
           />
         )}
         {previewPos && draggedAgentId && (
-          <DropPreview agent={agentById(draggedAgentId)} position={previewPos} size={NODE_SIZE} />
+          <DropPreview name={agentById(draggedAgentId).name} position={previewPos} size={NODE_SIZE}>
+            <AgentLogo agent={agentById(draggedAgentId)} size={32} />
+          </DropPreview>
         )}
+        {previewPos && previewPanel && (() => {
+          const { icon: Icon, title, size } = PANELS[previewPanel];
+          return <DropPreview name={t(title)} position={previewPos} size={size}><Icon size={32} /></DropPreview>;
+        })()}
         {toast && <Toast key={toast.id} text={toast.text} onDone={() => setToast(null)} />}
-        {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} onAction={onNodeAction} onClose={closeNodeMenu} />}
+        {nodeMenu && <NodeMenu x={nodeMenu.x} y={nodeMenu.y} type={nodeMenu.type} mcp={nodeMenu.mcp} onAction={onNodeAction} onClose={closeNodeMenu} />}
         {deleteRequest && <DeleteDialog selection={deleteRequest} onCancel={cancelDelete} onConfirm={confirmDelete} />}
+        {undoRequest && <DeleteDialog selection={undoRequest} onCancel={cancelUndo} onConfirm={() => { setUndoRequest(null); history.undo(); }} />}
         {maximizedNode && (
           <section className="terminal-max" aria-label={maximizedName}>
             <header className="terminal-max-header">

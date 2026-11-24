@@ -102,6 +102,30 @@ test('restoration ignores beforeunload saves from the old renderer', (t) => {
   assert.equal(handlers.get('workspace:get')().boards[0].name, 'Fresh');
 });
 
+test('preset backlog creation uses the sanitized new note and its board project directory', (t) => {
+  const dir = fixture(t);
+  const handlers = new Map();
+  const store = load('workspaceStore.cjs', { electron: { app: { getPath: () => dir }, ipcMain: { handle: (key, fn) => handlers.set(key, fn), on() {} } }, './i18n.cjs': i18n, './settingsStore.cjs': { MODEL: /^[\w.-]+$/ } });
+  const applied = [];
+  store.register(() => {}, undefined, (_id, _cards, _preset, backlog, persist) => {
+    applied.push(backlog);
+    persist();
+  });
+  const { workspace: current, generation } = handlers.get('workspace:startup')();
+  const newBoard = { ...board().boards[0], id: 'next', nodes: [
+    { id: 'work', type: 'terminal', position: { x: 0, y: 0 }, data: { agentId: 'codex', cwd: dir } },
+    { id: 'plan', type: 'note', position: { x: 0, y: 50 }, data: { text: '- [ ] Default' } },
+  ] };
+  const workspace = { activeBoardId: newBoard.id, boards: [...current.boards, newBoard] };
+  const setPreset = (backlog) => handlers.get('workspace:setPreset')(null, workspace, generation, null, backlog);
+  assert.match(setPreset({ noteId: 'work', cwd: dir }).error, /team.backlogFailed/);
+  assert.match(setPreset({ noteId: 'plan', cwd: path.dirname(dir) }).error, /team.backlogFailed/);
+  assert.equal(applied.length, 0);
+  assert.deepEqual(setPreset({ noteId: 'plan', cwd: dir, text: 'ignored' }), { ok: true });
+  assert.deepEqual(applied, [{ noteId: 'plan', cwd: dir, text: '- [ ] Default' }]);
+  assert.equal(store.get().activeBoardId, newBoard.id);
+});
+
 test('undo keeps Note links and excludes terminals closed since the snapshot', async () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'lib', 'boardHistory.js'), 'utf8');
   const { restoreBoardHistory } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));

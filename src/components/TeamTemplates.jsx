@@ -8,7 +8,7 @@ import useT from '../hooks/useT.js';
 
 const terminals = (board) => board?.nodes.filter((node) => node.type === 'terminal') ?? [];
 
-export default function TeamTemplates({ board, getBoard, boardName, onCreate, onClose }) {
+export default function TeamTemplates({ boardId, board, getBoard, boardName, onCreate, onClose }) {
   const t = useT();
   const { agents, settings } = useSettings();
   const { activeFolder, rootPath } = useWorkspace();
@@ -17,6 +17,8 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
   const [tab, setTab] = useState('use');
   const [name, setName] = useState(boardName);
   const [folder, setFolder] = useState(activeFolder || rootPath || '');
+  const [testUrl, setTestUrl] = useState('');
+  const [bindBacklog, setBindBacklog] = useState(true);
   const [installed, setInstalled] = useState({});
   const [replacements, setReplacements] = useState({});
   const [error, setError] = useState('');
@@ -43,20 +45,25 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
   }, [onClose]);
 
   const template = templates.find((item) => item.id === selected);
-  const sourceIds = [...new Set(terminals(template?.board).map((node) => node.data.agentId))];
-  const compatible = (sourceId, agent) => {
-    if (sourceId === 'shell') return agent.id === 'shell';
-    const ids = new Set(template.board.nodes.filter((node) => node.type === 'terminal' && node.data.agentId === sourceId).map((node) => node.id));
-    const needsHooks = template.board.nodes.some((node) => ids.has(node.id) && node.data.role) || template.board.edges.some((edge) => ids.has(edge.source) || (ids.has(edge.target) && (edge.data.mode === 'delegate' || edge.data.bidirectional)));
+  const visualTests = template?.board.nodes.filter((node) => node.type === 'visualTest') ?? [];
+  const sourceCards = terminals(template?.board).filter((node) => node.data.agentId !== 'shell');
+  const compatible = (node, agent) => {
+    const needsHooks = node.data.role || template.mcp?.cards[node.id]?.length || template.board.edges.some((edge) => {
+      if (edge.data.mode === 'relay' && edge.data.terminalFallback) return false;
+      return edge.source === node.id || (edge.target === node.id && (edge.data.mode === 'delegate' || edge.data.bidirectional));
+    });
     return !needsHooks || Boolean(agent.hooks);
   };
-  const choice = (id) => {
-    if (Object.hasOwn(replacements, id)) return replacements[id];
+  const choice = (node) => {
+    if (Object.hasOwn(replacements, node.id)) return replacements[node.id];
+    const id = node.data.agentId;
     const agent = agents.find((entry) => entry.id === id);
-    return agent && installed[id] && compatible(id, agent) ? id : '';
+    return agent && installed[id] && compatible(node, agent) ? id : '';
   };
-  const summary = (item) => t('team.summary', { agents: terminals(item.board).length, links: item.board.edges.length });
+  const summary = (item) => t('team.summary', { agents: terminals(item.board).filter((node) => node.data.agentId !== 'shell').length, links: item.board.edges.length });
   const roles = terminals(template?.board).filter((node) => node.data.role);
+  const missingAgent = sourceCards.some((node) => !choice(node));
+  const needsAntigravity = sourceCards.some((node) => node.data.agentId === 'antigravity' && !choice(node)) && !agents.some((agent) => agent.id === 'antigravity');
 
   const perform = async (action) => {
     setBusy(true); setError('');
@@ -64,15 +71,17 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
     finally { setBusy(false); }
   };
   const create = () => perform(async () => {
-    const result = await window.teams.create(selected, folder, Object.fromEntries(sourceIds.map((id) => [id, choice(id)])));
+    const cardAgents = Object.fromEntries(sourceCards.map((node) => [node.id, choice(node)]));
+    const result = await window.teams.create(selected, folder, {}, visualTests.length ? testUrl.trim() : '', cardAgents);
     if (result.error) { setError(result.error); return; }
-    if (!await onCreate(result.value.name, result.value.board)) { setError(t('team.boardLimit')); return; }
+    const created = await onCreate(result.value.name, result.value.board, result.value.mcp, bindBacklog ? result.value.backlog : undefined);
+    if (!created || created.error) { setError(created?.error || t('team.boardLimit')); return; }
     onClose();
   });
   const save = () => perform(async () => {
-    const result = await window.teams.save(name, getBoard());
+    const result = await window.teams.save(name, getBoard(), boardId);
     if (result.error) { setError(result.error); return; }
-    await refresh(); setSelected(result.value.id); setReplacements({}); setConfirmDelete(false); setTab('use');
+    await refresh(); setSelected(result.value.id); setTestUrl(''); setBindBacklog(true); setReplacements({}); setConfirmDelete(false); setTab('use');
   });
   const remove = () => perform(async () => {
     const result = await window.teams.remove(selected);
@@ -99,7 +108,7 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
         </div>
       </div> : <div className="team-layout">
         <aside className="team-list thin-scrollbar" aria-label={t('team.title')}>
-          {templates.map((item) => <button key={item.id} className={`team-item ${item.id === selected ? 'active' : ''}`} onClick={() => { setSelected(item.id); setReplacements({}); setConfirmDelete(false); setError(''); }}>
+          {templates.map((item) => <button key={item.id} className={`team-item ${item.id === selected ? 'active' : ''}`} onClick={() => { setSelected(item.id); setTestUrl(''); setBindBacklog(true); setReplacements({}); setConfirmDelete(false); setError(''); }}>
             <strong>{item.name}</strong>
             <span className="hint">{t(item.builtin ? 'team.recipe' : 'team.personal')} · {summary(item)}</span>
           </button>)}
@@ -114,26 +123,44 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
             <summary>{t('team.roles', { n: roles.length })}</summary>
             {roles.map((node) => <div key={node.id}><strong>{node.data.label || node.data.agentId}</strong><p>{node.data.role}</p></div>)}
           </details>}
+          {template.mcp && <details className="team-roles" open>
+            <summary>{t('mcp.servers')}</summary>
+            {template.mcp.board.length > 0 && <div><strong>{t('team.boardDefaults')}</strong><p>{template.mcp.board.join(', ')}</p></div>}
+            {terminals(template.board).filter((node) => Object.hasOwn(template.mcp.cards, node.id)).map((node) => (
+              <div key={node.id}><strong>{node.data.label || node.data.agentId}</strong><p>{template.mcp.cards[node.id].join(', ') || t('team.noExtraMcp')}</p></div>
+            ))}
+          </details>}
 
           <h3 className="team-section">{t('team.setup')}</h3>
           <label className="field"><span>{t('team.folder')}</span><div className="field-row">
             <input type="text" value={folder} placeholder={t('team.folderPlaceholder')} onChange={(e) => setFolder(e.target.value)} />
             <button className="text-button" title={t('team.pickFolder')} onClick={async () => { const picked = await window.fs.pickFolder(folder); if (picked) setFolder(picked); }}><FolderOpen size={15} />{t('team.browse')}</button>
           </div></label>
-          {sourceIds.length > 0 && <div className="field"><span>{t('team.agents')}</span>
-            <div className="team-agents">{sourceIds.map((id) => {
-              const source = agents.find((agent) => agent.id === id);
-              const count = terminals(template.board).filter((node) => node.data.agentId === id).length;
-              return <label className="team-agent-row" key={id}>
-                <span className="team-agent-source"><AgentLogo agent={source} size={18} />{source?.name || id}{count > 1 && <span className="hint">×{count}</span>}</span>
+          {template.backlog && <div className="field">
+            <label className="checkbox">
+              <input type="checkbox" checked={bindBacklog} onChange={(e) => setBindBacklog(e.target.checked)} />
+              {t('team.bindBacklog')}
+            </label>
+            {bindBacklog && <span className="hint">{t('team.bindBacklogHint')}</span>}
+          </div>}
+          {visualTests.length > 0 && <label className="field">
+            <span>{t('team.testUrl')}</span>
+            <input type="text" inputMode="url" value={testUrl} placeholder="http://localhost:3000" onChange={(e) => setTestUrl(e.target.value)} />
+            {visualTests.some((node) => node.data.url) && <span className="hint">{t('team.testUrlHint')}</span>}
+          </label>}
+          {sourceCards.length > 0 && <div className="field"><span>{t('team.agents')}</span>
+            <div className="team-agents">{sourceCards.map((node) => {
+              const source = agents.find((agent) => agent.id === node.data.agentId);
+              return <label className="team-agent-row" key={node.id}>
+                <span className="team-agent-source"><AgentLogo agent={source} size={18} />{node.data.label || source?.name || node.data.agentId}</span>
                 <ArrowRight size={14} className="muted" />
-                <select className={choice(id) ? '' : 'missing'} value={choice(id)} onChange={(e) => setReplacements((current) => ({ ...current, [id]: e.target.value }))}>
+                <select className={choice(node) ? '' : 'missing'} value={choice(node)} onChange={(e) => setReplacements((current) => ({ ...current, [node.id]: e.target.value }))}>
                   <option value="">{t('team.chooseAgent')}</option>
-                  {agents.filter((agent) => compatible(id, agent)).map((agent) => <option key={agent.id} value={agent.id} disabled={!installed[agent.id]}>{agent.name}{!installed[agent.id] ? ` — ${t('team.notInstalled')}` : ''}</option>)}
+                  {agents.filter((agent) => compatible(node, agent)).map((agent) => <option key={agent.id} value={agent.id} disabled={!installed[agent.id]}>{agent.name}{!installed[agent.id] ? ` — ${t('team.notInstalled')}` : ''}</option>)}
                 </select>
               </label>;
             })}</div>
-            {sourceIds.some((id) => !choice(id)) && <p className="link-warning">{t('team.replaceHint')}</p>}
+            {missingAgent && <p className="link-warning">{t(needsAntigravity ? 'team.enableAntigravity' : 'team.replaceHint')}</p>}
           </div>}
           {error && <p role="alert" className="form-error">{error}</p>}
           <div className="dialog-actions">
@@ -143,7 +170,7 @@ export default function TeamTemplates({ board, getBoard, boardName, onCreate, on
               <button className="text-button" onClick={() => setConfirmDelete(false)}>{t('common.cancel')}</button>
             </> : <button className="icon-button" title={t('team.delete')} onClick={() => setConfirmDelete(true)}><Trash2 size={15} /></button>)}
             <span className="team-actions-spacer" />
-            <button className="text-button primary" disabled={busy || !folder.trim() || sourceIds.some((id) => !choice(id))} onClick={create}>{t('team.create')}</button>
+            <button className="text-button primary" disabled={busy || !folder.trim() || missingAgent} onClick={create}>{t('team.create')}</button>
           </div>
         </div>}
       </div>}

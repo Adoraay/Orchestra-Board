@@ -3,10 +3,11 @@ const http = require('http');
 
 // Petit serveur local qui reçoit les hooks de Claude Code (PLAN.md §3.2, statuts) et les appels
 // d'outils du serveur MCP d'Orchestra (§3.11).
-// Uniquement sur 127.0.0.1, port choisi par le système, jeton secret renouvelé à chaque lancement :
-// un autre programme du PC ne peut pas envoyer de faux statuts ni de faux messages.
+// Uniquement sur 127.0.0.1, avec un secret par lancement pour les hooks et un jeton MCP propre à chaque case.
 const MAX_BODY = 1024 * 1024;
-const token = crypto.randomBytes(16).toString('hex');
+const hookToken = crypto.randomBytes(16).toString('hex');
+const toolSecret = crypto.randomBytes(32);
+const toolToken = (id) => crypto.createHmac('sha256', toolSecret).update(id).digest('hex');
 let port = null;
 
 // onHook(id, payload) -> réponse au hook (ou rien = {}) ; onTool(id, name, args, signal) -> Promise<{ text, isError }>.
@@ -16,7 +17,13 @@ function start(onHook, onTool) {
     // Jeton dans ?t=… ; pour les hooks de Codex, dans le chemin suivi de l'événement (pas de & ni de ? dans
     // leur commande, voir codexProfile.cjs) : /hook/<id>/<jeton>/<événement>.
     const match = url.pathname.match(/^\/(hook|tool)\/([\w-]{1,128})(?:\/(\w{1,64})\/\w{1,32})?$/);
-    if (req.method !== 'POST' || !match || (match[3] ?? url.searchParams.get('t')) !== token) {
+    if (req.method !== 'POST' || !match) {
+      res.writeHead(404).end();
+      return;
+    }
+    const [, kind, id, pathToken] = match;
+    const expectedToken = kind === 'hook' ? hookToken : toolToken(id);
+    if ((pathToken ?? url.searchParams.get('t')) !== expectedToken) {
       res.writeHead(404).end();
       return;
     }
@@ -32,8 +39,6 @@ function start(onHook, onTool) {
       try {
         payload = JSON.parse(body);
       } catch {}
-      const [, kind, id] = match;
-
       if (kind === 'hook') {
         // Réponse immédiate (l'agent attend la fin du hook avant de continuer) : {} ne décide rien.
         const response = onHook(id, payload) ?? {};
@@ -60,9 +65,9 @@ function start(onHook, onTool) {
   });
 }
 
-const hookUrl = (id) => `http://127.0.0.1:${port}/hook/${id}?t=${token}`;
-const toolUrl = (id) => `http://127.0.0.1:${port}/tool/${id}?t=${token}`;
+const hookUrl = (id) => `http://127.0.0.1:${port}/hook/${id}?t=${hookToken}`;
+const toolUrl = (id) => `http://127.0.0.1:${port}/tool/${id}?t=${toolToken(id)}`;
 // Base à compléter par /<événement> (hooks de Codex).
-const hookBase = (id) => `http://127.0.0.1:${port}/hook/${id}/${token}`;
+const hookBase = (id) => `http://127.0.0.1:${port}/hook/${id}/${hookToken}`;
 
 module.exports = { start, hookUrl, toolUrl, hookBase };

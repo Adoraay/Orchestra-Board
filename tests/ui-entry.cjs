@@ -68,6 +68,60 @@ app.on('browser-window-created', (_event, win) => {
         app.quit();
         return;
       }
+      if (mode === 'conductor-bar') {
+        await require('./ui-conductor-bar.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI conductor-bar: shortcut, default folder, streamed actions, preview ghosts, correction, cancel, approve, CLI error, reset');
+        app.quit();
+        return;
+      }
+      if (mode === 'conductor') {
+        await require('./ui-conductor.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI conductor: tools create, link, update and remove tiles on the live map, log them and open the right board');
+        app.quit();
+        return;
+      }
+      if (mode === 'board-ops') {
+        await require('./ui-board-ops.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI board-ops: link tool, link panel, notes, texts and deletion through shared board operations');
+        app.quit();
+        return;
+      }
+      if (mode === 'panels') {
+        await require('./ui-panels.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI panels: tabs dragged onto the map, saved, moved, removed and restored');
+        app.quit();
+        return;
+      }
+      if (mode === 'visual-test') {
+        await require('./ui-visual-test.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI visual-test: Chrome flow, assertions, network and console diagnostics, saved screenshot');
+        app.quit();
+        return;
+      }
+      if (mode === 'browser-link') {
+        await require('./ui-browser-link.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI browser-link: Link tool, real clicks on an agent then on the page of a browser card');
+        app.quit();
+        return;
+      }
+      if (mode === 'interactive-browser') {
+        await require('./ui-interactive-browser.cjs')({ win, evaluate, until, sleep, data, errors });
+        console.log('PASS UI interactive-browser: Dock, live webviews, history, cookie isolation and workspace restoration');
+        app.quit();
+        return;
+      }
+      if (mode === 'mcp-relay') {
+        await require('./ui-mcp-relay.cjs')({ evaluate, until, sleep, data, errors });
+        console.log('PASS UI mcp-relay: board and card scope, CMD output relayed for review');
+        app.quit();
+        return;
+      }
+      if (mode === 'team-presets') {
+        await require('./ui-team-presets.cjs')({ evaluate, until, data, errors });
+        console.log('PASS UI team-presets: create and save a maintenance board, then reuse it in another project');
+        app.quit();
+        return;
+      }
       if (mode === 'changes') {
         await require('./ui-changes.cjs')({ win, evaluate, until, sleep, data, errors });
         app.quit();
@@ -91,7 +145,7 @@ app.on('browser-window-created', (_event, win) => {
         assert.deepEqual(require('../electron/ptyManager.cjs').ids(), ['smoke-terminal']);
         await evaluate(`document.querySelector('button[title^="Settings"]').click()`);
         await evaluate(`[...document.querySelectorAll('[role="tab"]')].find(b => b.textContent === 'General').click()`);
-        await until("document.body.textContent.includes('0.1.3')");
+        await until(`document.body.textContent.includes(${JSON.stringify(require('../package.json').version)})`);
         await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Browse backups').click()`);
       }
       await until("!!document.querySelector('#backup-select')");

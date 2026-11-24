@@ -1,7 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { app, BrowserWindow, Menu, Notification, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, session, shell } = require('electron');
 const { loadWindowIdentity } = require('./windowIdentity.cjs');
 const ptyManager = require('./ptyManager.cjs');
 const fsHandlers = require('./fsHandlers.cjs');
@@ -10,14 +10,24 @@ const agentsHandlers = require('./agentsHandlers.cjs');
 const workspaceStore = require('./workspaceStore.cjs');
 const hookServer = require('./hookServer.cjs');
 const claudeHooks = require('./claudeHooks.cjs');
+const antigravityHooks = require('./antigravityHooks.cjs');
 const claudeTrust = require('./claudeTrust.cjs');
 const codexProfile = require('./codexProfile.cjs');
+const { createMcpCatalog, validId } = require('./mcpCatalog.cjs');
 const agentStatus = require('./agentStatus.cjs');
 const gitHandlers = require('./git.cjs');
+const { randomUUID } = require('crypto');
 const linkRelay = require('./linkRelay.cjs');
 const delegation = require('./delegation.cjs');
 const terminalLink = require('./terminalLink.cjs');
 const noteLink = require('./noteLink.cjs');
+const conductor = require('./conductor.cjs');
+const conductorSession = require('./conductorSession.cjs');
+const visualTests = require('./visualTestRunner.cjs');
+const visualTestLink = require('./visualTestLink.cjs');
+const { createInteractiveBrowser, isTool: isBrowserTool } = require('./interactiveBrowser.cjs');
+const { BROWSER_PARTITION } = require('./browserModel.mjs');
+const { createNoteFiles, registerNoteFiles } = require('./noteFiles.cjs');
 const activityLog = require('./activityLog.cjs');
 const diagnostics = require('./diagnostics.cjs');
 const tasksHandlers = require('./tasksHandlers.cjs');
@@ -36,6 +46,24 @@ let win;
 let quitConfirmed = false;
 let taskSequences;
 let sequenceNodes = [];
+const mcpCatalog = () => createMcpCatalog(app.getPath('userData'));
+const isBoardFrame = (event) => win && event.sender === win.webContents && event.senderFrame === event.sender.mainFrame;
+const interactiveBrowser = createInteractiveBrowser();
+
+ipcMain.handle('browser:register', (event, ...args) => isBoardFrame(event) && interactiveBrowser.register(event.sender, ...args));
+ipcMain.handle('browser:cookies', (event, guestId, url) => isBoardFrame(event) ? interactiveBrowser.cookies(event.sender, guestId, url) : null);
+ipcMain.handle('browser:removeCookies', (event, guestId, url) => isBoardFrame(event) ? interactiveBrowser.cookies(event.sender, guestId, url, true) : null);
+ipcMain.handle('browser:savePreferenceCookie', (event, guestId, url, preference) => isBoardFrame(event) ? interactiveBrowser.savePreferenceCookie(event.sender, guestId, url, preference) : null);
+
+ipcMain.handle('mcp:get', (event, boardId, cardId) => isBoardFrame(event) ? mcpCatalog().get(boardId, cardId) : null);
+ipcMain.handle('mcp:save', (event, boardId, cardId, change) => {
+  if (!isBoardFrame(event)) return { error: 'invalidScope' };
+  try {
+    return { config: mcpCatalog().save(boardId, cardId, change) };
+  } catch (err) {
+    return { error: err.code ? 'saveFailed' : err.message };
+  }
+});
 
 function sequenceAgents() {
   const agents = settingsStore.load().agents;
@@ -92,8 +120,10 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webviewTag: true,
     },
   });
+  interactiveBrowser.attach(win.webContents, session.fromPartition(BROWSER_PARTITION));
 
   if (process.platform === 'win32') {
     win.setAppDetails(identity.details);
@@ -176,10 +206,12 @@ function notifyFinished(id, info) {
   notification.show();
 }
 
-agentStatus.init(sendStatus, notifyFinished);
+agentStatus.init(sendStatus, notifyFinished, (id, reply) => {
+  if (reply) linkRelay.onStop(id, { last_assistant_message: reply }, { fallback: true });
+});
 // Tableau de chaque case (filtres du journal), mis à jour à chaque sauvegarde de workspace.json.
 let caseBoards = new Map();
-const caseName = (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || id;
+const caseName = (id) => agentStatus.info(id)?.name || noteLink.nameOf(id) || conductor.nameOf(id) || id;
 activityLog.init({
   nameOf: caseName,
   boardOf: (id) => caseBoards.get(id) ?? null,
@@ -224,15 +256,102 @@ terminalLink.init({
   emit: emitLink,
 });
 
+const noteFiles = createNoteFiles(app.getPath('userData'), (id, state) => send('note:file:change', id, state));
 noteLink.init({
   log: activityLog.add,
   write: (id, text) => send('note:write', id, text),
+  file: noteFiles.get,
   emit: emitLink,
 });
 
-// Outils du serveur MCP d'une case : lien Note, lien Terminal ou Délégation.
+// Changement de la map demandé par le chef d'orchestre : appliqué par l'interface (mêmes opérations que
+// l'utilisateur), qui répond une fois la map sauvegardée (PLAN.md §3.25).
+const OP_TIMEOUT = 15000;
+const opWaiters = new Map();
+function requestOp(boardId, op) {
+  return new Promise((resolve) => {
+    if (!win || win.isDestroyed()) return resolve({ error: 'window' });
+    const reqId = randomUUID();
+    const timer = setTimeout(() => { opWaiters.delete(reqId); resolve({ error: 'timeout' }); }, OP_TIMEOUT);
+    opWaiters.set(reqId, (response) => { clearTimeout(timer); resolve(response); });
+    send('conductor:op', { reqId, boardId, op });
+  });
+}
+ipcMain.on('conductor:done', (_e, reqId, response) => {
+  const done = opWaiters.get(reqId);
+  if (!done) return;
+  opWaiters.delete(reqId);
+  const valid = response && typeof response === 'object';
+  done({
+    id: valid && typeof response.id === 'string' ? response.id : null,
+    error: !valid ? 'invalid' : typeof response.error === 'string' ? response.error.slice(0, 200) : null,
+  });
+});
+
+conductor.init({
+  requestOp,
+  settings: () => settingsStore.load().conductor,
+  agents: () => settingsStore.load().agents,
+  info: agentStatus.info,
+  enqueue: linkRelay.enqueue,
+  buffer: ptyManager.buffer,
+  clean: terminalLink.clean,
+  ensureWorktree: gitHandlers.ensureWorktree,
+  isRepo: gitHandlers.repoRoot,
+  logEntries: activityLog.list,
+  log: activityLog.add,
+  onPending: (caller, items) => conductorSession.onPending(caller, items),
+  onBoardCreated: (caller, boardId) => conductorSession.linkBoard(caller, boardId),
+});
+
+// Session cachée du chef d'orchestre, une par tableau, lancée à chaque message de la bulle.
+conductorSession.init({
+  dir: () => app.getPath('userData'),
+  settings: () => settingsStore.load().conductor,
+  findCommand: (engine) => {
+    const [agentId, command] = { codex: ['codex', 'codex'], antigravity: ['antigravity', 'agy'] }[engine] ?? ['claude-code', 'claude'];
+    return agentsHandlers.testCommand(settingsStore.load().agents.find((a) => a.id === agentId)?.command ?? command);
+  },
+  toolUrl: hookServer.toolUrl,
+  mcpServerPath: claudeHooks.mcpServerPath,
+  tools: conductor.TOOLS,
+  openSession: conductor.openSession,
+  closeSession: conductor.closeSession,
+  boardExists: (boardId) => workspaceStore.get().boards.some((b) => b.id === boardId),
+  emit: (boardId, event) => send('conductorSession:event', boardId, event),
+  pendingOf: conductor.pendingOf,
+  commit: conductor.commit,
+  discard: conductor.discard,
+});
+ipcMain.handle('conductorSession:get', (_e, boardId) => conductorSession.get(boardId));
+ipcMain.handle('conductorSession:send', (_e, boardId, message, folder) => conductorSession.send(boardId, message, folder));
+ipcMain.handle('conductorSession:reset', (_e, boardId) => conductorSession.reset(boardId));
+ipcMain.handle('conductorSession:approve', (_e, boardId) => conductorSession.approve(boardId));
+ipcMain.handle('conductorSession:cancel', (_e, boardId) => conductorSession.cancel(boardId));
+ipcMain.on('conductorSession:stop', (_e, boardId) => conductorSession.stop(boardId));
+
+// Groupes d'outils que le serveur MCP montre à une case : un lien Navigateur ou Test visuel actif depuis elle.
+function toolGroups(caller) {
+  if (!agentStatus.info(caller)) return [];
+  const board = workspaceStore.get().boards.find((b) => b.nodes.some((node) => node.id === caller));
+  const modes = new Set((board?.edges ?? []).filter((edge) =>
+    edge.source === caller && edge.data.enabled !== false && ['browser', 'visual'].includes(edge.data.mode)).map((edge) => edge.data.mode));
+  return [...modes];
+}
+
+// Outils du serveur MCP d'une case : liens Note, Test visuel, Terminal et Délégation, ou chef d'orchestre.
 function callTool(caller, name, args, signal) {
+  if (name === 'orchestra_tool_groups') return { text: JSON.stringify(toolGroups(caller)), isError: false };
+  if (conductor.isTool(name)) return conductor.callTool(caller, name, args);
   if (noteLink.isTool(name)) return noteLink.callTool(caller, name, args);
+  if (isBrowserTool(name)) {
+    if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
+    return interactiveBrowser.callTool(workspaceStore.get(), caller, name, args);
+  }
+  if (visualTestLink.isTool(name)) {
+    if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
+    return visualTestLink.callTool(workspaceStore.get(), caller, name, args, visualTests.isRunning);
+  }
   if (!terminalLink.isTool(name)) return delegation.callTool(caller, name, args, signal);
   if (!agentStatus.info(caller)) return { text: t('delegate.callerNotRunning'), isError: true };
   return terminalLink.callTool(caller, name, args, signal);
@@ -254,7 +373,13 @@ function trackSession(id, payload) {
 // Début de session : la réponse au hook dit à l'agent qu'il tourne dans Orchestra et lui donne son rôle
 // (même format pour Claude Code et Codex). Ce contexte n'est pas affiché dans le terminal.
 function onHook(id, payload) {
+  const isAntigravity = caseAgents.get(id) === 'antigravity';
+  if (isAntigravity) {
+    payload = antigravityHooks.normalize(payload);
+    if (!payload) return {};
+  }
   const turnOwner = linkRelay.onHook(id, payload);
+  conductor.onHook(id, payload);
   taskSequences?.onHook(id, payload);
   diagnostics.onHook(id, payload.hook_event_name);
   try { trackSession(id, payload); }
@@ -272,12 +397,14 @@ function onHook(id, payload) {
     linkRelay.onStop(id, payload);
   }
   agentStatus.onHook(id, payload);
-  if (payload.hook_event_name === 'SessionStart') {
+  if (payload.hook_event_name === 'SessionStart' || (isAntigravity && payload.hook_event_name === 'UserPromptSubmit' && !roleState.get(id).known)) {
     const parts = [t('orchestra.context')];
     if (!agentStatus.info(id)) return {};
     const role = roleState.start(id);
     if (role) parts.push(t('role.context', { role }));
-    return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: parts.join('\n\n') } };
+    const context = parts.join('\n\n');
+    if (isAntigravity) return { injectSteps: [{ systemMessage: { systemMessage: context } }] };
+    return { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } };
   }
 }
 
@@ -290,39 +417,45 @@ function resumeArgs(id, agent, resume) {
   const session = workspaceStore.getSession(id);
   if (session && agent.hooks === 'claude') return ` --resume ${session.id}`;
   if (session && agent.hooks === 'codex') return ` resume ${session.id}`;
+  if (session && agent.hooks === 'antigravity') return ` --conversation ${session.id}`;
   return agent.hooks || !agent.resumeArgs ? '' : ` ${agent.resumeArgs}`;
 }
 
 // Commande à taper dans le shell : celle de l'agent, + profil Orchestra pour Codex, + reprise de conversation, + modèle choisi,
 // + hooks et serveur MCP pour Claude Code.
-function buildCommand(id, agent, resume, model) {
+function buildCommand(id, agent, resume, model, mcpServers, antigravityLaunch) {
   if (!agent.command) return null;
   let command = agent.command;
-  if (agent.hooks === 'codex') command += ` -p ${codexProfile.PROFILE}`;
+  if (agent.hooks === 'codex') command += ` -p ${codexProfile.profileFor(id, mcpServers)}`;
   command += resumeArgs(id, agent, resume);
   // Après la reprise : « codex resume » prend aussi -m.
   if (typeof model === 'string' && settingsStore.MODEL.test(model)) {
-    if (agent.hooks === 'claude') command += ` --model ${model}`;
+    if (agent.hooks === 'claude' || agent.hooks === 'antigravity') command += ` --model ${model}`;
     if (agent.hooks === 'codex') command += ` -m ${model}`;
   }
   if (agent.hooks === 'claude') {
-    command += ` --settings "${claudeHooks.writeSettings(id)}" --mcp-config "${claudeHooks.writeMcpConfig(id)}"`;
+    const options = { conductor: conductor.tileTools(id) };
+    command += ` --settings "${claudeHooks.writeSettings(id, options)}" --mcp-config "${claudeHooks.writeMcpConfig(id, mcpServers, options)}"`;
   }
+  if (antigravityLaunch) command += antigravityLaunch.args;
   return command;
 }
 
 // L'interface envoie seulement l'id de l'agent : la commande à lancer vient des paramètres.
 // Renvoie { buffer, status } : buffer = dernières sorties si le terminal tournait déjà (case d'un
 // autre tableau qu'on rouvre), status = statut actuel de la case.
-ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume, model }) => {
+ipcMain.handle('pty:create', (_e, { id, boardId, agentId, cwd, label, cols, rows, resume, model }) => {
   const settings = settingsStore.load();
   const agent = settingsStore.findAgent(settings, agentId);
-  if (typeof id !== 'string' || !agent) return null;
+  if (!validId(id) || !agent) return null;
 
   const existing = agentStatus.info(id);
+  const mcpServers = existing || !agent.hooks ? {} : mcpCatalog().resolve(caseBoards.get(id) ?? boardId, id);
   if (!existing && resume && agent.hooks && !canResume(workspaceStore.getSession(id), agentId, cwd)) {
     return { error: t('session.unavailable') };
   }
+  const antigravityLaunch = !existing && agent.hooks === 'antigravity' ? antigravityHooks.prepare(id, mcpServers, settings.general.shell) : null;
+  const command = existing ? null : buildCommand(id, agent, resume, model, mcpServers, antigravityLaunch);
   if (!existing) {
     if (!resume) workspaceStore.setSession(id, null);
     caseAgents.set(id, agentId);
@@ -330,25 +463,26 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
   if (!existing && agent.hooks === 'claude' && settings.general.trustFolders) claudeTrust.trustFolder(cwd);
   if (!existing) {
     diagnostics.onLaunch(id);
-    agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command), kind: agent.hooks || null });
+    agentStatus.register(id, agent.hooks ? 'hooks' : 'activity', { name: cleanName(label) ?? agent.name, cwd, notify: Boolean(agent.command), isShell: !agent.command, kind: agent.hooks || null });
     send('agent:status', id, agentStatus.info(id)); // la barre des agents actifs le voit tout de suite
   }
   const result = ptyManager.create(
     {
       id,
-      command: existing ? null : buildCommand(id, agent, resume, model),
+      command,
       shell: settings.general.shell,
-      cwd,
-      env: agent.hooks === 'codex' ? codexProfile.env(id) : null,
+      cwd: antigravityLaunch ? antigravityHooks.caseFolder(cwd) : cwd,
+      env: antigravityLaunch?.env ?? (agent.hooks === 'codex' ? codexProfile.env(id) : null),
       cols,
       rows,
     },
     (id, data) => {
-      agentStatus.onOutput(id);
+      agentStatus.onOutput(id, data);
       terminalLink.onOutput(id, data);
       send(`pty:data:${id}`, data);
     },
     (id, code) => {
+      conductor.onExit(id);
       agentStatus.unregister(id);
       caseAgents.delete(id);
       diagnostics.forget(id);
@@ -356,6 +490,7 @@ ipcMain.handle('pty:create', (_e, { id, agentId, cwd, label, cols, rows, resume,
       blockers.onStatus(id, null);
       blockers.onExit(id, code);
       claudeHooks.removeSettings(id);
+      antigravityHooks.remove(id);
       send('agent:status', id, null);
       send(`pty:exit:${id}`, code);
       relayStatus(id, null);
@@ -387,6 +522,7 @@ ipcMain.on('pty:rename', (_e, id, name) => {
   send('agent:status', id, agentStatus.info(id));
 });
 ipcMain.on('pty:kill', (_e, id) => {
+  conductor.onExit(id);
   ptyManager.kill(id);
   agentStatus.unregister(id);
   caseAgents.delete(id);
@@ -394,6 +530,7 @@ ipcMain.on('pty:kill', (_e, id) => {
   roleState.clear(id);
   blockers.onStatus(id, null);
   claudeHooks.removeSettings(id);
+  antigravityHooks.remove(id);
   send('agent:status', id, null);
   relayStatus(id, null);
 });
@@ -440,6 +577,11 @@ const ABOUT_LINKS = {
   issues: 'https://github.com/Adoraay/Orchestra-Board/issues/new/choose',
 };
 ipcMain.handle('about:info', () => ({ version: app.getVersion() }));
+ipcMain.handle('visualTest:start', (event, id, data) => isBoardFrame(event)
+  ? visualTests.start(id, data, (nodeId, result) => send('visualTest:finished', nodeId, result))
+  : { error: 'unavailable' });
+ipcMain.handle('visualTest:isRunning', (event, id) => Boolean(isBoardFrame(event) && visualTests.isRunning(id)));
+ipcMain.on('visualTest:cancel', (event, id) => { if (isBoardFrame(event)) visualTests.cancel(id); });
 ipcMain.on('about:open', (_e, key) => {
   if (Object.hasOwn(ABOUT_LINKS, key)) shell.openExternal(ABOUT_LINKS[key]);
 });
@@ -478,6 +620,9 @@ workspaceStore.register((workspace) => {
   roleState.setWorkspace(workspace);
   terminalLink.setWorkspace(workspace, (agentId) => settingsStore.load().agents.find((a) => a.id === agentId)?.name ?? agentId);
   noteLink.setWorkspace(workspace);
+  conductor.setWorkspace(workspace);
+  conductorSession.prune(workspace.boards.map((b) => b.id));
+  noteFiles.setWorkspace(workspace);
 }, () => {
   for (const id of ptyManager.ids()) {
     ptyManager.kill(id);
@@ -485,24 +630,27 @@ workspaceStore.register((workspace) => {
     roleState.clear(id);
     blockers.onStatus(id, null);
     claudeHooks.removeSettings(id);
+    antigravityHooks.remove(id);
     relayStatus(id, null);
     send('agent:status', id, null);
   }
   for (const id of caseAgents.keys()) diagnostics.forget(id);
   caseAgents.clear();
+}, (boardId, cards, preset, backlog, persist, event) => {
+  if (!isBoardFrame(event)) throw new Error('Invalid board frame');
+  return mcpCatalog().applyPreset(boardId, cards, preset, () => {
+    if (!backlog) return persist();
+    return noteFiles.applyProjectBacklog(backlog.noteId, backlog.cwd, backlog.text, persist);
+  });
 });
 gitHandlers.register(workspaceStore.get);
 taskService = tasksHandlers.register(workspaceStore.get, send, linkRelay);
-teamTemplates.register();
+teamTemplates.register(noteFiles.get);
 usage.register();
 updates.register(() => win);
 activityLog.register(() => win);
+registerNoteFiles(ipcMain, dialog, () => win, noteFiles);
 
-<<<<<<< HEAD
-// Pas de barre de menu File / Edit / View. macOS garde toujours un menu : le strict nécessaire, dont Édition
-// pour Cmd+C / Cmd+V / Cmd+A dans les champs et les terminaux, et Cmd+Q / Cmd+H.
-Menu.setApplicationMenu(isMac ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null);
-=======
 ipcMain.handle('sequences:list', () => ({ ...(taskSequences?.list() ?? { tasks: [], error: t('sequences.storage') }), agents: sequenceAgents() }));
 for (const action of ['save', 'remove', 'start', 'action']) {
   ipcMain.handle(`sequences:${action}`, (_event, ...args) => {
@@ -513,9 +661,9 @@ for (const action of ['save', 'remove', 'start', 'action']) {
   });
 }
 
-// Pas de barre de menu File / Edit / View.
-Menu.setApplicationMenu(null);
->>>>>>> main
+// Pas de barre de menu File / Edit / View. macOS garde toujours un menu : le strict nécessaire, dont Édition
+// pour Cmd+C / Cmd+V / Cmd+A dans les champs et les terminaux, et Cmd+Q / Cmd+H.
+Menu.setApplicationMenu(isMac ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null);
 // Identité propre dans la barre des tâches (sinon Windows regroupe la fenêtre sous « Electron »).
 app.setAppUserModelId('com.orchestraboard.orchestra');
 
@@ -533,32 +681,33 @@ app.on('second-instance', () => {
 app.whenReady().then(async () => {
   if (!isFirstInstance) return;
   migrateOldUserData();
-<<<<<<< HEAD
   await shellEnv.loadLoginPath();
-=======
   taskSequences = createTaskSequences(app.getPath('userData'), {
     t, agents: sequenceAgents, info: agentStatus.info,
     enqueue: linkRelay.enqueue, cancel: linkRelay.cancelSequence,
     lastReply: linkRelay.lastReply, readDelay: linkRelay.READ_DELAY,
     emit: (value) => send('sequences:changed', value),
   });
->>>>>>> main
   claudeHooks.clearAll();
+  antigravityHooks.clearAll();
   await hookServer.start(onHook, callTool);
   codexProfile.ensure();
+  if (!workspaceStore.recovering()) {
+    codexProfile.pruneCardProfiles(workspaceStore.get().boards.flatMap((board) =>
+      board.nodes.filter((node) => node.type === 'terminal').map((node) => node.id)));
+  }
   createWindow();
 });
 
-<<<<<<< HEAD
-// Mac : attendre la confirmation de Cmd+Q ; Windows : arrêter les PTY avant la fin de l'app.
+// Pas de processus orphelins : on tue tous les agents en quittant (Mac : après la confirmation de Cmd+Q).
 app.on(isMac ? 'will-quit' : 'before-quit', () => {
-=======
-// Pas de processus orphelins : on tue tous les agents en quittant.
-app.on('before-quit', () => {
+  conductorSession.stopAll();
+  visualTests.dispose();
+  noteFiles.dispose();
   taskSequences?.dispose();
   linkRelay.dispose();
->>>>>>> main
   ptyManager.killAll();
+  antigravityHooks.clearAll();
   usage.stop();
 });
 app.on('window-all-closed', () => app.quit());

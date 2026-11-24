@@ -3,8 +3,7 @@ const { t } = require('./i18n.cjs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 
-// Liens entre agents (PLAN.md §3.5) : quand A a fini (hook Stop de Claude Code), sa dernière réponse
-// est envoyée dans le terminal de B avec la consigne du lien.
+// Quand la source a fini (hook Stop ou fin d'activité), sa réponse est envoyée avec la consigne du lien.
 // Limite de tours : une « chaîne » démarre quand l'utilisateur tape lui-même une consigne (Entrée) ;
 // elle suit les messages d'agent en agent et chaque lien ne peut y servir que maxTurns fois.
 const READ_DELAY = 400; // ms : au moment du hook Stop, le transcript n'est pas toujours fini d'écrire
@@ -50,7 +49,8 @@ function pendingList() {
 }
 
 const notify = () => deps.pending(pendingList());
-const emitItem = (item, event) => { if (item.owner !== 'sequence') deps.emit(item.id, event); };
+// Un message sans lien (chef d'orchestre) n'anime aucun trait.
+const emitItem = (item, event) => { if (item.owner !== 'sequence' && item.id) deps.emit(item.id, event); };
 
 // Appelé à chaque sauvegarde de workspace.json (déjà validé), tous tableaux confondus.
 // Seuls les liens en Transmission envoient tout seuls ; la Délégation passe par les outils MCP.
@@ -106,6 +106,16 @@ function lastReply(payload) {
   } catch {
     return '';
   }
+  if (payload.provider === 'antigravity') {
+    for (const line of lines.reverse()) {
+      try {
+        const step = JSON.parse(line);
+        if (step.type === 'USER_INPUT') break;
+        if (step.type === 'PLANNER_RESPONSE' && typeof step.content === 'string' && step.content.trim()) return step.content.trim();
+      } catch {} // première ligne coupée par la lecture de la fin du fichier
+    }
+    return '';
+  }
   const entries = [];
   for (const line of lines) {
     try {
@@ -128,7 +138,7 @@ function buildText(prompt, reply) {
   const template = typeof prompt === 'string' ? prompt : '';
   // {reponse} (français) ou {response} (anglais) : la consigne s'écrit dans la langue de l'interface.
   const token = ['{reponse}', '{response}'].find((t) => template.includes(t));
-  return token ? template.replaceAll(token, reply) : `${template}\n\n${reply}`.trim();
+  return token ? template.replaceAll(token, () => reply) : `${template}\n\n${reply}`.trim();
 }
 
 // Collage entre crochets (le CLI le reçoit comme un collage, pas comme une frappe), puis Entrée à part.
@@ -280,7 +290,7 @@ function flush(target) {
   if (item) deliver(target, item);
 }
 
-function onStop(id, payload) {
+function onStop(id, payload, { fallback = false } = {}) {
   if (!deps.status(id)) return;
   const delivery = deliveries.get(id);
   if (delivery?.item.owner === 'sequence') return;
@@ -289,7 +299,7 @@ function onStop(id, payload) {
     clearTimeout(delivery.timeout);
     setTimeout(() => release(id, delivery), READ_DELAY + 10);
   }
-  const outgoing = (links.get(id) ?? []).filter((l) => l.enabled && l.prompt.trim());
+  const outgoing = (links.get(id) ?? []).filter((l) => l.enabled && l.prompt.trim() && (!fallback || l.terminalFallback));
   if (!outgoing.length) return;
   const chain = chainOf(id);
 
@@ -299,7 +309,7 @@ function onStop(id, payload) {
     for (const previous of outgoing) {
       // Le lien et sa validation peuvent avoir changé pendant la lecture du transcript.
       const link = findLink(previous.key);
-      if (!link?.enabled || !link.prompt.trim() || link.source !== id || link.target !== previous.target) continue;
+      if (!link?.enabled || !link.prompt.trim() || link.source !== id || link.target !== previous.target || (fallback && !link.terminalFallback)) continue;
       const refuse = (text) => deps.log({ kind: 'refused', linkId: link.id, from: id, to: link.target, text });
       if (!reply) {
         deps.emit(link.id, { state: 'error', message: t('link.noReply') });
@@ -317,7 +327,8 @@ function onStop(id, payload) {
         refuse(t('link.targetNotRunning'));
         continue;
       }
-      const text = buildText(link.prompt, reply);
+      const rendered = buildText(link.prompt, reply);
+      const text = fallback ? rendered.slice(0, MAX_MESSAGE) : rendered;
       if (link.review) {
         // Rien ne part sans l'utilisateur : le tour ne compte qu'à l'envoi.
         const qid = randomUUID();
@@ -422,7 +433,7 @@ function onStatus(id, info) {
   }
   const delivery = deliveries.get(id);
   if (delivery && info?.status === 'working' && delivery.item.owner !== 'sequence') delivery.working = true;
-  // Les cibles sans hooks (réception seule) se libèrent sur leur fin d'activité.
+  // Les cibles sans hooks peuvent terminer sans texte à transmettre.
   if (delivery?.submitted && delivery.working && info?.status === 'done' && !delivery.stopping && !delivery.item.onDelivered) release(id, delivery);
   if (!info || info.status === 'idle' || info.status === 'done') {
     if (queues.get(id)?.[0]?.owner === 'sequence') setTimeout(() => flush(id), 0);

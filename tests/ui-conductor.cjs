@@ -1,0 +1,141 @@
+const assert = require('assert/strict');
+const fs = require('fs');
+const path = require('path');
+
+// Chef d'orchestre (PLAN.md §3.25) : outils appelés par le vrai serveur local, comme le ferait le serveur MCP
+// d'une case Claude Code avec le réglage de test. Seules des cases Terminal sont créées : aucun CLI IA lancé.
+module.exports = async ({ evaluate, until, sleep, data, errors }) => {
+  const status = require('../electron/agentStatus.cjs');
+  const hooks = require('../electron/hookServer.cjs');
+  const conductor = require('../electron/conductor.cjs');
+  const tool = async (caller, name, args = {}) => {
+    const response = await fetch(hooks.toolUrl(caller), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, arguments: args }) });
+    return response.json();
+  };
+  const saved = () => JSON.parse(fs.readFileSync(path.join(data, 'workspace.json'), 'utf8'));
+  const node = (id) => `.react-flow__node[data-id="${id}"]`;
+
+  await until("!!document.querySelector('.react-flow__node[data-id=\"lead\"]')");
+  for (let i = 0; i < 100 && !status.info('lead'); i++) await sleep(100);
+  assert.ok(status.info('lead'), 'the lead tile runs');
+  await sleep(4200); // écran de démarrage
+
+  // Une case Terminal crée une autre case sous elle : visible, nommée, sauvegardée comme créée par le chef d'orchestre.
+  const created = await tool('lead', 'create_agent', { type: 'terminal', name: 'Runner', near: 'Lead' });
+  assert.equal(created.isError, false, created.text);
+  const id = created.text.match(/[0-9a-f-]{36}/)[0];
+  await until(`!!document.querySelector('${node(id)}')`);
+  await until(`document.querySelector('${node(id)}').textContent.includes('Runner')`);
+  const runner = saved().boards[0].nodes.find((n) => n.id === id);
+  assert.equal(runner.data.createdBy, 'conductor');
+  const lead = saved().boards[0].nodes.find((n) => n.id === 'lead');
+  assert.ok(runner.position.y > lead.position.y + 300, 'placed below its lead');
+  assert.equal(conductor.tileTools(id), false);
+
+  const sticky = await tool('lead', 'create_sticky', { text: '- [ ] Build\n- [ ] Test', name: 'Plan' });
+  assert.equal(sticky.isError, false, sticky.text);
+  await until("[...document.querySelectorAll('.react-flow__node-note')].some((n) => n.textContent.includes('Build'))");
+  const link = await tool('lead', 'create_link', { from: 'Lead', to: 'Runner', mode: 'delegate' });
+  assert.equal(link.isError, false, link.text);
+  await until("document.querySelectorAll('.react-flow__edge').length === 1");
+  // Un lien qui part d'une case Terminal transmet sa sortie (Transmission à valider), quel que soit le type demandé.
+  assert.equal(saved().boards[0].edges[0].data.mode, 'relay');
+  assert.equal(saved().boards[0].edges[0].data.terminalFallback, true);
+  assert.equal((await tool('lead', 'update_sticky', { sticky: 'Plan', text: '- [x] Build' })).isError, false);
+  await until("[...document.querySelectorAll('.react-flow__node-note')].some((n) => n.textContent.includes('Build') && !n.textContent.includes('Test'))");
+
+  const view = JSON.parse((await tool('lead', 'read_board')).text);
+  assert.deepEqual(view.terminals.map((t) => t.name).sort(), ['Lead', 'Runner']);
+  assert.equal(view.links[0].from, 'Lead');
+  assert.equal(view.stickies[0].name, 'Plan');
+  assert.ok(view.recent_log.some((entry) => entry.kind === 'conductor'));
+  const output = await tool('lead', 'read_agent_output', { agent: 'Lead' });
+  assert.equal(output.isError, false);
+  assert.ok(output.text.split('\n').length <= 80);
+
+  // La case créée ne peut pas utiliser ces outils.
+  for (let i = 0; i < 100 && !status.info(id); i++) await sleep(100);
+  assert.equal((await tool(id, 'create_sticky', { text: 'nope' })).isError, true);
+
+  // Retirer : case et terminal fermés, lien retiré.
+  assert.equal((await tool('lead', 'remove_agent', { agent: 'Runner' })).isError, false);
+  await until(`!document.querySelector('${node(id)}')`);
+  await until("document.querySelectorAll('.react-flow__edge').length === 0");
+  for (let i = 0; i < 50 && status.info(id); i++) await sleep(100);
+  assert.equal(status.info(id), null, 'its terminal is closed');
+
+  // Journal : une entrée par action, au nom de la case qui a appelé.
+  const log = await evaluate("window.activityLog.get()");
+  const entries = log.filter((e) => e.kind === 'conductor');
+  assert.equal(entries.length, 5);
+  assert.ok(entries.every((e) => e.fromName === 'Lead'));
+
+  // Deux agents sous le même chef : la rangée est recentrée, le chef au milieu au-dessus (pyramide).
+  for (const name of ['Left', 'Right']) assert.equal((await tool('lead', 'create_agent', { type: 'terminal', name, near: 'Lead' })).isError, false);
+  await until("[...document.querySelectorAll('.react-flow__node-terminal')].filter((n) => /Left|Right/.test(n.textContent)).length === 2");
+  const tile = (label) => saved().boards[0].nodes.find((n) => n.data.label === label);
+  for (let i = 0; i < 30 && !(tile('Left') && tile('Right')); i++) await sleep(100);
+  const width = (n) => n.style?.width ?? 640;
+  const [l, r, top] = [tile('Left'), tile('Right'), tile('Lead')];
+  assert.equal(l.position.y, r.position.y);
+  assert.equal((Math.min(l.position.x, r.position.x) + Math.max(l.position.x + width(l), r.position.x + width(r))) / 2, top.position.x + width(top) / 2);
+  // Disposition demandée : colonne.
+  assert.equal((await tool('lead', 'arrange', { layout: 'column', tiles: ['Lead', 'Left', 'Right'] })).isError, false);
+  for (let i = 0; i < 30 && tile('Left').position.x !== tile('Lead').position.x; i++) await sleep(100);
+  assert.equal(tile('Left').position.x, tile('Lead').position.x);
+  assert.equal(tile('Right').position.x, tile('Lead').position.x);
+
+  // Cases outils : un navigateur ouvert sur l'adresse donnée et un test visuel déjà réglé, sauvegardés.
+  const browserCard = await tool('lead', 'create_card', { type: 'browser', url: 'http://127.0.0.1:9/', near: 'Lead' });
+  assert.equal(browserCard.isError, false, browserCard.text);
+  const testCard = await tool('lead', 'create_card', { type: 'visual_test', url: 'http://127.0.0.1:9/login' });
+  assert.equal(testCard.isError, false, testCard.text);
+  await until("!!document.querySelector('.interactive-browser-node') && !!document.querySelector('.visual-test-node')");
+  const card = (type) => saved().boards[0].nodes.find((n) => n.type === type);
+  for (let i = 0; i < 30 && !(card('interactiveBrowser') && card('visualTest')); i++) await sleep(100);
+  assert.equal(card('interactiveBrowser').data.tabs[0].url, 'http://127.0.0.1:9/');
+  assert.equal(card('visualTest').data.url, 'http://127.0.0.1:9/login');
+  const cards = JSON.parse((await tool('lead', 'read_board')).text).cards;
+  assert.deepEqual(cards.map((c) => c.type).sort(), ['browser', 'visual_test']);
+
+  // Session du chef d'orchestre sur un autre tableau : ce tableau s'ouvre, le changement y est appliqué.
+  conductor.openSession('conductor-other', { boardId: 'other', folder: data, preview: false });
+  const remote = await tool('conductor-other', 'create_sticky', { text: 'Other board plan', name: 'Remote plan' });
+  assert.equal(remote.isError, false, remote.text);
+  await until("[...document.querySelectorAll('.react-flow__node-note')].some((n) => n.textContent.includes('Other board plan'))");
+  assert.equal(saved().activeBoardId, 'other');
+  assert.ok(saved().boards.find((b) => b.id === 'other').nodes.some((n) => n.data.text === 'Other board plan'));
+  // Validation d'un aperçu : une seule étape Ctrl+Z, qui retire aussi les cases créées et ferme leurs terminaux.
+  conductor.openSession('conductor-other', { boardId: 'other', folder: data, preview: true });
+  for (const [name, args] of [
+    ['create_agent', { type: 'terminal', name: 'Batch A' }],
+    ['create_agent', { type: 'terminal', name: 'Batch B', near: 'Batch A' }],
+    ['create_link', { from: 'Batch A', to: 'Batch B' }],
+    ['create_sticky', { text: 'Batch plan', name: 'Batch note' }],
+  ]) assert.equal((await tool('conductor-other', name, args)).isError, false, name);
+  const { applied } = await conductor.commit('conductor-other');
+  assert.equal(applied, true);
+  const batchIds = saved().boards.find((b) => b.id === 'other').nodes.filter((n) => /^Batch [AB]$/.test(n.data.label)).map((n) => n.id);
+  assert.equal(batchIds.length, 2);
+  for (const batchId of batchIds) for (let i = 0; i < 100 && !status.info(batchId); i++) await sleep(100);
+  await sleep(600); // au-delà du délai de l'historique : l'étape suivante serait séparée
+  await evaluate("document.activeElement?.blur()");
+  await evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true }))");
+  // Un terminal qui vient de démarrer travaille (sortie récente) : confirmation, comme pour Suppr.
+  await sleep(300);
+  if (await evaluate("!!document.querySelector('.dialog .danger-fill')")) {
+    assert.ok(await evaluate("document.querySelector('.dialog').textContent.includes('Batch A')"), 'the dialog lists the agents to stop');
+    await evaluate("document.querySelector('.dialog .danger-fill').click()");
+  }
+  await until("![...document.querySelectorAll('.react-flow__node')].some((n) => /Batch (A|B|plan)/.test(n.textContent))");
+  await until("[...document.querySelectorAll('.react-flow__node-note')].some((n) => n.textContent.includes('Other board plan'))");
+  for (const batchId of batchIds) {
+    for (let i = 0; i < 50 && status.info(batchId); i++) await sleep(100);
+    assert.equal(status.info(batchId), null, 'the terminals of the undone plan are closed');
+  }
+
+  conductor.closeSession('conductor-other');
+  assert.equal((await tool('conductor-other', 'read_board')).isError, true);
+
+  assert.deepEqual(errors, []);
+};

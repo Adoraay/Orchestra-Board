@@ -1,9 +1,16 @@
-import { ArrowLeftRight, ArrowRight, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Globe, MonitorCheck, Repeat, SquareTerminal, StickyNote, Trash2, X } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { DEFAULT_LINK, LINK_MODES, MAX_TURNS } from '../lib/links.js';
 import usePendingMessages from '../hooks/usePendingMessages.js';
 import useT from '../hooks/useT.js';
 import PendingMessage from './PendingMessage.jsx';
+
+const CONTEXT_LINKS = {
+  note: { Icon: StickyNote, warning: 'link.warnNote' },
+  terminal: { Icon: SquareTerminal, warning: 'link.warnTerminal' },
+  visual: { Icon: MonitorCheck, warning: 'link.warnVisual' },
+  browser: { Icon: Globe, warning: 'link.warnBrowser' },
+};
 
 function statusText(event, nameOf, t) {
   const turns = event.maxTurns ? t('link.status.turns', { turns: event.turns, max: event.maxTurns }) : '';
@@ -27,22 +34,22 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
   const caseOf = (id) => {
     const node = nodes.find((n) => n.id === id);
     const agent = agentById(node?.data.agentId);
-    return { name: node?.data.label || (node?.type === 'note' ? t('note.defaultName') : agent.name), agent };
+    const toolNames = { note: 'note.defaultName', visualTest: 'tool.visualTest', interactiveBrowser: 'dock.browser' };
+    const name = toolNames[node?.type] ? t(toolNames[node.type]) : agent.name;
+    return { name: node?.data.label || name, agent };
   };
   const source = caseOf(edge.source);
   const target = caseOf(edge.target);
   const nameOf = (id) => (id === edge.source ? source.name : target.name);
   const relay = link.mode === 'relay';
 
-  // Qui doit être Claude Code ou Codex (agents à hooks) : en Transmission, chaque source (son hook Stop donne
-  // la réponse) ; en Délégation, les deux bouts (l'un appelle les outils, l'autre répond).
+  // En Transmission, chaque source doit fournir une réponse. En Délégation les deux bouts ont besoin de hooks.
   const needsHooks = relay ? [source, ...(link.bidirectional ? [target] : [])] : [source, target];
   const notClaude = needsHooks.filter((c) => !c.agent.hooks).map((c) => c.name);
 
-  // Lien Terminal (PLAN.md §3.17) ou Note : rien à régler, une explication et la suppression.
-  if (link.mode === 'terminal' || link.mode === 'note') {
-    const Icon = link.mode === 'note' ? StickyNote : SquareTerminal;
-    const warning = link.mode === 'note' ? 'link.warnNote' : 'link.warnTerminal';
+  const contextual = CONTEXT_LINKS[link.mode];
+  if (contextual) {
+    const { Icon, warning } = contextual;
     return (
       <aside className="link-panel nowheel" aria-label={t('link.panelLabel')}>
         <header className="link-panel-header">
@@ -59,6 +66,20 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
         </p>
         <p className="hint">{t(`link.mode.${link.mode}.description`)}</p>
         {!source.agent.hooks && <p className="link-warning">{t(warning, { name: source.name })}</p>}
+        {['visual', 'browser'].includes(link.mode) && (
+          <label className="checkbox link-toggle">
+            <input type="checkbox" checked={link.enabled} onChange={(event) => onChange({ enabled: event.target.checked })} />
+            {t('link.enabled')}
+          </label>
+        )}
+        {link.mode === 'terminal' && (
+          <button className="text-button" onClick={() => {
+            onSwap();
+            onChange({ mode: 'relay', terminalFallback: true, review: true });
+          }}>
+            <Repeat size={14} />{t('link.relayTerminal')}
+          </button>
+        )}
         <button className="text-button danger link-delete" onClick={onDelete}>
           <Trash2 size={14} />
           {t('link.delete')}
@@ -79,13 +100,16 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
       </header>
 
       <div className="link-modes" role="radiogroup" aria-label={t('link.type')}>
-        {LINK_MODES.map((mode) => (
+        {(source.agent.id === 'shell' && target.agent.id !== 'shell' ? ['relay', 'terminal'] : LINK_MODES).map((mode) => (
           <button
             key={mode}
             role="radio"
             aria-checked={link.mode === mode}
             className={`link-mode ${link.mode === mode ? 'active' : ''}`}
-            onClick={() => onChange({ mode })}
+            onClick={() => {
+              if (mode === 'terminal') onSwap();
+              onChange({ mode });
+            }}
           >
             {t(`link.mode.${mode}`)}
           </button>
@@ -128,6 +152,14 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
             <input type="checkbox" checked={link.review} onChange={(e) => onChange({ review: e.target.checked })} />
             {t('link.review')}
           </label>
+          {notClaude.length > 0 && (
+            <label className="checkbox">
+              <input type="checkbox" checked={link.terminalFallback === true} onChange={(e) => onChange({
+                terminalFallback: e.target.checked, ...(e.target.checked && { review: true }),
+              })} />
+              {t('link.terminalFallback')}
+            </label>
+          )}
         </>
       )}
 
@@ -145,7 +177,7 @@ export default function LinkPanel({ edge, nodes, event, onChange, onSwap, onDele
         />
       </label>
 
-      {notClaude.length > 0 && (
+      {notClaude.length > 0 && (!relay || link.terminalFallback) && (
         <p className="link-warning">
           {relay
             ? t('link.warnRelay', { names: notClaude.join(t('common.and')) })

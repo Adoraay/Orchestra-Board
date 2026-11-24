@@ -1,7 +1,7 @@
 {
   "name": "orchestra",
   "productName": "Orchestra",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "license": "MIT",
   "description": "Une grande map où l'on glisse des agents IA (Claude Code, Codex...) qui tournent chacun dans un vrai terminal.",
@@ -20,7 +20,8 @@
     "build:launcher": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /target:winexe /codepage:65001 /out:launcher.exe /win32icon:build\\icon.ico /r:System.Windows.Forms.dll scripts\\launcher.cs"
   },
   "dependencies": {
-    "node-pty": "^1.0.0"
+    "node-pty": "^1.0.0",
+    "playwright-core": "1.65.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",

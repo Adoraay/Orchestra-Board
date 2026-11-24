@@ -8,6 +8,12 @@ import useT from '../hooks/useT.js';
 const DEFAULT_COLOR = '#8b93a7'; // couleur de secours d'un agent (exception autorisée)
 
 const newAgentId = () => 'custom-' + crypto.randomUUID().replace(/-/g, '').slice(0, 10);
+// Gemini CLI n'est plus pris en charge (Antigravity le remplace). Même règle que isGemini de settingsStore.cjs.
+function isGemini(name, command) {
+  const program = command.trim().match(/^"([^"]+)"|^(\S+)/);
+  const file = program ? (program[1] || program[2]).split(/[\\/]/).pop().replace(/\.(cmd|exe|bat|ps1)$/i, '') : '';
+  return /\bgemini\b/i.test(name) || file.toLowerCase() === 'gemini' || /gemini-cli/i.test(command);
+}
 
 // Formulaire « Ajouter un agent » : nom, commande (avec test), logo, couleur de secours.
 export default function AgentForm({ onSave, onCancel }) {
@@ -21,7 +27,8 @@ export default function AgentForm({ onSave, onCancel }) {
   const [logoError, setLogoError] = useState(null);
   const [test, setTest] = useState(null); // { ok, message } | 'pending'
 
-  const valid = name.trim() && command.trim() && !/[\r\n]/.test(command);
+  const gemini = isGemini(name, command);
+  const valid = name.trim() && command.trim() && !/[\r\n]/.test(command) && !gemini;
   const preview = decorateAgent({ id, name: name || '?', color, logo: logo?.file }, logo ? { [logo.file]: logo.dataUrl } : {});
 
   const pickLogo = async () => {
@@ -93,6 +100,8 @@ export default function AgentForm({ onSave, onCancel }) {
         </div>
         {logoError && <span className="test-result error"><XCircle size={14} />{logoError}</span>}
       </div>
+
+      {gemini && <p className="test-result error" role="alert"><XCircle size={14} />{t('agentForm.geminiUnsupported')}</p>}
 
       <div className="form-actions">
         <button type="button" className="text-button" onClick={cancel}>{t('common.cancel')}</button>

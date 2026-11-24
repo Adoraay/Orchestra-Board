@@ -4,15 +4,16 @@ import AgentsTab from './AgentsTab.jsx';
 import AppearanceTab from './AppearanceTab.jsx';
 import DiagnosticsTab from './DiagnosticsTab.jsx';
 import GeneralTab from './GeneralTab.jsx';
+import McpTab from './McpTab.jsx';
 import ShortcutsTab from './ShortcutsTab.jsx';
 import useT from '../hooks/useT.js';
 
-const TABS = ['appearance', 'agents', 'general', 'diagnostics', 'shortcuts'];
+const TABS = ['appearance', 'agents', 'mcp', 'general', 'diagnostics', 'shortcuts'];
 
 // Fenêtre de paramètres centrée (PLAN.md §3.3) : fermeture par ×, Échap ou clic à côté.
-export default function SettingsModal({ onClose, onStartTutorial, onStartSetup }) {
+export default function SettingsModal({ onClose, onStartTutorial, onStartSetup, boardId, boardName, nodes, mcpCardId }) {
   const t = useT();
-  const [tab, setTab] = useState('appearance');
+  const [tab, setTab] = useState(mcpCardId ? 'mcp' : 'appearance');
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -49,6 +50,7 @@ export default function SettingsModal({ onClose, onStartTutorial, onStartSetup }
         <div className="modal-body no-scrollbar" role="tabpanel">
           {tab === 'appearance' && <AppearanceTab />}
           {tab === 'agents' && <AgentsTab />}
+          {tab === 'mcp' && <McpTab boardId={boardId} boardName={boardName} nodes={nodes} initialCardId={mcpCardId} />}
           {tab === 'general' && <GeneralTab onStartTutorial={onStartTutorial} onStartSetup={onStartSetup} />}
           {tab === 'diagnostics' && <DiagnosticsTab />}
           {tab === 'shortcuts' && <ShortcutsTab />}

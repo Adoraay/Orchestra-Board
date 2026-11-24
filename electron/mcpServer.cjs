@@ -128,6 +128,46 @@ const TOOLS = [
     },
   },
   {
+    name: 'list_visual_tests',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists the visual tests linked to your tile, including runner IDs and latest completion times.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'read_visual_test',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Returns the last completed result of a linked visual test, including HTTP status, failed step, and network and console error counts. Does not start a test. Screenshots stay on the board.',
+    inputSchema: {
+      type: 'object',
+      properties: { runner_id: { type: 'string', description: 'ID from list_visual_tests. Optional when exactly one test is linked.' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'orchestra_browser_get_state',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: 'Lists live tabs on Interactive Browser cards you can reach through a Browser link. Returns tab IDs, routes, titles, loading and history state, and console error types and locations. An empty tab has the URL about:blank.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'orchestra_browser_navigate',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Opens a full http(s) URL in an empty linked Interactive Browser tab, or navigates within the origin already open in that tab (another site is refused). Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object',
+      properties: { tabId: { type: 'string' }, url: { type: 'string', maxLength: 4096 } },
+      required: ['tabId', 'url'], additionalProperties: false,
+    },
+  },
+  {
+    name: 'orchestra_browser_reload',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: 'Starts reloading the current page of a linked Interactive Browser tab. Use a tab ID from orchestra_browser_get_state and poll that tool for the result.',
+    inputSchema: {
+      type: 'object', properties: { tabId: { type: 'string' } }, required: ['tabId'], additionalProperties: false,
+    },
+  },
+  {
     name: 'write_note',
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     description:
@@ -144,6 +184,218 @@ const TOOLS = [
     },
   },
 ];
+
+// Outils du chef d'orchestre (PLAN.md §3.25) : construire et diriger le tableau. Servis seulement si
+// ORCHESTRA_TOOLSET le demande ('conductor' : eux seuls, pour la session cachée ; 'all' : en plus des
+// outils d'une case, pour la tester depuis une case Claude Code). Orchestra revérifie l'appelant.
+const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const ADD = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+const CHANGE = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+const REF = (what) => ({ type: 'string', description: `${what}: its id or its exact name, as given by read_board (a temporary pending-N id works too).` });
+const NEAR = REF('Existing tile to place the new one near (below it). Optional: without it Orchestra finds a free spot');
+const CONDUCTOR_TOOLS = [
+  {
+    name: 'read_board',
+    annotations: READ,
+    description:
+      'Returns the current Orchestra board as JSON: agents and terminals (id, name, type, status, folder, branch, role), sticky notes, ' +
+      'tool cards (browser and visual test, with their address), ' +
+      'links (from, to, mode, instruction, turns), pending changes waiting for the user\'s approval, and the last exchanges of the log. ' +
+      'Call it first, and again before changing something you did not create.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'create_agent',
+    annotations: ADD,
+    description:
+      'Adds a tile to the board: a Claude Code, Codex or Antigravity agent (each in its own visible terminal), or a plain terminal. ' +
+      'role = lasting instructions given to the agent at the start of its session (who it is, what it must and must not do). ' +
+      'prompt = its first task, sent once it has started; write it self-contained, the agent does not see your conversation. ' +
+      'Agents that edit code in parallel must not share a folder: give each one its own worktree_branch. ' +
+      'Returns the new id, usable at once by create_link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['claude', 'codex', 'antigravity', 'terminal'] },
+        name: { type: 'string', description: 'Short unique tile name (40 characters max), e.g. "Backend". Other agents address it by this name.' },
+        role: { type: 'string', description: 'Role of the agent (2,000 characters max). Agents only, not terminals.' },
+        prompt: { type: 'string', description: 'First message sent to the agent. Agents only, not terminals.' },
+        folder: { type: 'string', description: 'Folder the agent runs in: an absolute path, ~, or a path relative to the working folder. A missing folder is created when the plan is applied, if its parent exists (not with worktree_branch). Default: the working folder.' },
+        worktree_branch: { type: 'string', description: 'Run the agent in a Git worktree of this branch, created from HEAD if it does not exist (e.g. "maestro/backend"). The folder must be in a Git repository.' },
+        near: NEAR,
+      },
+      required: ['type'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_link',
+    annotations: ADD,
+    description:
+      'Links two tiles. Between agents: mode "delegate" lets the source agent talk to the target itself with its own tools ' +
+      '(list_agents, send_to_agent, wait_for_replies) and get its reply back; mode "relay" sends the source\'s final answer to the target ' +
+      'automatically each time the source finishes, with the instruction ({response} is replaced by that answer). ' +
+      'An agent linked to a terminal can run commands in it; an agent linked to a sticky note can read and rewrite it; ' +
+      'an agent linked to a browser or visual test card (create_card) can use it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from: REF('Source tile'),
+        to: REF('Target tile'),
+        mode: { type: 'string', enum: ['delegate', 'relay'], description: 'Between two agents. Default: delegate. Ignored for terminal and sticky-note links.' },
+        instruction: { type: 'string', description: 'Relay only: message sent to the target with the source\'s answer, e.g. "Review this code: {response}".' },
+        max_turns: { type: 'integer', minimum: 1, maximum: 20, description: 'How many times the link can be used in one chain (default 3), against endless loops.' },
+        bidirectional: { type: 'boolean', description: 'Both directions (default false).' },
+      },
+      required: ['from', 'to'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_link',
+    annotations: CHANGE,
+    description: 'Changes a link: its instruction, turn limit, mode, direction or whether it is enabled.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        link: { type: 'string', description: 'Link id from read_board. Or give from and to instead.' },
+        from: REF('Source tile'),
+        to: REF('Target tile'),
+        mode: { type: 'string', enum: ['delegate', 'relay'] },
+        instruction: { type: 'string' },
+        max_turns: { type: 'integer', minimum: 1, maximum: 20 },
+        bidirectional: { type: 'boolean' },
+        enabled: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'remove_link',
+    annotations: CHANGE,
+    description: 'Removes a link between two tiles.',
+    inputSchema: {
+      type: 'object',
+      properties: { link: { type: 'string', description: 'Link id. Or give from and to instead.' }, from: REF('Source tile'), to: REF('Target tile') },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_sticky',
+    annotations: ADD,
+    description:
+      'Adds a sticky note to the board, e.g. to write the plan. Status lines are shown with icons: "- [x] Done", "- [~] In progress", "- [ ] To do". ' +
+      'Link an agent to it (create_link) if that agent should update it.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string' }, name: { type: 'string', description: 'Short unique name, e.g. "Plan".' }, near: NEAR },
+      required: ['text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_sticky',
+    annotations: CHANGE,
+    description: 'Replaces the whole text of a sticky note. The user may have edited it: read_board first.',
+    inputSchema: {
+      type: 'object',
+      properties: { sticky: REF('Sticky note'), text: { type: 'string' } },
+      required: ['sticky', 'text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'set_role',
+    annotations: CHANGE,
+    description: 'Sets the role of a Claude, Codex or Antigravity agent. A running agent applies it from its next session.',
+    inputSchema: {
+      type: 'object',
+      properties: { agent: REF('Agent'), role: { type: 'string', description: 'New role; empty to remove it.' } },
+      required: ['agent', 'role'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'send_to',
+    annotations: ADD,
+    description:
+      'Sends a message to a running Claude, Codex or Antigravity agent, as if the user typed it (queued until the agent is free). ' +
+      'Use it to give a new task or to unblock an agent. Its answer is not returned to you: check later with read_board or read_agent_output.',
+    inputSchema: {
+      type: 'object',
+      properties: { agent: REF('Agent'), message: { type: 'string', description: 'Self-contained message.' } },
+      required: ['agent', 'message'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'remove_agent',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    description: 'Closes an agent or terminal tile and removes it with its links. Refused while the agent is working.',
+    inputSchema: { type: 'object', properties: { agent: REF('Agent or terminal') }, required: ['agent'], additionalProperties: false },
+  },
+  {
+    name: 'read_agent_output',
+    annotations: READ,
+    description: 'Returns the last lines shown in an agent\'s or terminal\'s screen (ANSI codes removed, 80 lines at most), e.g. to see why it is stuck.',
+    inputSchema: {
+      type: 'object',
+      properties: { agent: REF('Agent or terminal'), lines: { type: 'integer', minimum: 1, maximum: 80, description: 'Default 40.' } },
+      required: ['agent'],
+      additionalProperties: false,
+    },
+  },
+];
+CONDUCTOR_TOOLS.push({
+  name: 'arrange',
+  annotations: CHANGE,
+  description:
+    'Moves tiles into the shape the user asked for. "pyramid": rows centered under each other, the top tile in the middle above ' +
+    'the next row (rows follow the links from the top, e.g. a lead above two workers); "row", "column", "grid": a line, a column ' +
+    'or a near-square grid. Call it after creating the tiles, and after their links for a pyramid.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      layout: { type: 'string', enum: ['pyramid', 'row', 'column', 'grid'] },
+      tiles: { type: 'array', items: { type: 'string' }, description: 'Ids or names of the tiles to arrange. Default: all agents and terminals of the board.' },
+      top: REF('Pyramid only: the tile at the top'),
+    },
+    required: ['layout'],
+    additionalProperties: false,
+  },
+});
+CONDUCTOR_TOOLS.push({
+  name: 'create_board',
+  annotations: ADD,
+  description:
+    'Creates a new empty board (a tab), opens it, and makes it the target of your next actions in this message. ' +
+    'Use it only when the user asks for a new board; otherwise work on the current one. At most 3 per message.',
+  inputSchema: {
+    type: 'object',
+    properties: { name: { type: 'string', description: 'Short board name (40 characters max), e.g. "API". Default: "Board N".' } },
+    additionalProperties: false,
+  },
+});
+CONDUCTOR_TOOLS.push({
+  name: 'create_card',
+  annotations: ADD,
+  description:
+    'Adds a tool card to the board. "browser": an Interactive Browser where a linked agent can open a site in an empty tab, ' +
+    'then read its state (titles, routes, console errors), reload it and navigate within that site; useful for a QA or frontend agent ' +
+    'checking a web app. "visual_test": a Visual Test that checks a web page in Google Chrome when the user runs it; a linked agent reads ' +
+    'its latest result. Then link an agent to the card with create_link (from the agent to the card).',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      type: { type: 'string', enum: ['browser', 'visual_test'] },
+      url: { type: 'string', description: 'Optional full http(s) address: the page opened in the browser, or the page checked by the visual test (e.g. "http://localhost:3000/").' },
+      near: NEAR,
+    },
+    required: ['type'],
+    additionalProperties: false,
+  },
+});
+const TOOLSET = process.env.ORCHESTRA_TOOLSET;
 
 function callOrchestra(name, args) {
   return new Promise((resolve) => {
@@ -170,6 +422,41 @@ function callOrchestra(name, args) {
 
 const send = (message) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\n');
 
+// Outils du Navigateur et du Test visuel : montrés seulement si la case a un lien de ce type (Orchestra décide).
+const TOOL_GROUPS = 'orchestra_tool_groups';
+const GROUP_OF = {
+  orchestra_browser_get_state: 'browser', orchestra_browser_navigate: 'browser', orchestra_browser_reload: 'browser',
+  list_visual_tests: 'visual', read_visual_test: 'visual',
+};
+const GROUP_POLL = 5000;
+let listedGroups = null;
+let pollTimer = null;
+
+async function toolGroups() {
+  const { text, isError } = await callOrchestra(TOOL_GROUPS, {});
+  try {
+    const groups = isError ? [] : JSON.parse(text);
+    return Array.isArray(groups) ? groups.filter((group) => typeof group === 'string').sort().join(',') : '';
+  } catch {
+    return '';
+  }
+}
+
+const visibleTools = (groups) => TOOLS.filter((tool) => !GROUP_OF[tool.name] || groups.split(',').includes(GROUP_OF[tool.name]));
+
+// Un lien ajouté ou retiré pendant la session : l'agent est prévenu que la liste a changé.
+function watchGroups() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    const groups = await toolGroups();
+    if (listedGroups !== null && groups !== listedGroups) {
+      listedGroups = groups;
+      send({ method: 'notifications/tools/list_changed' });
+    }
+  }, GROUP_POLL);
+  pollTimer.unref();
+}
+
 async function handle(message) {
   const { id, method, params } = message;
   if (id === undefined || id === null) return; // notification (initialized, cancelled…) : rien à répondre
@@ -180,14 +467,20 @@ async function handle(message) {
         id,
         result: {
           protocolVersion: params?.protocolVersion ?? PROTOCOL_VERSION,
-          capabilities: { tools: {} },
+          capabilities: { tools: { listChanged: true } },
           serverInfo: { name: 'orchestra', version: '1.0.0' },
         },
       });
     case 'ping':
       return send({ id, result: {} });
-    case 'tools/list':
-      return send({ id, result: { tools: TOOLS } });
+    case 'tools/list': {
+      // Session cachée du chef d'orchestre : ses outils seuls (pas de case, donc pas de groupes de liens).
+      if (TOOLSET === 'conductor') return send({ id, result: { tools: CONDUCTOR_TOOLS } });
+      listedGroups = await toolGroups();
+      watchGroups();
+      const tools = visibleTools(listedGroups);
+      return send({ id, result: { tools: TOOLSET === 'all' ? [...tools, ...CONDUCTOR_TOOLS] : tools } });
+    }
     case 'tools/call': {
       const { text, isError } = await callOrchestra(params?.name, params?.arguments ?? {});
       return send({ id, result: { content: [{ type: 'text', text }], isError } });

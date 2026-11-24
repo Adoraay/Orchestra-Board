@@ -10,6 +10,10 @@ import { displayPath } from '../lib/paths.js';
 import { isMac } from '../lib/platform.js';
 import useT from '../hooks/useT.js';
 
+const MAX_CONDUCTOR_AGENTS = 20; // = settingsStore.cjs
+const MODEL = /^[a-z0-9][\w.\-[\]]{0,63}$/i; // = settingsStore.cjs
+const ENGINES = ['claude', 'codex', 'antigravity'];
+
 // Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
 // Sur Mac, le shell par défaut est celui de l'utilisateur (zsh en général).
 const SHELLS = isMac
@@ -95,6 +99,55 @@ export default function GeneralTab({ onStartTutorial, onStartSetup }) {
           {t('general.codexOrchestration')}
         </label>
         <span className="hint">{t('general.codexOrchestrationHint')}</span>
+      </div>
+
+      <div className="field">
+        <span className="field-label">{t('general.conductor')}</span>
+        {ENGINES.map((engine) => (
+          <label key={engine} className="mode-option">
+            <input type="radio" name="conductor-engine" checked={settings.conductor.engine === engine} onChange={() => updateSettings('conductor', { engine })} />
+            <span>
+              <span className="mode-option-label">{t(`conductor.engine.${engine}`)}</span>
+              <span className="hint">{t(`general.conductorEngine.${engine}`)}</span>
+            </span>
+          </label>
+        ))}
+        <label className="field-row">
+          {t('general.conductorModel')}
+          <input
+            key={settings.conductor.model ?? ''}
+            defaultValue={settings.conductor.model ?? ''}
+            placeholder={t('general.conductorModelDefault')}
+            onBlur={(e) => {
+              const value = e.target.value.trim();
+              if (!value || MODEL.test(value)) updateSettings('conductor', { model: value || null });
+              else e.target.value = settings.conductor.model ?? '';
+            }}
+          />
+        </label>
+        <label className="field-row">
+          {t('general.conductorMaxAgents')}
+          <input
+            type="number"
+            min={1}
+            max={MAX_CONDUCTOR_AGENTS}
+            value={settings.conductor.maxAgents}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (Number.isInteger(value) && value >= 1 && value <= MAX_CONDUCTOR_AGENTS) updateSettings('conductor', { maxAgents: value });
+            }}
+          />
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={settings.conductor.tileTools} onChange={(e) => updateSettings('conductor', { tileTools: e.target.checked })} />
+          {t('general.conductorTileTools')}
+        </label>
+        <label className="checkbox">
+          <input type="checkbox" checked={settings.conductor.autoApply} onChange={(e) => updateSettings('conductor', { autoApply: e.target.checked })} />
+          {t('general.conductorAutoApply')}
+        </label>
+        <span className="hint">{t('general.conductorAutoHint')}</span>
+        <span className="hint">{t('general.conductorHint')}</span>
       </div>
 
       <div className="field">

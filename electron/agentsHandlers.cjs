@@ -100,10 +100,27 @@ function codexModels() {
   }
 }
 
+function antigravityModels() {
+  const windows = process.platform === 'win32';
+  const program = windows ? 'cmd.exe' : 'agy';
+  const args = windows ? ['/d', '/c', 'agy', 'models'] : ['models'];
+  return new Promise((resolve) => {
+    execFile(program, args, { timeout: 8000, windowsHide: true }, (error, stdout) => {
+      if (error) return resolve([]);
+      const models = stdout.split(/\r?\n/).flatMap((line) => {
+        const [id, name] = line.split('\t');
+        return name?.trim() && MODEL.test(id) ? [{ id, name: name.trim() }] : [];
+      });
+      resolve(models);
+    });
+  });
+}
+
 function listModels(agentId) {
   const agent = settingsStore.load().agents.find((a) => a.id === agentId);
   if (agent?.hooks === 'claude') return CLAUDE_MODELS.map((id) => ({ id, name: id[0].toUpperCase() + id.slice(1) }));
   if (agent?.hooks === 'codex') return codexModels();
+  if (agent?.hooks === 'antigravity') return antigravityModels();
   return [];
 }
 
