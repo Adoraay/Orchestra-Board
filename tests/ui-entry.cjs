@@ -137,7 +137,7 @@ app.on('browser-window-created', (_event, win) => {
         assert.deepEqual(require('../electron/ptyManager.cjs').ids(), ['smoke-terminal']);
         await evaluate(`document.querySelector('button[title^="Settings"]').click()`);
         await evaluate(`[...document.querySelectorAll('[role="tab"]')].find(b => b.textContent === 'General').click()`);
-        await until("document.body.textContent.includes('0.1.3')");
+        await until(`document.body.textContent.includes(${JSON.stringify(require('../package.json').version)})`);
         await evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Browse backups').click()`);
       }
       await until("!!document.querySelector('#backup-select')");
