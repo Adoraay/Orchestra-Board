@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 const ID = /^[\w-]{1,128}$/;
 const ACTIONS = new Set(['click', 'fill', 'visible', 'text']);
 const MAX_STEPS = 12;
@@ -11,6 +14,20 @@ const running = new Map();
 const text = (value, max) => typeof value === 'string' ? value.slice(0, max) : '';
 const httpStatus = (value) => Number.isInteger(value) && value >= 100 && value <= 599;
 const asArray = (value) => Array.isArray(value) ? value : [];
+
+// Navigateur du test. Playwright cherche Google Chrome à son emplacement habituel (/opt/google/chrome sous Linux).
+// Sous Linux sans Google Chrome, on prend le Chrome ou le Chromium trouvé dans le PATH (paquets chromium, chromium-browser…).
+const LINUX_BROWSERS = ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser'];
+function browserOptions({ platform = process.platform, envPath = process.env.PATH, exists = fs.existsSync } = {}) {
+  if (platform !== 'linux' || exists('/opt/google/chrome/chrome')) return { channel: 'chrome' };
+  for (const name of LINUX_BROWSERS) {
+    for (const dir of (envPath || '').split(path.delimiter)) {
+      const file = dir && path.join(dir, name);
+      if (file && exists(file)) return { executablePath: file };
+    }
+  }
+  return { channel: 'chrome' }; // rien trouvé : l'erreur habituelle « Chrome introuvable »
+}
 
 function configuration(data) {
   return {
@@ -111,7 +128,7 @@ async function run(config, url, controller) {
 
   try {
     const { chromium } = require('playwright-core');
-    browser = await chromium.launch({ channel: 'chrome', chromiumSandbox: true, timeout: 12000 });
+    browser = await chromium.launch({ ...browserOptions(), chromiumSandbox: true, timeout: 12000 });
     signal.throwIfAborted();
     const context = await browser.newContext({ viewport: { width: 1024, height: 640 }, acceptDownloads: false });
     page = await context.newPage();
@@ -177,4 +194,4 @@ function start(id, data, onDone) {
 function cancel(id) { running.get(id)?.abort('cancelled'); }
 function dispose() { for (const id of running.keys()) cancel(id); }
 
-module.exports = { configuration, sanitizeResult, start, isRunning: (id) => running.has(id), cancel, dispose };
+module.exports = { browserOptions, configuration, sanitizeResult, start, isRunning: (id) => running.has(id), cancel, dispose };

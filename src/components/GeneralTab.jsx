@@ -7,7 +7,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import { LINK_MODES } from '../lib/links.js';
 import { useWorkspace } from '../context/WorkspaceContext.jsx';
 import { displayPath } from '../lib/paths.js';
-import { isMac } from '../lib/platform.js';
+import { isMac, isWindows } from '../lib/platform.js';
 import useT from '../hooks/useT.js';
 
 const MAX_CONDUCTOR_AGENTS = 20; // = settingsStore.cjs
@@ -15,15 +15,19 @@ const MODEL = /^[a-z0-9][\w.\-[\]]{0,63}$/i; // = settingsStore.cjs
 const ENGINES = ['claude', 'codex', 'antigravity'];
 
 // Shells proposés : les noms propres ne se traduisent pas, les autres passent par shell.<id>.
-// Sur Mac, le shell par défaut est celui de l'utilisateur (zsh en général).
-const SHELLS = isMac
-  ? [{ id: 'default', label: 'shell.defaultMac' }, { id: 'bash', name: 'Bash' }, { id: 'pwsh', name: 'PowerShell (pwsh)' }]
-  : [
+// Sur Mac et Linux, le shell par défaut est celui de l'utilisateur (zsh, bash, fish…).
+const SHELLS = isWindows
+  ? [
       { id: 'default' },
       { id: 'powershell', name: 'Windows PowerShell' },
       { id: 'pwsh', name: 'PowerShell 7 (pwsh)' },
       { id: 'cmd' },
       { id: 'bash', name: 'Git Bash' },
+    ]
+  : [
+      { id: 'default', label: isMac ? 'shell.defaultMac' : 'shell.defaultLinux' },
+      { id: 'bash', name: 'Bash' },
+      { id: 'pwsh', name: 'PowerShell (pwsh)' },
     ];
 
 export default function GeneralTab({ onStartTutorial, onStartSetup }) {
@@ -87,7 +91,7 @@ export default function GeneralTab({ onStartTutorial, onStartSetup }) {
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.notifyDesktop} onChange={(e) => update({ notifyDesktop: e.target.checked })} />
-          {t(isMac ? 'general.notifyDesktopMac' : 'general.notifyDesktop')}
+          {t(isWindows ? 'general.notifyDesktop' : isMac ? 'general.notifyDesktopMac' : 'general.notifyDesktopLinux')}
         </label>
         <label className="checkbox">
           <input type="checkbox" checked={general.trustFolders} onChange={(e) => update({ trustFolders: e.target.checked })} />

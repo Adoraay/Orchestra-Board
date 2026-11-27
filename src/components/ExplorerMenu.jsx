@@ -3,7 +3,7 @@ import { ChevronLeft, ClipboardCopy, FolderOpen, FolderPlus, Pencil, Play, Trash
 import AgentLogo from './AgentLogo.jsx';
 import useFloatingMenu from '../hooks/useFloatingMenu.js';
 import useT from '../hooks/useT.js';
-import { isMac } from '../lib/platform.js';
+import { isMac, isWindows } from '../lib/platform.js';
 
 // Menu du clic droit dans l'explorateur (PLAN.md §3.14). « Lancer un agent ici » ouvre un sous-menu
 // vers la gauche (l'explorateur est collé au bord droit). Échap, clic ailleurs ou défilement le ferment.
@@ -32,7 +32,7 @@ export default function ExplorerMenu({ x, y, entry, isRoot, agents, onAction, on
       {entry.isDir && <div className="menu-separator" />}
       {item('rename', Pencil, t('common.rename'), { shortcut: 'F2', disabled: isRoot })}
       {item('copyPath', ClipboardCopy, t('menu.copyPath'))}
-      {item('reveal', FolderOpen, t(`${entry.isDir ? 'menu.openIn' : 'menu.revealIn'}${isMac ? 'Finder' : 'Explorer'}`))}
+      {item('reveal', FolderOpen, t(`${entry.isDir ? 'menu.openIn' : 'menu.revealIn'}${isWindows ? 'Explorer' : isMac ? 'Finder' : 'FileManager'}`))}
       {entry.isDir && agents.length > 0 && (
         <>
           <div className="menu-separator" />

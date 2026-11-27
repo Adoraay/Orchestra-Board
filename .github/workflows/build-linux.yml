@@ -1,0 +1,33 @@
+# Build Linux d'Orchestra : .AppImage et .tar.gz (x64), en artefact téléchargeable du run.
+# Lancement : à chaque push sur la branche linux, ou à la main (Actions › Build Linux › Run workflow).
+name: Build Linux
+
+on:
+  push:
+    branches: [linux]
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci # node-pty compilé par node-gyp (pas de binaire précompilé pour Linux)
+
+      - run: npm test
+
+      - run: npm run dist:linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Orchestra-Linux
+          path: |
+            release/*.AppImage
+            release/*.tar.gz
+          if-no-files-found: error

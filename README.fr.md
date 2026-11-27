@@ -451,6 +451,13 @@ npm run dist     # installateur Windows dans release/Orchestra-Setup-<version>.e
 
 La version macOS vit sur la branche `macbook` : `npm run dist:mac` y construit les `.dmg` (sur un Mac), et chaque push sur cette branche les construit sur GitHub Actions.
 
+La version Linux vit sur la branche `linux` : `npm run dist:linux` construit un `.AppImage` et un `.tar.gz` (x64) dans `release/`, et chaque push sur cette branche les construit sur GitHub Actions.
+
+- `node-pty` n'a pas de binaire précompilé pour Linux : `npm ci` le compile, il faut donc d'abord un compilateur C/C++ et Python (`sudo pacman -S --needed base-devel python` sur Arch, `sudo apt install build-essential python3` sur Debian/Ubuntu). Les versions récentes de npm bloquent les scripts d'installation des dépendances sauf ceux autorisés par `allowScripts` dans `package.json` (node-pty y figure) ; si `node_modules/node-pty/build/Release/pty.node` manque encore, lance `npx node-gyp rebuild` dans `node_modules/node-pty`.
+- L'AppImage a besoin de FUSE 2 (`fuse2` sur Arch, `libfuse2` sur Ubuntu). Rends-la exécutable avec `chmod +x` puis lance-la.
+- Visual Test utilise Google Chrome, ou à défaut le Chrome/Chromium du `PATH` (`chromium`, `chromium-browser`).
+- Pas d'installation directe des mises à jour sous Linux : la fenêtre de mise à jour renvoie vers la page des releases.
+
 <details>
 <summary><b>Lanceur Windows et remarques de build</b></summary>
 

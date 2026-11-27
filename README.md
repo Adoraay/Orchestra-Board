@@ -449,6 +449,13 @@ npm run dist     # Windows installer in release/Orchestra-Setup-<version>.exe
 
 The macOS version lives on the `macbook` branch: `npm run dist:mac` there builds the `.dmg` files (on a Mac), and every push to that branch builds them on GitHub Actions.
 
+The Linux version lives on the `linux` branch: `npm run dist:linux` builds an `.AppImage` and a `.tar.gz` (x64) in `release/`, and every push to that branch builds them on GitHub Actions.
+
+- `node-pty` has no prebuilt binary for Linux: `npm ci` compiles it, so install a C/C++ toolchain and Python first (`sudo pacman -S --needed base-devel python` on Arch, `sudo apt install build-essential python3` on Debian/Ubuntu). Recent npm versions block dependency install scripts unless `allowScripts` in `package.json` allows them (node-pty is listed); if `node_modules/node-pty/build/Release/pty.node` is still missing, run `npx node-gyp rebuild` inside `node_modules/node-pty`.
+- The AppImage needs FUSE 2 (`fuse2` on Arch, `libfuse2` on Ubuntu). Make it executable with `chmod +x` and run it.
+- Visual Test uses Google Chrome, or Chrome/Chromium from the `PATH` (`chromium`, `chromium-browser`) when Chrome isn't installed.
+- There is no built-in installer for updates on Linux: the update window links to the release page.
+
 ### Board extensions
 
 - **Antigravity** — Add Antigravity from **Settings → Agents** and place it on the board. Orchestra loads its hooks and MCP through a temporary workspace using `agy --add-dir`. The integration was verified with AGY 1.5.11.

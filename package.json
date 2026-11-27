@@ -6,6 +6,7 @@
   "license": "MIT",
   "description": "Une grande map où l'on glisse des agents IA (Claude Code, Codex...) qui tournent chacun dans un vrai terminal.",
   "main": "electron/main.cjs",
+  "desktopName": "orchestra.desktop",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
     "test:ui": "node tests/ui-smoke.cjs",
@@ -13,6 +14,7 @@
     "build": "vite build",
     "dist": "vite build && electron-builder --win",
     "dist:mac": "vite build && electron-builder --mac --publish never",
+    "dist:linux": "vite build && electron-builder --linux --publish never",
     "start": "electron .",
     "postinstall": "node scripts/fix-pty-permissions.cjs",
     "build:icon": "electron scripts/make-icon.cjs",
@@ -37,6 +39,10 @@
     "react-dom": "^18.3.1",
     "vite": "^6.4.5",
     "wait-on": "^8.0.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "node-pty": true
   },
   "build": {
     "appId": "com.orchestraboard.orchestra",
@@ -101,6 +107,28 @@
     },
     "dmg": {
       "artifactName": "Orchestra-${version}-${arch}.dmg"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Development",
+      "executableName": "orchestra",
+      "syncDesktopName": true,
+      "synopsis": "Infinite canvas for AI coding agents, each in a real terminal",
+      "artifactName": "Orchestra-${version}-linux-${arch}.${ext}"
     }
   }
 }
